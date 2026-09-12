@@ -1,0 +1,9 @@
+node_modules/
+build/
+dist/
+vendor/
+artifacts/
+.DS_Store
+*.log
+.phpunit.result.cache
+tests/local.json
