@@ -1,0 +1,16 @@
+{
+    "name": "wpsignal/wordsocket-woocommerce",
+    "description": "WordSocket for WooCommerce: a live orders board and live stock on product pages.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^12",
+        "wp-coding-standards/wpcs": "^3.0",
+        "phpcompatibility/phpcompatibility-wp": "^2.1"
+    }
+}
