@@ -1,9 +1,19 @@
-node_modules/
-build/
-dist/
-vendor/
-artifacts/
-.DS_Store
-*.log
-.phpunit.result.cache
-tests/local.json
+*
+!.gitignore
+!.github
+!.github/**/*
+!README.md
+!LICENSE.md
+
+# Explicit inclusions
+!wordsocket-woocommerce
+!wordsocket-woocommerce/**/*
+
+# Explicit exclusions
+node_modules
+build
+dist
+vendor
+artifacts
+**/tests/local.json
+**/.phpunit.result.cache
