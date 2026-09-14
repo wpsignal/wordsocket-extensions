@@ -5,10 +5,10 @@
  * Orders go to a staff-only channel, but the payload still leaves out email,
  * addresses and line-item prices. Stock payloads are public data.
  *
- * @package WPSignal\Extensions\WooCommerce
+ * @package WPSignal\Extensions\ShopSocket
  */
 
-namespace WPSignal\Extensions\WooCommerce;
+namespace WPSignal\Extensions\ShopSocket;
 
 use WC_Order;
 use WC_Product;
@@ -29,7 +29,7 @@ function order_payload( WC_Order $order, array $extra = array() ): array {
 	$last  = $order->get_billing_last_name();
 	$name  = trim( $first . ' ' . ( '' !== $last ? mb_substr( $last, 0, 1 ) . '.' : '' ) );
 	if ( '' === $name ) {
-		$name = __( 'Guest', 'wordsocket-woocommerce' );
+		$name = __( 'Guest', 'shopsocket' );
 	}
 
 	$date = $order->get_date_created();
@@ -58,9 +58,10 @@ function order_payload( WC_Order $order, array $extra = array() ): array {
  * @param int        $quantity  Quantity added.
  * @param string     $actor     Anonymous hash of the shopper's session, so the
  *                              shopper's own browser can ignore the event.
+ * @param string     $image_url Thumbnail URL, empty when the product has none.
  * @return array<string, mixed>
  */
-function cart_added_payload( WC_Product $product, int $quantity, string $actor ): array {
+function cart_added_payload( WC_Product $product, int $quantity, string $actor, string $image_url ): array {
 	$is_variation = $product->is_type( 'variation' );
 	$parent       = $is_variation ? wc_get_product( $product->get_parent_id() ) : $product;
 
@@ -71,6 +72,7 @@ function cart_added_payload( WC_Product $product, int $quantity, string $actor )
 		'variation_id' => $is_variation ? $product->get_id() : 0,
 		'name'         => $parent instanceof WC_Product ? $parent->get_name() : $product->get_name(),
 		'permalink'    => $product->get_permalink(),
+		'image'        => $image_url,
 		'quantity'     => $quantity,
 		'actor'        => $actor,
 		'in_carts'     => count_in_carts( $parent_id ),
@@ -85,16 +87,18 @@ function cart_added_payload( WC_Product $product, int $quantity, string $actor )
  */
 function stock_payload( WC_Product $product ): array {
 	$is_variation = $product->is_type( 'variation' );
+	$availability = $product->get_availability();
 
 	return array(
-		'product_id'     => $is_variation ? $product->get_parent_id() : $product->get_id(),
-		'variation_id'   => $is_variation ? $product->get_id() : 0,
-		'name'           => $product->get_name(),
-		'stock_quantity' => $product->get_stock_quantity(),
-		'stock_status'   => $product->get_stock_status(),
-		'managed'        => $product->managing_stock(),
-		'purchasable'    => $product->is_purchasable() && $product->is_in_stock(),
-		// Rendered availability so the storefront can swap markup without knowing Woo's rules.
-		'availability'   => wc_get_stock_html( $product ),
+		'product_id'         => $is_variation ? $product->get_parent_id() : $product->get_id(),
+		'variation_id'       => $is_variation ? $product->get_id() : 0,
+		'name'               => $product->get_name(),
+		'stock_quantity'     => $product->get_stock_quantity(),
+		'stock_status'       => $product->get_stock_status(),
+		'purchasable'        => $product->is_purchasable() && $product->is_in_stock(),
+		// Availability as WooCommerce words it, so the storefront never has to know Woo's rules:
+		// the text and class feed the Interactivity store directly.
+		'availability_text'  => wp_strip_all_tags( (string) $availability['availability'] ),
+		'availability_class' => (string) $availability['class'],
 	);
 }

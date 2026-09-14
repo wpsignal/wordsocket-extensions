@@ -7,10 +7,10 @@
  * strict channel list, so every channel this plugin subscribes to must also be
  * registered through `wpsignal_token_channels`.
  *
- * @package WPSignal\Extensions\WooCommerce
+ * @package WPSignal\Extensions\ShopSocket
  */
 
-namespace WPSignal\Extensions\WooCommerce;
+namespace WPSignal\Extensions\ShopSocket;
 
 use WPSignal\WPS;
 
@@ -26,16 +26,23 @@ add_action(
 		$wps->extensions()->register(
 			SLUG,
 			array(
-				'title'       => __( 'WooCommerce', 'wordsocket-woocommerce' ),
-				'description' => __( 'A live orders board for your team and live stock on product pages.', 'wordsocket-woocommerce' ),
+				'title'       => __( 'ShopSocket for WooCommerce', 'shopsocket' ),
+				'description' => __( 'A live orders board for your team and live stock on product pages.', 'shopsocket' ),
 				'version'     => VERSION,
-				'docs_url'    => 'https://wpsignal.io/extensions/woocommerce',
+				'docs_url'    => 'https://wpsignal.io/extensions/shopsocket',
 				'requires'    => array( 'woocommerce/woocommerce.php' => 'WooCommerce' ),
 			)
 		);
 
 		// Orders carry totals and customer names: staff only.
-		$wps->channels()->reserve( ORDERS_NS, 'manage_woocommerce' );
+		$wps->channels()->reserve( ORDERS_NS, STAFF_CAP );
+
+		// Every shopper may enter presence on the carts namespace (write only:
+		// they never subscribe, so no shopper sees another's membership). Staff
+		// subscribe to read it. The grant is open because presence carries only
+		// a non-reversible basket id, and the relay ties each membership to its
+		// own connection, so a token can only ever announce itself.
+		$wps->channels()->reserve( CARTS_NS, static fn(): bool => true );
 
 		// Products are posts: without this, every product save would also
 		// publish WordSocket's generic post.updated next to woo.stock.changed.
@@ -61,8 +68,10 @@ function register_stock_channel( array $channels, int $user_id, string $site_id 
 add_filter( 'wpsignal_token_channels', __NAMESPACE__ . '\register_stock_channel', 10, 3 );
 
 /**
- * The orders channel, auto-subscribed for staff so the board needs no extra
- * subscribe call. Non-staff tokens never get the prefix, so listing the
+ * Staff channels, auto-subscribed so the dashboard needs no extra subscribe
+ * call: the orders feed, and the relay's own `wps:connections` channel, which
+ * carries `wps.connections` (browsers connected right now) whenever the count
+ * changes. Non-staff tokens never get the orders prefix, so listing the
  * channel for them would only produce a refused subscribe: skip it.
  *
  * @param string[] $channels Channels the client auto-subscribes to.
@@ -71,8 +80,10 @@ add_filter( 'wpsignal_token_channels', __NAMESPACE__ . '\register_stock_channel'
  * @return string[]
  */
 function register_orders_channel( array $channels, int $user_id, string $site_id ): array {
-	if ( $user_id > 0 && user_can( $user_id, 'manage_woocommerce' ) ) {
+	if ( $user_id > 0 && user_can( $user_id, STAFF_CAP ) ) {
 		$channels[] = 'site:' . $site_id . ':' . ORDERS_NS . ':feed';
+		$channels[] = 'site:' . $site_id . ':' . CONNECTIONS_CHANNEL;
+		$channels[] = 'site:' . $site_id . ':' . CARTS_PRESENCE_CHANNEL;
 	}
 	return $channels;
 }

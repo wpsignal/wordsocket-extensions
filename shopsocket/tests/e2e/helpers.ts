@@ -1,0 +1,70 @@
+import { expect, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import type { RequestUtils } from "@wordpress/e2e-test-utils-playwright";
+import { wp } from "./env";
+
+/** Wait until window.WPS reports a connection on the current page. */
+export async function waitForLive(page: Page): Promise<void> {
+  await expect.poll(() => page.evaluate(() => window.WPS?.state.connected ?? false), { timeout: 20_000 }).toBe(true);
+}
+
+/** A fresh anonymous browser (own cookies and storage): a new shopper, not the logged-in admin. */
+export function visitorContext(browser: Browser, baseURL?: string): Promise<BrowserContext> {
+  return browser.newContext({ baseURL, ignoreHTTPSErrors: true, storageState: undefined });
+}
+
+/** The number in a tile or cell (digits and dots only, so "$1,234" reads as 1234), as a poll callback. */
+export const num = (loc: Locator) => async () => Number((await loc.textContent())?.replace(/[^\d.]/g, "") || 0);
+
+/** Forget every basket row on the target site, so a test starts from an empty store. */
+export function clearBaskets(): void {
+  wp("eval", "delete_transient('shopsocket_baskets'); delete_transient('shopsocket_baskets_pub');");
+}
+
+/** A managed-stock simple product through the WooCommerce REST API. */
+export async function createProduct(requestUtils: RequestUtils, name: string, stock: number, lowStock = 2, imageId?: number) {
+  const product = await requestUtils.rest({
+    method: "POST",
+    path: "/wc/v3/products",
+    data: {
+      name,
+      type: "simple",
+      regular_price: "9.99",
+      manage_stock: true,
+      stock_quantity: stock,
+      low_stock_amount: lowStock,
+      status: "publish",
+      images: imageId ? [{ id: imageId }] : [],
+    },
+  });
+  expect(product.id, JSON.stringify(product)).toBeTruthy();
+  return product as { id: number; permalink: string };
+}
+
+export async function deleteProduct(requestUtils: RequestUtils, id: number): Promise<void> {
+  await requestUtils.rest({ method: "DELETE", path: `/wc/v3/products/${id}`, params: { force: true } });
+}
+
+/** An order for `quantity` of a product, in `status`, through the WooCommerce REST API. */
+export async function createOrder(requestUtils: RequestUtils, productId: number, quantity: number, status = "processing") {
+  const order = await requestUtils.rest({
+    method: "POST",
+    path: "/wc/v3/orders",
+    data: {
+      status,
+      billing: { first_name: "Grace", last_name: "Hopper", email: "grace@example.com" },
+      line_items: [{ product_id: productId, quantity }],
+    },
+  });
+  expect(order.id, JSON.stringify(order)).toBeTruthy();
+  return order as { id: number; number: string; status: string };
+}
+
+export async function deleteOrder(requestUtils: RequestUtils, id: number): Promise<void> {
+  await requestUtils.rest({ method: "DELETE", path: `/wc/v3/orders/${id}`, params: { force: true } });
+}
+
+/** The id of any image already in the media library, or undefined when there is none. */
+export async function anyImageId(requestUtils: RequestUtils): Promise<number | undefined> {
+  const media = (await requestUtils.rest({ path: "/wp/v2/media", params: { media_type: "image", per_page: 1 } })) as { id: number }[];
+  return media[0]?.id;
+}

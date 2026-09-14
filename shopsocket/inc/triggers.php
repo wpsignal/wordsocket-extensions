@@ -5,10 +5,10 @@
  * Staff channel (`woo:orders:feed`): order created, paid, status changed,
  * low stock, out of stock. Public channel (`woo:stock`): stock changed.
  *
- * @package WPSignal\Extensions\WooCommerce
+ * @package WPSignal\Extensions\ShopSocket
  */
 
-namespace WPSignal\Extensions\WooCommerce;
+namespace WPSignal\Extensions\ShopSocket;
 
 use WC_Product;
 use WPSignal\WPS;
@@ -19,7 +19,41 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 const ORDERS_CHANNEL = ORDERS_NS . ':feed';
 
-/** Seconds between publishes for the same product. Filter `wordsocket_woocommerce_activity_throttle`. */
+/**
+ * Whether stock changes are published right now: not during an import
+ * (WordPress importers and the WooCommerce CSV importer set WP_IMPORTING).
+ *
+ * @return bool
+ */
+function should_publish_stock(): bool {
+	$importing = ( defined( 'WP_IMPORTING' ) && WP_IMPORTING ) || product_import_running();
+	/**
+	 * Filters whether a stock change is published. Return false to stay silent
+	 * (for example during a bulk update of your own).
+	 *
+	 * @param bool $publish Default: true unless an import is running.
+	 */
+	return (bool) apply_filters( 'shopsocket_publish_stock', ! $importing );
+}
+
+/**
+ * Whether the WooCommerce CSV importer is processing items in this request.
+ * It does not set WP_IMPORTING; it fires a hook per item, which flips a flag
+ * for the rest of the request (each importer batch is its own request).
+ *
+ * @param bool|null $set Internal: mark the import as running.
+ * @return bool
+ */
+function product_import_running( ?bool $set = null ): bool {
+	static $running = false;
+	if ( null !== $set ) {
+		$running = $set;
+	}
+	return $running;
+}
+add_action( 'woocommerce_product_import_before_process_item', static fn() => product_import_running( true ) );
+
+/** Seconds between publishes for the same product. Filter `shopsocket_activity_throttle`. */
 const ACTIVITY_THROTTLE = 10;
 
 /**
@@ -39,7 +73,7 @@ function should_publish_cart_add( $cart_item_key, $product_id, $quantity, $varia
 	 *
 	 * @param bool $enabled Default true.
 	 */
-	if ( ! apply_filters( 'wordsocket_woocommerce_activity_enabled', true ) ) {
+	if ( ! apply_filters( 'shopsocket_activity_enabled', true ) ) {
 		return false;
 	}
 	$id      = $variation_id ? (int) $variation_id : (int) $product_id;
@@ -52,11 +86,11 @@ function should_publish_cart_add( $cart_item_key, $product_id, $quantity, $varia
 	 *
 	 * @param int $seconds Default 10. Return 0 to publish every add.
 	 */
-	$throttle = (int) apply_filters( 'wordsocket_woocommerce_activity_throttle', ACTIVITY_THROTTLE );
+	$throttle = (int) apply_filters( 'shopsocket_activity_throttle', ACTIVITY_THROTTLE );
 	if ( $throttle <= 0 ) {
 		return true;
 	}
-	$key = 'wswoo_act_' . $id;
+	$key = 'shopsocket_act_' . $id;
 	if ( get_transient( $key ) ) {
 		return false;
 	}
@@ -65,17 +99,29 @@ function should_publish_cart_add( $cart_item_key, $product_id, $quantity, $varia
 }
 
 /**
- * Anonymous, stable-per-session hash so a shopper's own browser can ignore
- * its own add-to-basket event. Never reversible to the session.
+ * A stable, anonymous id for a shopper's WooCommerce session: the first 16 hex
+ * of SHA-256 of the session customer id. Two uses need it to match between PHP
+ * and the browser, so it is a plain hash (no server secret): the shopper's own
+ * browser ignores its own add-to-basket event, and the storefront enters relay
+ * presence under this id so the dashboard can tie a live connection to a basket
+ * row. The browser derives the same value from its WooCommerce session cookie.
+ * Not reversible to the session, and empty when there is no session yet.
  *
  * @return string
  */
-function actor_hash(): string {
-	$session = function_exists( 'WC' ) && WC()->session ? (string) WC()->session->get_customer_id() : '';
-	if ( '' === $session ) {
+function basket_id(): string {
+	// Logged-in shoppers: key on the user id, which is identical across the
+	// add request, the Store API, and the REST id lookup. Guests have no stable
+	// account, so fall back to their WooCommerce session id (they carry the
+	// session cookie that ties those requests together).
+	if ( is_user_logged_in() ) {
+		return substr( hash( 'sha256', 'user:' . get_current_user_id() ), 0, 16 );
+	}
+	$customer_id = function_exists( 'WC' ) && WC()->session ? (string) WC()->session->get_customer_id() : '';
+	if ( '' === $customer_id ) {
 		return '';
 	}
-	return substr( hash_hmac( 'sha256', $session, wp_salt( 'nonce' ) ), 0, 16 );
+	return substr( hash( 'sha256', 'guest:' . $customer_id ), 0, 16 );
 }
 
 /**
@@ -127,12 +173,13 @@ add_action(
 			)
 			->register();
 
-		// Stock level changed (checkout, refund, manual edit): public.
+		// Stock level changed (checkout, refund, manual edit): public. Silent
+		// during imports, which would otherwise publish once per product.
 		foreach ( array( 'woocommerce_product_set_stock', 'woocommerce_variation_set_stock' ) as $hook ) {
 			WPS::trigger( 'woo.stock.changed' )
 				->on( $hook, 10, 1 )
 				->channel( STOCK_CHANNEL )
-				->when( static fn( $product ) => $product instanceof WC_Product )
+				->when( static fn( $product ) => $product instanceof WC_Product && should_publish_stock() )
 				->data( static fn( WC_Product $product ) => stock_payload( $product ) )
 				->register();
 		}
@@ -145,8 +192,10 @@ add_action(
 			->when( __NAMESPACE__ . '\should_publish_cart_add' )
 			->data(
 				static function ( $cart_item_key, $product_id, $quantity, $variation_id = 0 ) {
-					$product = wc_get_product( $variation_id ? (int) $variation_id : (int) $product_id );
-					return cart_added_payload( $product, (int) $quantity, actor_hash() );
+					$product   = wc_get_product( $variation_id ? (int) $variation_id : (int) $product_id );
+					$image_url = wp_get_attachment_image_url( $product->get_image_id(), 'woocommerce_gallery_thumbnail' );
+					$image_url = is_string( $image_url ) ? $image_url : '';
+					return cart_added_payload( $product, (int) $quantity, basket_id(), $image_url );
 				}
 			)
 			->register();

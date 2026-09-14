@@ -6,8 +6,8 @@
 !LICENSE.md
 
 # Explicit inclusions
-!wordsocket-woocommerce
-!wordsocket-woocommerce/**/*
+!shopsocket
+!shopsocket/**/*
 
 # Explicit exclusions
 node_modules

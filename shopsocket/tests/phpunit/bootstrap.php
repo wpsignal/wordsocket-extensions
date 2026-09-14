@@ -32,8 +32,8 @@ foreach ( array( 'WPSignal\\WPS' => 'WordSocket', 'WooCommerce' => 'WooCommerce'
 		exit( 1 );
 	}
 }
-if ( ! defined( 'WPSignal\\Extensions\\WooCommerce\\VERSION' ) ) {
-	fwrite( STDERR, "WordSocket for WooCommerce is not active on the target site.\n" );
+if ( ! defined( 'WPSignal\\Extensions\\ShopSocket\\VERSION' ) ) {
+	fwrite( STDERR, "ShopSocket for WooCommerce is not active on the target site.\n" );
 	exit( 1 );
 }
 

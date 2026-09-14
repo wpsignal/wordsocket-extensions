@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "build"
+  },
+  "include": ["src/storefront/storefront.ts", "src/types/**/*.d.ts"]
+}

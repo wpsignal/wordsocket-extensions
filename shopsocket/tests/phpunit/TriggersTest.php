@@ -5,16 +5,19 @@
  */
 
 use WPSignal\WPS;
-use const WPSignal\Extensions\WooCommerce\ACTIVITY_CHANNEL;
-use const WPSignal\Extensions\WooCommerce\ORDERS_CHANNEL;
-use const WPSignal\Extensions\WooCommerce\STOCK_CHANNEL;
+use function WPSignal\Extensions\ShopSocket\count_in_carts;
+use const WPSignal\Extensions\ShopSocket\ACTIVITY_CHANNEL;
+use const WPSignal\Extensions\ShopSocket\CARTS_PRESENCE_CHANNEL;
+use const WPSignal\Extensions\ShopSocket\CONNECTIONS_CHANNEL;
+use const WPSignal\Extensions\ShopSocket\ORDERS_CHANNEL;
+use const WPSignal\Extensions\ShopSocket\STOCK_CHANNEL;
 
 final class TriggersTest extends ExtensionTestCase {
 
 	public function test_the_extension_is_registered_and_reserves_the_orders_namespace(): void {
 		$registered = WPS::instance()->extensions()->registered();
-		$this->assertArrayHasKey( 'wordsocket-woocommerce', $registered );
-		$this->assertSame( array( 'woocommerce/woocommerce.php' => 'WooCommerce' ), $registered['wordsocket-woocommerce']['requires'] );
+		$this->assertArrayHasKey( 'shopsocket', $registered );
+		$this->assertSame( array( 'woocommerce/woocommerce.php' => 'WooCommerce' ), $registered['shopsocket']['requires'] );
 
 		$channels = WPS::instance()->channels();
 		$this->assertTrue( $channels->is_strict() );
@@ -27,15 +30,22 @@ final class TriggersTest extends ExtensionTestCase {
 
 		$visitor_channels = apply_filters( 'wpsignal_token_channels', array( 'site:site123:events' ), 0, $site_id );
 		$this->assertContains( 'site:site123:' . STOCK_CHANNEL, $visitor_channels );
+		$this->assertContains( 'site:site123:' . ACTIVITY_CHANNEL, $visitor_channels );
 		$this->assertNotContains( 'site:site123:' . ORDERS_CHANNEL, $visitor_channels );
 		$visitor_prefixes = $channels->allowed_prefixes( 0, $site_id, $visitor_channels );
 		$this->assertNotContains( 'site:site123:woo:orders:', $visitor_prefixes );
+		// Visitors may write presence on the carts namespace, but never subscribe to it.
+		$this->assertContains( 'site:site123:woo:carts:', $visitor_prefixes );
+		$this->assertNotContains( 'site:site123:' . CARTS_PRESENCE_CHANNEL, $visitor_channels );
 
 		$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
 		$this->assertNotEmpty( $admins );
 		$admin_id       = (int) $admins[0];
 		$staff_channels = apply_filters( 'wpsignal_token_channels', array( 'site:site123:events' ), $admin_id, $site_id );
 		$this->assertContains( 'site:site123:' . ORDERS_CHANNEL, $staff_channels, 'staff auto-subscribe to the feed' );
+		$this->assertContains( 'site:site123:' . CONNECTIONS_CHANNEL, $staff_channels, 'and to the relay\'s connection count' );
+		$this->assertContains( 'site:site123:' . CARTS_PRESENCE_CHANNEL, $staff_channels, 'and to shopper presence' );
+		$this->assertNotContains( 'site:site123:' . CONNECTIONS_CHANNEL, $visitor_channels );
 		$this->assertContains( 'site:site123:woo:orders:', $channels->allowed_prefixes( $admin_id, $site_id, $staff_channels ) );
 	}
 
@@ -52,9 +62,20 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertSame( 4, $data['stock_quantity'] );
 		$this->assertSame( 'instock', $data['stock_status'] );
 		$this->assertTrue( $data['purchasable'] );
-		$this->assertStringContainsString( '4 in stock', wp_strip_all_tags( $data['availability'] ) );
+		// Availability in WooCommerce's own words, so the storefront needs no stock rules.
+		$this->assertSame( '4 in stock', $data['availability_text'] );
+		$this->assertSame( 'in-stock', $data['availability_class'] );
+		$this->assertSame(
+			array( 'product_id', 'variation_id', 'name', 'stock_quantity', 'stock_status', 'purchasable', 'availability_text', 'availability_class' ),
+			array_keys( $data )
+		);
 
 		$this->assertCount( 0, $this->events_on( 'events', 'post.updated' ), 'products are excluded from the default trigger' );
+
+		wc_update_product_stock( $product, 0 );
+		$events = $this->events_on( STOCK_CHANNEL, 'woo.stock.changed' );
+		$this->assertSame( 'Out of stock', end( $events )['data']['availability_text'] );
+		$this->assertSame( 'out-of-stock', end( $events )['data']['availability_class'] );
 	}
 
 	public function test_selling_across_the_low_and_out_of_stock_thresholds_notifies_staff(): void {
@@ -122,7 +143,7 @@ final class TriggersTest extends ExtensionTestCase {
 
 	public function test_adding_to_the_basket_publishes_anonymous_activity_once_per_throttle_window(): void {
 		$product = $this->make_product( 10 );
-		delete_transient( 'wswoo_act_' . $product->get_id() );
+		delete_transient( 'shopsocket_act_' . $product->get_id() );
 		WC()->cart->empty_cart();
 
 		WC()->cart->add_to_cart( $product->get_id(), 2 );
@@ -134,71 +155,53 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertSame( 'PHPUnit Widget', $data['name'] );
 		$this->assertSame( 2, $data['quantity'] );
 		$this->assertStringContainsString( 'phpunit-widget', $data['permalink'] );
-		$this->assertSame( array( 'product_id', 'variation_id', 'name', 'permalink', 'quantity', 'actor', 'in_carts' ), array_keys( $data ), 'nothing about who' );
+		$this->assertSame( '', $data['image'], 'no thumbnail on the fixture product' );
+		$this->assertSame( array( 'product_id', 'variation_id', 'name', 'permalink', 'image', 'quantity', 'actor', 'in_carts' ), array_keys( $data ), 'nothing about who' );
 
 		// Second add inside the window is throttled.
 		WC()->cart->add_to_cart( $product->get_id(), 1 );
 		$this->assertCount( 1, $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' ) );
 
 		// Window elapsed: publishes again. Disabled by filter: silent.
-		delete_transient( 'wswoo_act_' . $product->get_id() );
+		delete_transient( 'shopsocket_act_' . $product->get_id() );
 		WC()->cart->add_to_cart( $product->get_id(), 1 );
 		$this->assertCount( 2, $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' ) );
 
-		delete_transient( 'wswoo_act_' . $product->get_id() );
-		add_filter( 'wordsocket_woocommerce_activity_enabled', '__return_false' );
+		delete_transient( 'shopsocket_act_' . $product->get_id() );
+		add_filter( 'shopsocket_activity_enabled', '__return_false' );
 		try {
 			WC()->cart->add_to_cart( $product->get_id(), 1 );
 		} finally {
-			remove_filter( 'wordsocket_woocommerce_activity_enabled', '__return_false' );
+			remove_filter( 'shopsocket_activity_enabled', '__return_false' );
 		}
 		$this->assertCount( 2, $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' ) );
 		WC()->cart->empty_cart();
 	}
 
-	public function test_visitor_tokens_carry_the_activity_channel(): void {
-		$channels = apply_filters( 'wpsignal_token_channels', array( 'site:s:events' ), 0, 's' );
-		$this->assertContains( 'site:s:' . ACTIVITY_CHANNEL, $channels );
-	}
-
-	public function test_in_carts_counts_shoppers_and_removals_publish_the_new_count(): void {
+	public function test_in_carts_counts_holders_and_removals_publish_the_new_count(): void {
 		$product = $this->make_product( 10 );
 		$id      = $product->get_id();
-		delete_transient( 'wswoo_carts_' . $id );
-		delete_transient( 'wswoo_act_' . $id );
+		delete_transient( 'shopsocket_act_' . $id );
 		WC()->cart->empty_cart();
+		$this->clear_baskets();
 		$this->published = array();
 
-		// Two other shoppers already have it (tracked by their session hashes).
-		\WPSignal\Extensions\WooCommerce\track_cart_add( $id, 'shopper-a' );
-		\WPSignal\Extensions\WooCommerce\track_cart_add( $id, 'shopper-b' );
-		$this->assertSame( 2, \WPSignal\Extensions\WooCommerce\count_in_carts( $id ) );
+		// Two other shoppers already hold it.
+		$this->seed_basket( 'shopper-a', array( $id ), 10.0 );
+		$this->seed_basket( 'shopper-b', array( $id ), 10.0 );
+		$this->assertSame( 2, count_in_carts( $id ) );
 
 		// This session adds it: the event carries the count including us.
-		$key = WC()->cart->add_to_cart( $id, 1 );
-		$added = $this->events_on( \WPSignal\Extensions\WooCommerce\ACTIVITY_CHANNEL, 'woo.cart.added' );
+		$key   = WC()->cart->add_to_cart( $id, 1 );
+		$added = $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' );
 		$this->assertCount( 1, $added );
 		$this->assertSame( 3, $added[0]['data']['in_carts'] );
 		$this->assertNotSame( '', $added[0]['data']['actor'], 'the adding session is identified anonymously' );
 
 		// Removing our line publishes the new count, without an actor.
 		WC()->cart->remove_cart_item( $key );
-		$removed = $this->events_on( \WPSignal\Extensions\WooCommerce\ACTIVITY_CHANNEL, 'woo.cart.removed' );
+		$removed = $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.removed' );
 		$this->assertCount( 1, $removed );
 		$this->assertSame( array( 'product_id' => $id, 'variation_id' => 0, 'in_carts' => 2 ), $removed[0]['data'] );
-
-		// Abandoned carts age out after the session lifetime.
-		set_transient( 'wswoo_carts_' . $id, array( 'shopper-a' => time() - 3 * DAY_IN_SECONDS, 'shopper-b' => time() ), DAY_IN_SECONDS );
-		$this->assertSame( 1, \WPSignal\Extensions\WooCommerce\count_in_carts( $id ) );
-
-		// Emptying the cart (what checkout does) untracks every line.
-		delete_transient( 'wswoo_act_' . $id );
-		WC()->cart->add_to_cart( $id, 1 );
-		$this->published = array();
-		WC()->cart->empty_cart();
-		$emptied = $this->events_on( \WPSignal\Extensions\WooCommerce\ACTIVITY_CHANNEL, 'woo.cart.removed' );
-		$this->assertCount( 1, $emptied );
-		$this->assertSame( 1, $emptied[0]['data']['in_carts'], 'only shopper-b remains' );
-		delete_transient( 'wswoo_carts_' . $id );
 	}
 }

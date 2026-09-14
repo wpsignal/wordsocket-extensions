@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
-<ruleset name="WordSocket">
-    <description>Generally-applicable sniffs for WordSocket plugin.</description>
+<ruleset name="ShopSocket">
+    <description>Generally-applicable sniffs for the ShopSocket plugin.</description>
 	<rule ref="WordPress.WP.Capabilities">
 		<properties>
 			<property name="custom_capabilities" type="array">
@@ -10,7 +10,6 @@
 	</rule>
 	<rule ref="WordPress">
 		<exclude name="WordPress.Files.FileName.InvalidClassFileName" />
-		<exclude name="WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode" />
     </rule>
     <rule ref="PHPCompatibilityWP"/>
 	<config name="testVersion" value="8.2-"/>

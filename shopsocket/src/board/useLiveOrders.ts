@@ -5,20 +5,19 @@
  */
 import { useEffect, useState } from "@wordpress/element";
 
-export type OrderRow = WooOrderEvent & { lastEvent: string; updatedAt: number };
+/** An order on the board; `updatedAt` is 0 for the server-rendered rows and drives the "fresh" flash. */
+export type OrderRow = WooOrderEvent & { updatedAt: number };
 
 const MAX_ROWS = 100;
 
-function upsert(rows: OrderRow[], event: WooOrderEvent, name: string): OrderRow[] {
-  const row: OrderRow = { ...event, lastEvent: name, updatedAt: Date.now() };
+function upsert(rows: OrderRow[], event: WooOrderEvent): OrderRow[] {
+  const row: OrderRow = { ...event, updatedAt: Date.now() };
   const rest = rows.filter((r) => r.order_id !== event.order_id);
   return [row, ...rest].slice(0, MAX_ROWS);
 }
 
 export function useLiveOrders(initial: WooOrderEvent[], onNewOrder: (order: WooOrderEvent) => void) {
-  const [rows, setRows] = useState<OrderRow[]>(() =>
-    initial.map((o) => ({ ...o, lastEvent: "loaded", updatedAt: 0 })),
-  );
+  const [rows, setRows] = useState<OrderRow[]>(() => initial.map((o) => ({ ...o, updatedAt: 0 })));
 
   useEffect(() => {
     const wps = window.WPS;
@@ -26,7 +25,7 @@ export function useLiveOrders(initial: WooOrderEvent[], onNewOrder: (order: WooO
     const offs = ["woo.order.created", "woo.order.paid", "woo.order.status"].map((name) =>
       wps.on(name, (data) => {
         const event = data as unknown as WooOrderEvent;
-        setRows((current) => upsert(current, event, name));
+        setRows((current) => upsert(current, event));
         if (name === "woo.order.created") onNewOrder(event);
       }),
     );

@@ -1,0 +1,10 @@
+{
+  "wpRoot": "/path/to/woocommerce-wordpress",
+  "wpBaseUrl": "https://woo.example.test",
+  "wpUsername": "e2e-admin",
+  "wpPassword": "change-me",
+  "apiUrl": "https://api.example.test:8443",
+  "dashboardEmail": "e2e@example.test",
+  "dashboardPassword": "change-me",
+  "localTls": "../../api/scripts/local-tls.sh"
+}

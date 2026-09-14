@@ -6,7 +6,7 @@ Plugins published on WordPress.org that extend [WordSocket](https://github.com/w
 
 | Plugin | What it does |
 |--------|--------------|
-| `wordsocket-woocommerce` (in progress) | A live orders board for your team and live stock on product pages. |
+| `shopsocket` (ShopSocket for WooCommerce, in progress) | A live orders board for your team and live stock on product pages. |
 
 ## License
 
