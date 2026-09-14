@@ -1,22 +1,23 @@
 <?php
 /**
- * Live Orders: a WooCommerce submenu screen rendering the React board.
+ * ShopSocket dashboard under the WooCommerce menu: shoppers online, baskets
+ * in progress, and the live orders board staff keep open all day.
  *
  * The WordSocket client is enqueued by WordSocket itself on every admin page
  * for logged-in users (with the staff token carrying the orders namespace),
- * so the board only needs its own bundle and the initial order list.
+ * so the screen only needs its own bundle, the initial order list, and a
+ * snapshot of the figures (`dashboard.php`) it then keeps fresh through
+ * `GET /dashboard`.
  *
- * @package WPSignal\Extensions\WooCommerce
+ * @package WPSignal\Extensions\ShopSocket
  */
 
-namespace WPSignal\Extensions\WooCommerce;
+namespace WPSignal\Extensions\ShopSocket;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const BOARD_SLUG   = 'wordsocket-live-orders';
-const BOARD_CAP    = 'manage_woocommerce';
 const BOARD_ORDERS = 50;
 
 add_action(
@@ -24,11 +25,11 @@ add_action(
 	static function (): void {
 		add_submenu_page(
 			'woocommerce',
-			__( 'Live Orders', 'wordsocket-woocommerce' ),
-			__( 'Live Orders', 'wordsocket-woocommerce' ),
-			BOARD_CAP,
-			BOARD_SLUG,
-			__NAMESPACE__ . '\render_board',
+			__( 'ShopSocket', 'shopsocket' ),
+			__( 'ShopSocket', 'shopsocket' ),
+			STAFF_CAP,
+			SLUG,
+			__NAMESPACE__ . '\render_dashboard',
 			2
 		);
 	},
@@ -70,12 +71,12 @@ function order_statuses(): array {
 }
 
 /**
- * Render the board screen and enqueue its bundle.
+ * Render the dashboard screen and enqueue its bundle.
  *
  * @return void
  */
-function render_board(): void {
-	if ( ! current_user_can( BOARD_CAP ) ) {
+function render_dashboard(): void {
+	if ( ! current_user_can( STAFF_CAP ) ) {
 		return;
 	}
 
@@ -86,24 +87,28 @@ function render_board(): void {
 	);
 
 	wp_enqueue_script( SLUG . '-board', URL . 'build/board.js', $asset['dependencies'], $asset['version'], true );
-	wp_set_script_translations( SLUG . '-board', 'wordsocket-woocommerce', DIR . 'languages' );
-	wp_enqueue_style( SLUG . '-board', URL . 'build/board.css', array( 'wp-components' ), $asset['version'] );
+	wp_set_script_translations( SLUG . '-board', 'shopsocket', DIR . 'languages' );
+	// The bundle carries its own @wordpress/components and DataViews styles
+	// (wp-scripts writes package stylesheets to style-board.css).
+	wp_enqueue_style( SLUG . '-board-vendor', URL . 'build/style-board.css', array(), $asset['version'] );
+	wp_style_add_data( SLUG . '-board-vendor', 'rtl', 'replace' );
+	wp_enqueue_style( SLUG . '-board', URL . 'build/board.css', array( SLUG . '-board-vendor' ), $asset['version'] );
 	wp_style_add_data( SLUG . '-board', 'rtl', 'replace' );
 
 	wp_add_inline_script(
 		SLUG . '-board',
-		'window.wordsocketWoo = ' . wp_json_encode(
+		'window.shopSocket = ' . wp_json_encode(
 			array(
-				'restUrl'        => rest_url( 'wc/v3/' ),
+				'dashboardUrl'   => rest_url( REST_NS . '/dashboard' ),
 				'nonce'          => wp_create_nonce( 'wp_rest' ),
 				'orders'         => initial_orders(),
 				'statuses'       => order_statuses(),
+				'snapshot'       => dashboard_snapshot(),
 				'currencySymbol' => html_entity_decode( get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8' ),
-				'soundDefault'   => true,
 			)
 		) . ';',
 		'before'
 	);
 
-	echo '<div class="wrap"><div id="wordsocket-woo-board"></div></div>';
+	echo '<div class="wrap"><div id="shopsocket-board"></div></div>';
 }

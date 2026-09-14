@@ -1,0 +1,265 @@
+.shopsocket-board {
+  max-width: 1200px;
+
+  h2 {
+    font-size: 1.1em;
+    margin: 24px 0 8px;
+  }
+}
+
+.shopsocket-board__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-block: 8px 16px;
+
+  h1 {
+    margin: 0;
+  }
+}
+
+.shopsocket-board__controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.shopsocket-board__empty {
+  color: #50575e;
+  font-size: 14px;
+  margin: 0;
+}
+
+/* Tiles: the left column of the summary grid below. */
+
+.shopsocket-tiles {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.shopsocket-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 20px;
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  border-radius: 4px;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.04);
+}
+
+.shopsocket-tile__value {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.shopsocket-tile__label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.shopsocket-tile__detail {
+  font-size: 12px;
+  color: #646970;
+}
+
+/* Board */
+
+.shopsocket-board__orders {
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  border-radius: 4px;
+  padding: 0 16px 8px;
+
+  .dataviews-wrapper {
+    min-height: 200px;
+  }
+}
+
+.shopsocket-order {
+  font-weight: 600;
+  text-decoration: none;
+
+  &.is-fresh {
+    animation: shopsocket-flash 4s ease-out;
+  }
+}
+
+@keyframes shopsocket-flash {
+  from {
+    background-color: #fff3c4;
+    box-shadow: 0 0 0 6px #fff3c4;
+  }
+  to {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+.shopsocket-conn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid #c3c4c7;
+
+  &::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #a7aaad;
+  }
+
+  &.is-on::before {
+    background: #00a32a;
+  }
+
+  &.is-off::before {
+    background: #d63638;
+  }
+}
+
+.shopsocket-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 2px;
+  background: #f0f0f1;
+  font-size: 12px;
+  white-space: nowrap;
+
+  &.status-processing {
+    background: #c6e1c6;
+  }
+
+  &.status-completed {
+    background: #c8d7e1;
+  }
+
+  &.status-on-hold {
+    background: #f8dda7;
+  }
+
+  &.status-cancelled,
+  &.status-failed,
+  &.status-refunded {
+    background: #eba3a3;
+  }
+}
+
+.shopsocket-stock-alert {
+  margin-right: 12px;
+
+  &.is-out {
+    color: #d63638;
+    font-weight: 600;
+  }
+}
+
+/* Kitchen mode: the board fills the viewport and the admin chrome goes. */
+body.shopsocket-fullscreen {
+  #adminmenumain,
+  #wpadminbar,
+  #wpfooter {
+    display: none;
+  }
+
+  #wpcontent {
+    margin-left: 0;
+    padding: 0;
+  }
+
+  .shopsocket-board {
+    max-width: none;
+    padding: 24px;
+    font-size: 18px;
+  }
+
+  .shopsocket-tile__value {
+    font-size: 48px;
+  }
+
+  .shopsocket-board__orders {
+    font-size: 18px;
+  }
+}
+
+/* Baskets panel: live vs abandoned */
+
+.shopsocket-summary {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.6fr);
+  gap: 16px;
+  margin-bottom: 16px;
+  transition: opacity 0.3s;
+
+  &.is-stale {
+    opacity: 0.6;
+  }
+}
+
+.shopsocket-baskets {
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  border-radius: 4px;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.04);
+  padding: 8px 4px;
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    padding: 8px 16px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  thead th {
+    font-size: 13px;
+    border-bottom: 1px solid #dcdcde;
+  }
+
+  thead th:first-child,
+  tbody th {
+    text-align: left;
+    font-weight: 500;
+  }
+
+  tbody th {
+    color: #646970;
+    font-size: 13px;
+  }
+
+  tbody td {
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  td.is-abandoned {
+    color: #996800;
+  }
+}
+
+.shopsocket-baskets__hint {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: #8c8f94;
+}
+
+@media (max-width: 782px) {
+  .shopsocket-summary {
+    grid-template-columns: 1fr;
+  }
+}
