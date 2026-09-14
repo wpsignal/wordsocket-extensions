@@ -1,0 +1,116 @@
+.shopsocket-stock--updated,
+.shopsocket-in-carts--updated {
+  animation: shopsocket-pulse 1.5s ease-out;
+}
+
+@keyframes shopsocket-pulse {
+  from {
+    background-color: rgb(255 243 196);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.shopsocket-stock[hidden],
+.shopsocket-in-carts[hidden],
+.shopsocket-toast[hidden],
+.shopsocket-toast [hidden] {
+  display: none;
+}
+
+.shopsocket-in-carts {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0 0 1em;
+  font-size: 0.9em;
+  opacity: 0.85;
+}
+
+.shopsocket-in-carts__dot {
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: currentColor;
+  animation: shopsocket-blink 2s ease-in-out infinite;
+}
+
+@keyframes shopsocket-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.single_add_to_cart_button.shopsocket-out-of-stock {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shopsocket-toasts {
+  position: fixed;
+  inset-inline-end: 1rem;
+  inset-block-end: 1rem;
+  z-index: 9999;
+  max-width: min(22rem, calc(100vw - 2rem));
+}
+
+.shopsocket-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: rgb(30 30 30 / 0.95);
+  color: #fff;
+  font-size: 0.9rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+
+  &.is-visible {
+    animation: shopsocket-toast-in 0.3s ease-out;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: underline;
+  }
+}
+
+.shopsocket-toast__image {
+  flex: none;
+  width: 3rem;
+  height: 3rem;
+  object-fit: cover;
+  border-radius: 0.25rem;
+}
+
+.shopsocket-toast__close {
+  margin-inline-start: auto;
+  background: none;
+  border: 0;
+  color: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+@keyframes shopsocket-toast-in {
+  from {
+    transform: translateY(0.5rem);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shopsocket-stock--updated,
+  .shopsocket-in-carts--updated,
+  .shopsocket-in-carts__dot,
+  .shopsocket-toast.is-visible {
+    animation: none;
+  }
+}
