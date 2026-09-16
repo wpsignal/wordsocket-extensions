@@ -26,8 +26,10 @@ test.describe("ShopSocket dashboard", () => {
 
     const product = await createProduct(requestUtils, "E2E Basket Widget", 20);
 
-    // One visitor context (keeps the session cookie so a reopened tab is the
-    // same basket), a page that adds the product and enters presence.
+    /*
+     * One visitor context (keeps the session cookie so a reopened tab is the
+     * same basket), a page that adds the product and enters presence.
+     */
     const visitor = await visitorContext(browser, baseURL);
     try {
       const shop = await visitor.newPage();
@@ -42,28 +44,56 @@ test.describe("ShopSocket dashboard", () => {
       await expect.poll(num(abandonedShoppers), { timeout: 5_000 }).toBe(abandoned0);
       const liveWithShopper = await num(liveShoppers)();
 
-      // Closing the tab drops the connection: the relay reports the leave and the
-      // basket moves to abandoned at once, no beacon and no timeout.
+      /*
+       * The product itself is listed under live products, linking to its edit
+       * screen. Asserted by name: this test created it, nobody else holds it.
+       */
+      const liveLink = page.locator(".shopsocket-live-products a", { hasText: "E2E Basket Widget" });
+      await expect(liveLink).toHaveAttribute("href", new RegExp(`post\\.php\\?post=${product.id}&action=edit$`), { timeout: 15_000 });
+      const liveCells = liveLink.locator("xpath=ancestor::tr[1]").locator(".shopsocket-live-products__count");
+      await expect(liveCells).toHaveText(["1", "1"]);
+
+      // A second unit of the same product: still one basket, two units.
+      await shop.locator(".single_add_to_cart_button").first().click();
+      await expect(liveCells).toHaveText(["1", "2"], { timeout: 15_000 });
+
+      /*
+       * Closing the tab drops the connection: the relay reports the leave and the
+       * basket moves to abandoned at once, no beacon and no timeout.
+       */
       await shop.close();
       await expect.poll(num(abandonedShoppers), { timeout: 10_000 }).toBeGreaterThanOrEqual(abandoned0 + 1);
       await expect.poll(num(liveShoppers), { timeout: 10_000 }).toBeLessThanOrEqual(liveWithShopper - 1);
+      await expect(liveLink).toHaveCount(0, { timeout: 10_000 });
 
-      // Reopening the tab (same session, same basket) reconnects and it goes live
-      // again, without touching the cart.
+      /*
+       * Reopening the tab (same session, same basket) reconnects and it goes live
+       * again, without touching the cart.
+       */
       const reopened = await visitor.newPage();
       await reopened.goto(product.permalink);
       await waitForLive(reopened);
       await expect.poll(num(liveShoppers), { timeout: 10_000 }).toBeGreaterThanOrEqual(liveWithShopper);
       await expect.poll(num(abandonedShoppers), { timeout: 10_000 }).toBe(abandoned0);
+      await expect(liveLink).toBeVisible({ timeout: 10_000 });
+
+      /*
+       * The row store is a cache: lose this shopper's row, and the next page
+       * load writes it back from their real cart, so the product is live again.
+       */
+      clearBaskets(product.id);
+      await expect(liveLink).toHaveCount(0, { timeout: 10_000 });
+      await reopened.reload();
+      await waitForLive(reopened);
+      await expect(liveLink).toBeVisible({ timeout: 15_000 });
     } finally {
       await visitor.close();
+      clearBaskets(product.id);
       await deleteProduct(requestUtils, product.id);
-      clearBaskets();
     }
   });
 
   test("a logged-in shopper's own basket shows live, not abandoned", async ({ admin, page, requestUtils }) => {
-    clearBaskets();
     const product = await createProduct(requestUtils, "E2E LoggedIn Basket", 20);
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
@@ -86,8 +116,8 @@ test.describe("ShopSocket dashboard", () => {
       await expect.poll(num(abandonedShoppers), { timeout: 5_000 }).toBe(abandoned0);
     } finally {
       await shop.close();
+      clearBaskets(product.id);
       await deleteProduct(requestUtils, product.id);
-      clearBaskets();
     }
   });
 
@@ -96,6 +126,7 @@ test.describe("ShopSocket dashboard", () => {
     await waitForLive(page);
 
     const usersTile = page.locator(".shopsocket-tile.is-users .shopsocket-tile__value");
+    // The users-online tile as a number, as a poll callback.
     const users = async () => Number((await usersTile.textContent()) || 0);
     const users0 = await users();
 

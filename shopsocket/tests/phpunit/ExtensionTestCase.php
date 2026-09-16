@@ -30,6 +30,7 @@ abstract class ExtensionTestCase extends TestCase {
 	/** @var int[] Orders to delete in tearDown. */
 	protected array $orders = array();
 
+	/** Fake credentials, an empty basket store, and an HTTP interceptor that records every publish. */
 	protected function setUp(): void {
 		parent::setUp();
 		foreach ( self::OPTIONS as $name ) {
@@ -61,6 +62,7 @@ abstract class ExtensionTestCase extends TestCase {
 		add_filter( 'pre_http_request', $this->http_filter, 10, 3 );
 	}
 
+	/** Drop the interceptor and this test's products and orders, then restore the options. */
 	protected function tearDown(): void {
 		remove_filter( 'pre_http_request', $this->http_filter, 10 );
 		$this->clear_baskets();
@@ -102,28 +104,21 @@ abstract class ExtensionTestCase extends TestCase {
 		delete_transient( 'shopsocket_baskets_pub' );
 	}
 
-	/**
-	 * Seed one basket row directly, bypassing the WooCommerce cart. Live vs
-	 * abandoned is decided by relay presence, not stored here, so this only sets
-	 * contents.
-	 *
-	 * @param string $id       Basket id.
-	 * @param int[]  $products Parent product IDs in the basket.
-	 * @param float  $value    Cart value.
-	 * @return void
-	 */
-	protected function seed_basket( string $id, array $products, float $value ): void {
+	/** Seed one basket row directly, bypassing the WooCommerce cart; one unit of each product unless `$quantities` says otherwise. */
+	protected function seed_basket( string $id, array $products, float $value, array $quantities = array() ): void {
 		$baskets = get_transient( 'shopsocket_baskets' );
 		$baskets = is_array( $baskets ) ? $baskets : array();
 		$baskets[ $id ] = array(
-			'products'  => array_map( 'intval', $products ),
-			'value'     => $value,
-			'currency'  => get_woocommerce_currency(),
-			'last_seen' => time(),
+			'products'   => array_map( 'intval', $products ),
+			'quantities' => $quantities,
+			'value'      => $value,
+			'currency'   => get_woocommerce_currency(),
+			'last_seen'  => time(),
 		);
 		set_transient( 'shopsocket_baskets', $baskets, DAY_IN_SECONDS );
 	}
 
+	/** A managed-stock simple product, deleted in tearDown. */
 	protected function make_product( int $stock = 5, int $low = 2 ): WC_Product_Simple {
 		$product = new WC_Product_Simple();
 		$product->set_name( 'PHPUnit Widget' );
@@ -137,6 +132,7 @@ abstract class ExtensionTestCase extends TestCase {
 		return $product;
 	}
 
+	/** A guest order holding the product, deleted in tearDown. */
 	protected function make_order( WC_Product $product, int $qty = 1 ): WC_Order {
 		$order = wc_create_order( array( 'customer_id' => 0 ) );
 		$order->add_product( $product, $qty );

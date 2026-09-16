@@ -1,5 +1,4 @@
 .shopsocket-board {
-  max-width: 1200px;
 
   h2 {
     font-size: 1.1em;
@@ -32,7 +31,7 @@
   margin: 0;
 }
 
-/* Tiles: the left column of the summary grid below. */
+/* Tiles, the left column of the summary grid */
 
 .shopsocket-tiles {
   display: flex;
@@ -69,7 +68,7 @@
   color: #646970;
 }
 
-/* Board */
+/* Live orders */
 
 .shopsocket-board__orders {
   background: #fff;
@@ -164,7 +163,7 @@
   }
 }
 
-/* Kitchen mode: the board fills the viewport and the admin chrome goes. */
+/* Full screen: the board fills the viewport and the admin chrome goes */
 body.shopsocket-fullscreen {
   #adminmenumain,
   #wpadminbar,
@@ -187,7 +186,8 @@ body.shopsocket-fullscreen {
     font-size: 48px;
   }
 
-  .shopsocket-board__orders {
+  .shopsocket-board__orders,
+  .shopsocket-live-products {
     font-size: 18px;
   }
 }
@@ -256,6 +256,63 @@ body.shopsocket-fullscreen {
   font-size: 11px;
   font-weight: 400;
   color: #8c8f94;
+}
+
+/* Products in live baskets */
+
+.shopsocket-live-products {
+  background: #fff;
+  border: 1px solid #c3c4c7;
+  border-radius: 4px;
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.04);
+  padding: 8px 4px;
+  margin-bottom: 16px;
+
+  h2 {
+    font-size: 13px;
+    font-weight: 500;
+    margin: 4px 16px 8px;
+  }
+
+  .shopsocket-board__empty {
+    padding: 0 16px 8px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    padding: 6px 16px;
+    text-align: left;
+  }
+
+  thead th {
+    font-size: 13px;
+    color: #646970;
+    border-bottom: 1px solid #dcdcde;
+  }
+
+  tbody th {
+    font-weight: 500;
+  }
+
+  a {
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .shopsocket-live-products__count {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  tbody .shopsocket-live-products__count {
+    font-weight: 600;
+  }
 }
 
 @media (max-width: 782px) {

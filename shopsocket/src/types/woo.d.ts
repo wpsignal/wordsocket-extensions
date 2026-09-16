@@ -3,7 +3,13 @@
 interface ShopSocketBoardConfig {
 	/** `GET` here returns fresh WooDashboardData (inc/dashboard.php). */
 	dashboardUrl: string;
+	/** `GET ?ids=1,2,3` here returns `{ products: WooProductRef[] }` for the live-products list. */
+	productsUrl: string;
+	/** The wp-admin base; an order link is only followed when it points there. */
+	adminUrl: string;
 	nonce: string;
+	/** The channel each event is trusted from (inc/channels.php). */
+	channels: { orders: string; stock: string; presence: string; connections: string };
 	/** Orders to render before the first live event. */
 	orders: WooOrderEvent[];
 	/** Statuses the board shows, in display order. */
@@ -15,10 +21,12 @@ interface ShopSocketBoardConfig {
 
 /** One basket row from the server (inc/carts.php `all_baskets()`). */
 interface WooBasketRow {
-	/** Stable, anonymous session id (SHA-256 of the WooCommerce customer id, 16 hex). */
+	/** `basket_id()`: 16 hex of SHA-256 over the user id or the guest session id. */
 	id: string;
 	/** Parent product IDs in the cart. */
 	products: number[];
+	/** Units of each parent product, keyed by product id (JSON object keys are strings). */
+	quantities: Record< string, number >;
 	/** Cart value. */
 	value: number;
 	/** ISO 4217 code for `value`. */
@@ -51,6 +59,16 @@ interface WooDashboardSnapshot {
 	/** Distinct storefront visitors connected right now (deduped by visitor id across tabs). */
 	usersOnline: number;
 	online: { active_connections: number; max_connections: number } | null;
+	/** Products in live baskets: how many of those baskets hold each, and the units across them, unordered. */
+	liveProducts: Array< { id: number; baskets: number; units: number } >;
+}
+
+/** A product the board names (inc/dashboard.php `products_for_board()`). */
+interface WooProductRef {
+	id: number;
+	name: string;
+	/** The wp-admin edit screen; the board follows it only into this site's admin. */
+	edit_url: string;
 }
 
 /** Payload of woo.order.* events (inc/payloads.php). */

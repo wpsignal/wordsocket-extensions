@@ -3,21 +3,26 @@
  * what is happening in the store right now, then the live orders board.
  */
 import { __, sprintf } from "@wordpress/i18n";
-import { useCallback, useEffect, useRef, useState } from "@wordpress/element";
+import { useCallback, useEffect, useMemo, useRef, useState } from "@wordpress/element";
 import { Button, Notice, ToggleControl } from "@wordpress/components";
 import { useLiveOrders, useStockAlerts } from "./useLiveOrders";
 import { useConnectionState } from "./useConnectionState";
 import { useDashboardSnapshot } from "./useDashboardSnapshot";
+import { useProductNames } from "./useProductNames";
+import { adminUrlOrNull } from "./trust";
 import { LiveOrders } from "./LiveOrders";
 import { playChime } from "./chime";
 
 const config: ShopSocketBoardConfig = window.shopSocket ?? {
   dashboardUrl: "",
+  productsUrl: "",
+  adminUrl: "",
   nonce: "",
   orders: [],
   statuses: [],
   snapshot: { baskets: [], online: null },
   currencySymbol: "",
+  channels: { orders: "", stock: "", presence: "", connections: "" },
 };
 
 const SOUND_KEY = "shopsocket-sound";
@@ -32,6 +37,7 @@ function readSound(): boolean {
   }
 }
 
+/** The board: header controls, tiles, the stock strip, and the live orders table. */
 export function Dashboard() {
   const [sound, setSound] = useState(readSound);
   const [fullscreen, setFullscreen] = useState(false);
@@ -42,8 +48,8 @@ export function Dashboard() {
     if (soundRef.current) playChime();
   }, []);
 
-  const rows = useLiveOrders(config.orders, onNewOrder);
-  const alerts = useStockAlerts();
+  const rows = useLiveOrders(config.orders, onNewOrder, config.channels);
+  const alerts = useStockAlerts(config.channels);
   const connection = useConnectionState();
   const { snapshot, stale } = useDashboardSnapshot(config);
 
@@ -67,7 +73,6 @@ export function Dashboard() {
         <div className="shopsocket-board__controls">
           <ConnectionBadge state={connection} />
           <ToggleControl
-            __nextHasNoMarginBottom
             label={__("Sound on new order", "shopsocket")}
             checked={sound}
             onChange={setSound}
@@ -79,6 +84,7 @@ export function Dashboard() {
       </header>
 
       <Tiles snapshot={snapshot} stale={stale} />
+      <LiveProductsPanel products={snapshot.liveProducts} />
 
       {alerts.length > 0 && (
         <Notice status="warning" isDismissible={false} className="shopsocket-board__stock">
@@ -100,7 +106,7 @@ export function Dashboard() {
 
       <section className="shopsocket-board__orders" aria-labelledby="shopsocket-orders-heading">
         <h2 id="shopsocket-orders-heading">{__("Live orders", "shopsocket")}</h2>
-        <LiveOrders rows={rows} statuses={config.statuses} currencySymbol={config.currencySymbol} />
+        <LiveOrders rows={rows} statuses={config.statuses} currencySymbol={config.currencySymbol} adminUrl={config.adminUrl} />
       </section>
     </div>
   );
@@ -108,6 +114,7 @@ export function Dashboard() {
 
 type BasketSegment = WooDashboardSnapshot["baskets"]["live"];
 
+/** A whole-unit amount in the browser's locale, or a rounded number when the currency is unknown. */
 function money(amount: number, currency: string): string {
   try {
     return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
@@ -116,6 +123,7 @@ function money(amount: number, currency: string): string {
   }
 }
 
+/** The "right now" figures: users online, open connections, and the baskets panel. */
 function Tiles({ snapshot, stale }: { snapshot: WooDashboardSnapshot; stale: boolean }) {
   const { baskets, usersOnline, online } = snapshot;
   return (
@@ -147,6 +155,7 @@ function Tiles({ snapshot, stale }: { snapshot: WooDashboardSnapshot; stale: boo
   );
 }
 
+/** Shoppers, products, and revenue, split into live and abandoned baskets. */
 function BasketsPanel({ live, abandoned }: { live: BasketSegment; abandoned: BasketSegment }) {
   return (
     <div className="shopsocket-baskets">
@@ -178,6 +187,72 @@ function BasketsPanel({ live, abandoned }: { live: BasketSegment; abandoned: Bas
   );
 }
 
+const LIVE_PRODUCTS = 100;
+
+/** Products in live baskets, most held first, at most LIVE_PRODUCTS of them, each linking to its edit screen. */
+function LiveProductsPanel({ products }: { products: WooDashboardSnapshot["liveProducts"] }) {
+  // Rank by live baskets before asking for names, so the fetch stays bounded.
+  const top = useMemo(
+    () => [...products].sort((a, b) => b.baskets - a.baskets || b.units - a.units || a.id - b.id).slice(0, LIVE_PRODUCTS),
+    [products],
+  );
+  const ref = useProductNames(
+    useMemo(() => top.map((p) => p.id), [top]),
+    config,
+  );
+  const rows = useMemo(
+    () =>
+      [...top].sort((a, b) => {
+        if (a.baskets !== b.baskets) return b.baskets - a.baskets;
+        if (a.units !== b.units) return b.units - a.units;
+        const an = ref(a.id)?.name;
+        const bn = ref(b.id)?.name;
+        if (an && bn) return an.localeCompare(bn);
+        if (an || bn) return an ? -1 : 1;
+        return a.id - b.id;
+      }),
+    [top, ref],
+  );
+
+  return (
+    <section className="shopsocket-live-products" aria-labelledby="shopsocket-live-products-heading">
+      <h2 id="shopsocket-live-products-heading">{__("Products in live baskets", "shopsocket")}</h2>
+      {rows.length === 0 ? (
+        <p className="shopsocket-board__empty">{__("No shopper with a basket is on the site right now.", "shopsocket")}</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{__("Product", "shopsocket")}</th>
+              <th scope="col" className="shopsocket-live-products__count">{__("Live baskets", "shopsocket")}</th>
+              <th scope="col" className="shopsocket-live-products__count">{__("Units", "shopsocket")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ id, baskets, units }) => {
+              const product = ref(id);
+              const label = product
+                ? product.name
+                : product === null
+                  ? sprintf(/* translators: %d: product id */ __("Product #%d (removed)", "shopsocket"), id)
+                  : `#${id}`;
+              const href = product ? adminUrlOrNull(product.edit_url, config.adminUrl) : null;
+              return (
+                <tr key={id}>
+                  <th scope="row">{href ? <a href={href}>{label}</a> : label}</th>
+                  <td className="shopsocket-live-products__count">{String(baskets)}</td>
+                  <td className="shopsocket-live-products__count">{String(units)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+/** One row of the baskets table. */
 function BasketRow({ label, live, abandoned }: { label: string; live: string; abandoned: string }) {
   return (
     <tr>
@@ -188,6 +263,7 @@ function BasketRow({ label, live, abandoned }: { label: string; live: string; ab
   );
 }
 
+/** The WordSocket connection in a word, with the retry countdown while down. */
 function ConnectionBadge({ state }: { state: WPSConnectionState | null }) {
   if (!state) {
     return <span className="shopsocket-conn is-off">{__("Realtime client not loaded", "shopsocket")}</span>;

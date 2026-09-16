@@ -15,9 +15,20 @@ export function visitorContext(browser: Browser, baseURL?: string): Promise<Brow
 /** The number in a tile or cell (digits and dots only, so "$1,234" reads as 1234), as a poll callback. */
 export const num = (loc: Locator) => async () => Number((await loc.textContent())?.replace(/[^\d.]/g, "") || 0);
 
-/** Forget every basket row on the target site, so a test starts from an empty store. */
-export function clearBaskets(): void {
-  wp("eval", "delete_transient('shopsocket_baskets'); delete_transient('shopsocket_baskets_pub');");
+/**
+ * Forget the basket rows holding `productId`, or every row when no product is
+ * given. The rehearsal site is shared with manual testing, so tests clear only
+ * what they created.
+ */
+export function clearBaskets(productId?: number): void {
+  if (productId === undefined) {
+    wp("eval", "delete_transient('shopsocket_baskets'); delete_transient('shopsocket_baskets_pub');");
+    return;
+  }
+  wp(
+    "eval",
+    `$rows = get_transient('shopsocket_baskets'); if (is_array($rows)) { foreach ($rows as $id => $row) { if (in_array(${productId}, (array) ($row['products'] ?? []), true)) { unset($rows[$id]); } } set_transient('shopsocket_baskets', $rows, 2 * DAY_IN_SECONDS); delete_transient('shopsocket_baskets_pub'); }`,
+  );
 }
 
 /** A managed-stock simple product through the WooCommerce REST API. */
@@ -40,6 +51,7 @@ export async function createProduct(requestUtils: RequestUtils, name: string, st
   return product as { id: number; permalink: string };
 }
 
+/** Delete a product for good (no trash) through the WooCommerce REST API. */
 export async function deleteProduct(requestUtils: RequestUtils, id: number): Promise<void> {
   await requestUtils.rest({ method: "DELETE", path: `/wc/v3/products/${id}`, params: { force: true } });
 }
@@ -59,6 +71,7 @@ export async function createOrder(requestUtils: RequestUtils, productId: number,
   return order as { id: number; number: string; status: string };
 }
 
+/** Delete an order for good (no trash) through the WooCommerce REST API. */
 export async function deleteOrder(requestUtils: RequestUtils, id: number): Promise<void> {
   await requestUtils.rest({ method: "DELETE", path: `/wc/v3/orders/${id}`, params: { force: true } });
 }

@@ -1,15 +1,10 @@
 <?php
 /**
- * The basket store: one row per anonymous shopper, holding what is in their
- * cart. Whether a basket is live or abandoned is not decided here: the dashboard
- * crosses these rows with the relay's presence membership (who has an open tab
- * right now), keyed by the same `basket_id`. So this file only tracks contents.
+ * Basket rows: what each shopper has in their cart, keyed by `basket_id()`.
  *
- * WooCommerce keeps a shopper's cart in their session for the session lifetime
- * (48h by default) whether or not they are on the site, so a row persists until
- * the session would, then ages out. Contents are read server-side from the
- * shopper's own request (`current_cart_state()`), never trusted from the client.
- * Any change republishes the rows to staff so the dashboard updates at once.
+ * Only contents live here. Live or abandoned is decided by the dashboard,
+ * which crosses these rows with the relay's presence membership. A row is
+ * read from the shopper's own request and lasts as long as their session.
  *
  * @package WPSignal\Extensions\ShopSocket
  */
@@ -27,18 +22,17 @@ const BASKETS_TRANSIENT = 'shopsocket_baskets';
 const BASKETS_PUB_HASH  = 'shopsocket_baskets_pub';
 
 /**
- * Seconds a basket row survives without a cart change: the WooCommerce session
- * lifetime, so an abandoned basket drops when its session would.
+ * Seconds a row survives without a cart change: the WooCommerce session lifetime.
  *
  * @return int
  */
 function basket_lifetime(): int {
+	// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WooCommerce's own filter, read for its value.
 	return max( 60, (int) apply_filters( 'wc_session_expiration', 2 * DAY_IN_SECONDS ) );
 }
 
 /**
- * All basket rows, pruned to the session lifetime and to non-empty carts:
- * basket id => row.
+ * Basket rows by id, dropping empty carts and rows past the session lifetime.
  *
  * @return array<string, array<string, mixed>>
  */
@@ -72,14 +66,13 @@ function write_baskets( array $baskets ): void {
 }
 
 /**
- * The requester's own cart as a row, or null when it is empty or not loaded.
- * Read server-side from the session the request carries, never from the
- * client. Never loads the cart itself: inside the cart hooks it already
- * exists, and the `basket-id` endpoint loads it only for a request that
- * carries a WooCommerce session, so a first-time visitor never gets a session
- * (and a fresh random basket id) just for asking.
+ * The requester's own cart as a row, or null when empty or not loaded.
  *
- * @return array{products: int[], value: float}|null
+ * Never loads the cart: a first-time visitor must not get a session (and a
+ * random basket id) just for asking. The `basket-id` endpoint loads it only
+ * for a request that already carries one.
+ *
+ * @return array{products: int[], quantities: array<int, int>, value: float}|null
  */
 function current_cart_state(): ?array {
 	if ( ! function_exists( 'WC' ) ) {
@@ -94,27 +87,29 @@ function current_cart_state(): ?array {
 		return null;
 	}
 
-	$products = array();
-	$value    = 0.0;
+	$quantities = array();
+	$value      = 0.0;
 	foreach ( $items as $item ) {
-		$parent = cart_item_parent_id( $item );
+		$quantity = max( 1, (int) ( $item['quantity'] ?? 1 ) );
+		$parent   = cart_item_parent_id( $item );
 		if ( $parent ) {
-			$products[ $parent ] = true;
+			// Variations of one product count together under the parent.
+			$quantities[ $parent ] = ( $quantities[ $parent ] ?? 0 ) + $quantity;
 		}
 		$product = $item['data'] ?? null;
 		$price   = $product instanceof \WC_Product ? (float) $product->get_price() : 0.0;
-		$value  += $price * (int) ( $item['quantity'] ?? 1 );
+		$value  += $price * $quantity;
 	}
 
 	return array(
-		'products' => array_map( 'intval', array_keys( $products ) ),
-		'value'    => round( $value, 2 ),
+		'products'   => array_map( 'intval', array_keys( $quantities ) ),
+		'quantities' => $quantities,
+		'value'      => round( $value, 2 ),
 	);
 }
 
 /**
- * Upsert the requester's basket row from their real cart (or forget it when the
- * cart is empty). Republishes the rows when they change.
+ * Upsert the requester's row from their cart, or drop it when the cart is empty.
  *
  * @param string $id Basket id (see `basket_id()`).
  * @return void
@@ -136,10 +131,11 @@ function record_cart( string $id ): void {
 	}
 
 	$baskets[ $id ] = array(
-		'products'  => $state['products'],
-		'value'     => $state['value'],
-		'currency'  => get_woocommerce_currency(),
-		'last_seen' => time(),
+		'products'   => $state['products'],
+		'quantities' => $state['quantities'],
+		'value'      => $state['value'],
+		'currency'   => get_woocommerce_currency(),
+		'last_seen'  => time(),
 	);
 	write_baskets( $baskets );
 	publish_baskets_changed();
@@ -164,27 +160,33 @@ function forget_cart( string $id ): void {
 }
 
 /**
- * Every basket row for the dashboard: `{ id, products, value }`. The dashboard
- * splits these into live and abandoned using the relay's presence membership.
+ * Every row for the dashboard: `{ id, products, value, currency }`.
  *
- * @return array<int, array{id: string, products: int[], value: float, currency: string}>
+ * @return array<int, array{id: string, products: int[], quantities: array<int, int>, value: float, currency: string}>
  */
 function all_baskets(): array {
 	$rows = array();
 	foreach ( read_baskets() as $id => $row ) {
+		$products = array_map( 'intval', (array) ( $row['products'] ?? array() ) );
+		$stored   = (array) ( $row['quantities'] ?? array() );
+		// A row written before quantities were kept counts one unit per product.
+		$quantities = array();
+		foreach ( $products as $product_id ) {
+			$quantities[ $product_id ] = max( 1, (int) ( $stored[ $product_id ] ?? 1 ) );
+		}
 		$rows[] = array(
-			'id'       => (string) $id,
-			'products' => array_map( 'intval', (array) ( $row['products'] ?? array() ) ),
-			'value'    => round( (float) ( $row['value'] ?? 0 ), 2 ),
-			'currency' => (string) ( $row['currency'] ?? get_woocommerce_currency() ),
+			'id'         => (string) $id,
+			'products'   => $products,
+			'quantities' => $quantities,
+			'value'      => round( (float) ( $row['value'] ?? 0 ), 2 ),
+			'currency'   => (string) ( $row['currency'] ?? get_woocommerce_currency() ),
 		);
 	}
 	return $rows;
 }
 
 /**
- * Shoppers with the product (any variation) in their cart. Counts every basket
- * that holds it, present or not: the storefront has no view of presence.
+ * Shoppers holding the product (any variation), present or not: WP has no view of presence.
  *
  * @param int $product_id Parent product ID.
  * @return int
@@ -200,8 +202,7 @@ function count_in_carts( int $product_id ): int {
 }
 
 /**
- * Publish the basket rows to staff when they have changed since the last
- * publish, so the dashboard updates without waiting for its poll.
+ * Publish the rows to staff when they differ from the last publish.
  *
  * @return void
  */
@@ -234,6 +235,7 @@ add_action(
 	5
 );
 
+// A line removed: recapture the row, then tell product pages the new count.
 add_action(
 	'woocommerce_cart_item_removed',
 	static function ( $cart_item_key, WC_Cart $cart ): void {
@@ -247,6 +249,7 @@ add_action(
 	2
 );
 
+// A quantity change: the row's value moves even when its product set does not.
 add_action(
 	'woocommerce_cart_item_set_quantity',
 	static function (): void {
@@ -255,8 +258,10 @@ add_action(
 	20
 );
 
-// Checkout or an explicit clear empties the cart: forget the basket, then tell
-// each product page the new count (forget first so this shopper is not counted).
+/*
+ * An emptied cart (checkout or clear): forget the basket first, so this shopper
+ * is not counted, then tell each product page the new count.
+ */
 add_action(
 	'woocommerce_before_cart_emptied',
 	static function (): void {
