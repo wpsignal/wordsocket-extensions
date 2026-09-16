@@ -1,9 +1,9 @@
 <?php
 /**
- * Storefront markup (Interactivity API directives), the basket-id endpoint,
- * and the import guard.
+ * Storefront: stock and counter markup, the basket-id endpoint, the import guard.
  */
 
+use function WPSignal\Extensions\ShopSocket\all_baskets;
 use function WPSignal\Extensions\ShopSocket\in_carts_html;
 use function WPSignal\Extensions\ShopSocket\product_import_running;
 use function WPSignal\Extensions\ShopSocket\should_publish_stock;
@@ -15,7 +15,12 @@ use const WPSignal\Extensions\ShopSocket\STORE_NS;
 
 final class StorefrontTest extends ExtensionTestCase {
 
-	/** The `data-wp-context` value on an element (the runtime prefixes it with the namespace). */
+	/**
+	 * The `data-wp-context` value on an element (the runtime prefixes it with the namespace).
+	 *
+	 * @param string $html Rendered markup.
+	 * @return array
+	 */
 	private function context_of( string $html ): array {
 		$this->assertMatchesRegularExpression( "/data-wp-context='([^']+)'/", $html );
 		preg_match( "/data-wp-context='([^']+)'/", $html, $m );
@@ -91,10 +96,10 @@ final class StorefrontTest extends ExtensionTestCase {
 	}
 
 	public function test_basket_id_never_creates_a_session_for_a_visitor_without_one(): void {
-		// A first-time visitor: no WooCommerce session cookie, not logged in, and
-		// so no session or cart loaded for the request. The endpoint must answer
-		// without loading the cart, or every such request would mint a fresh
-		// session and a different random basket id.
+		/*
+		 * A first-time visitor: no session cookie, not logged in. The endpoint must
+		 * not load the cart, or every such request would mint a session and a new id.
+		 */
 		$cookies = $_COOKIE;
 		$session = WC()->session;
 		$cart    = WC()->cart;
@@ -120,6 +125,29 @@ final class StorefrontTest extends ExtensionTestCase {
 			$_COOKIE      = $cookies;
 			WC()->session = $session;
 			WC()->cart    = $cart;
+		}
+	}
+
+	public function test_basket_id_rebuilds_the_shoppers_row_from_their_cart(): void {
+		$product = $this->make_product( 5 );
+		WC()->cart->empty_cart();
+		WC()->cart->add_to_cart( $product->get_id(), 2 );
+		$this->clear_baskets();
+		$this->assertSame( array(), all_baskets(), 'the row store was lost' );
+
+		try {
+			$_COOKIE['wp_woocommerce_session_phpunit'] = 'present';
+			wp_set_current_user( 0 );
+			$response = rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/basket-id' ) );
+			$this->assertSame( 200, $response->get_status() );
+			$rows = all_baskets();
+			$this->assertCount( 1, $rows, 'asking for the basket id wrote the row back' );
+			$this->assertSame( array( $product->get_id() ), $rows[0]['products'] );
+			$this->assertSame( array( $product->get_id() => 2 ), $rows[0]['quantities'] );
+			$this->assertSame( $rows[0]['id'], $response->get_data()['id'] );
+		} finally {
+			unset( $_COOKIE['wp_woocommerce_session_phpunit'] );
+			WC()->cart->empty_cart();
 		}
 	}
 
