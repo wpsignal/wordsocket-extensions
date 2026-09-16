@@ -96,8 +96,7 @@ function stock_payload( WC_Product $product ): array {
 		'stock_quantity'     => $product->get_stock_quantity(),
 		'stock_status'       => $product->get_stock_status(),
 		'purchasable'        => $product->is_purchasable() && $product->is_in_stock(),
-		// Availability as WooCommerce words it, so the storefront never has to know Woo's rules:
-		// the text and class feed the Interactivity store directly.
+		// WooCommerce's own availability text and class, so the storefront needs no stock rules.
 		'availability_text'  => wp_strip_all_tags( (string) $availability['availability'] ),
 		'availability_class' => (string) $availability['class'],
 	);

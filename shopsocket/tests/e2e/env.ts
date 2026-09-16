@@ -53,9 +53,11 @@ if (missing.length > 0) {
 // The rehearsal script path is relative to the plugin directory.
 process.env.WPS_LOCAL_TLS = resolve(__dirname, "../..", process.env.WPS_LOCAL_TLS!);
 
-// The WordPress fixtures build their REST request context without
-// ignoreHTTPSErrors, so Node must trust the mkcert root CA that signs the
-// local certificates. Playwright's driver inherits this environment.
+/*
+ * The WordPress fixtures build their REST request context without
+ * ignoreHTTPSErrors, so Node must trust the mkcert root CA that signs the
+ * local certificates. Playwright's driver inherits this environment.
+ */
 if (!process.env.NODE_EXTRA_CA_CERTS) {
   try {
     const caRoot = execFileSync("mkcert", ["-CAROOT"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();

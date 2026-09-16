@@ -1,9 +1,7 @@
 <?php
 /**
  * PHPUnit bootstrap: load a local WordPress with WooCommerce, WordSocket and
- * this plugin active. Same approach as WordSocket's own suite: real hooks and
- * REST server, outbound HTTP intercepted, options restored after each test.
- * Refuses anything but a local or development environment.
+ * this plugin active. Refuses anything but a local or development environment.
  */
 
 $wp_root = getenv( 'WP_ROOT' );

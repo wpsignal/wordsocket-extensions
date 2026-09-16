@@ -48,10 +48,7 @@ const CARTS_NS = 'woo:carts';
 /** The presence channel: staff subscribe, shoppers enter (and never subscribe). */
 const CARTS_PRESENCE_CHANNEL = 'woo:carts:live';
 
-/**
- * WooCommerce features this plugin is compatible with, declared before
- * WooCommerce checks them (`before_woocommerce_init`).
- */
+// HPOS compatibility, declared before WooCommerce checks it.
 add_action(
 	'before_woocommerce_init',
 	static function () {

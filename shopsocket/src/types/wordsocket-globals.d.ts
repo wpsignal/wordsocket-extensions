@@ -39,7 +39,7 @@ interface WPSConnectionState {
 interface WPSApi {
 	/** Register a handler for a specific event name. Returns unsubscribe fn. */
 	on( event: string, handler: WPSEventHandler ): () => void;
-	/** Register a callback receiving the full connection state (error, retry countdown, failure count). Returns unsubscribe fn. */
+	/** Register a handler for the full connection state. Returns unsubscribe fn. */
 	onStateChange( handler: ( state: WPSConnectionState ) => void ): () => void;
 	/** The current connection state, as delivered to onStateChange. */
 	readonly state: WPSConnectionState;
