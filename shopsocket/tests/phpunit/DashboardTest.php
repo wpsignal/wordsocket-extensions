@@ -5,11 +5,74 @@
 
 use function WPSignal\Extensions\ShopSocket\all_baskets;
 use function WPSignal\Extensions\ShopSocket\dashboard_snapshot;
+use function WPSignal\Extensions\ShopSocket\enqueue_settings_panel;
 use function WPSignal\Extensions\ShopSocket\parse_product_ids;
 use function WPSignal\Extensions\ShopSocket\products_for_board;
 use const WPSignal\Extensions\ShopSocket\REST_NS;
 
 final class DashboardTest extends ExtensionTestCase {
+
+	public function test_the_active_wordsocket_is_new_enough_and_the_plugins_row_links_to_the_board(): void {
+		$this->assertTrue( \WPSignal\Extensions\ShopSocket\wordsocket_ready() );
+		if ( ! function_exists( 'WPSignal\\Extensions\\ShopSocket\\plugin_action_links' ) ) {
+			require_once dirname( __DIR__, 2 ) . '/inc/admin-board.php';
+		}
+		$links = \WPSignal\Extensions\ShopSocket\plugin_action_links( array( 'deactivate' => '<a href="#">Deactivate</a>' ) );
+		$this->assertCount( 2, $links );
+		$this->assertStringContainsString( 'admin.php?page=shopsocket', $links[0], 'the board link comes first' );
+		$this->assertStringContainsString( '>View<', $links[0] );
+	}
+
+	public function test_the_board_sits_under_analytics_unless_that_feature_is_off(): void {
+		if ( ! function_exists( 'WPSignal\\Extensions\\ShopSocket\\board_menu' ) ) {
+			require_once dirname( __DIR__, 2 ) . '/inc/admin-board.php';
+		}
+		$was = get_option( 'woocommerce_analytics_enabled' );
+		try {
+			update_option( 'woocommerce_analytics_enabled', 'yes' );
+			$menu = \WPSignal\Extensions\ShopSocket\board_menu();
+			$this->assertSame( 'wc-admin&path=/analytics/overview', $menu['parent'] );
+			$this->assertSame( 'Realtime', $menu['label'] );
+
+			update_option( 'woocommerce_analytics_enabled', 'no' );
+			$menu = \WPSignal\Extensions\ShopSocket\board_menu();
+			$this->assertSame( 'woocommerce', $menu['parent'], 'no Analytics menu to sit under' );
+			$this->assertSame( 'ShopSocket', $menu['label'] );
+		} finally {
+			if ( false === $was ) {
+				delete_option( 'woocommerce_analytics_enabled' );
+			} else {
+				update_option( 'woocommerce_analytics_enabled', $was );
+			}
+		}
+	}
+
+	public function test_the_extensions_tab_card_is_enqueued_after_wordsocket_settings(): void {
+		// The admin side loads only under is_admin(); the hook is registered when the file is.
+		if ( ! function_exists( 'WPSignal\\Extensions\\ShopSocket\\enqueue_settings_panel' ) ) {
+			require_once dirname( __DIR__, 2 ) . '/inc/admin-board.php';
+		}
+		$this->assertSame( 10, has_action( 'wordsocket_settings_enqueue', 'WPSignal\\Extensions\\ShopSocket\\enqueue_settings_panel' ) );
+		try {
+			enqueue_settings_panel();
+			$this->assertTrue( wp_script_is( 'shopsocket-settings', 'enqueued' ) );
+			$script = wp_scripts()->registered['shopsocket-settings'];
+			$this->assertContains( 'wpsignal-settings', $script->deps, 'window.wordsocket must exist first' );
+			$this->assertContains( 'wp-plugins', $script->deps );
+
+			$before = wp_scripts()->get_inline_script_data( 'shopsocket-settings', 'before' );
+			$this->assertStringContainsString( 'window.shopSocketSettings = ', $before );
+			$this->assertMatchesRegularExpression( '/window\\.shopSocketSettings = (\\{.*\\});/s', $before );
+			preg_match( '/window\\.shopSocketSettings = (\\{.*\\});/s', $before, $m );
+			$config = json_decode( $m[1], true );
+			$this->assertIsArray( $config );
+			$this->assertStringEndsWith( 'admin.php?page=shopsocket', $config['boardUrl'] );
+		} finally {
+			wp_dequeue_script( 'shopsocket-settings' );
+			wp_deregister_script( 'shopsocket-settings' );
+			wp_dequeue_style( 'shopsocket-settings' );
+		}
+	}
 
 	public function test_all_baskets_returns_rows_of_contents_by_basket_id(): void {
 		$this->assertSame( array(), all_baskets() );

@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       ShopSocket for WooCommerce
+ * Plugin Name:       ShopSocket
  * Plugin URI:        https://wpsignal.io/extensions/shopsocket
  * Description:       A live orders board for your team and live stock on product pages, powered by WordSocket and WPSignal realtime.
  * Version:           0.1.0
@@ -47,6 +47,22 @@ const CONNECTIONS_CHANNEL = 'wps:connections';
 const CARTS_NS = 'woo:carts';
 /** The presence channel: staff subscribe, shoppers enter (and never subscribe). */
 const CARTS_PRESENCE_CHANNEL = 'woo:carts:live';
+
+/** The WordSocket release that brought presence, publish grants, and the stats route. */
+const MIN_WORDSOCKET = '0.22.0';
+
+/**
+ * Whether the active WordSocket is new enough, judged by what this plugin
+ * uses rather than a version string: version-2 tokens and the stats route.
+ *
+ * @return bool
+ */
+function wordsocket_ready(): bool {
+	return class_exists( \WPSignal\Token::class )
+		&& defined( '\WPSignal\Token::TOKEN_VERSION' )
+		&& \WPSignal\Token::TOKEN_VERSION >= 2
+		&& method_exists( \WPSignal\Publisher::class, 'stats' );
+}
 
 // HPOS compatibility, declared before WooCommerce checks it.
 add_action(
