@@ -8,7 +8,7 @@
     "build": "wp-scripts build && tsc -p tsconfig.storefront.json",
     "start": "concurrently -k -n board,storefront \"wp-scripts start\" \"tsc -p tsconfig.storefront.json --watch --preserveWatchOutput\"",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tests/e2e/tsconfig.json",
-    "make-pot": "wp i18n make-pot . languages/shopsocket.pot --slug=shopsocket --domain=shopsocket",
+    "make-pot": "php -d memory_limit=512M \"$(command -v wp)\" i18n make-pot . languages/shopsocket.pot --slug=shopsocket --domain=shopsocket --exclude=node_modules,vendor,tests,artifacts,src",
     "test:php": "vendor/bin/phpunit",
     "test:e2e": "wp-scripts test-playwright",
     "test": "npm run test:php && npm run test:e2e"
