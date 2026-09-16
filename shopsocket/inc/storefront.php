@@ -1,16 +1,10 @@
 <?php
 /**
- * Storefront: live stock, "someone just added" toasts, and the in-cart count
- * on shop and product pages, for every visitor.
+ * Storefront: live stock, "someone just added" toasts, and the in-cart count.
  *
- * Built on the Interactivity API: the markup below carries directives bound
- * to the `shopsocket/storefront` store (`src/storefront/storefront.ts`,
- * compiled to `build/storefront/storefront.js`), the server seeds that store's
- * state, and WordSocket's events update it.
- *
- * Visitors get the WordSocket client only on WooCommerce pages (product,
- * shop and archives, cart, checkout). Their tokens carry the public channels
- * only, so nothing staff-only is reachable from a shopper's browser.
+ * Interactivity API markup bound to the `shopsocket/storefront` store
+ * (`src/storefront/storefront.ts`): PHP seeds the state, WordSocket events
+ * update it. Only WooCommerce pages get the client, on public channels only.
  *
  * @package WPSignal\Extensions\ShopSocket
  */
@@ -43,13 +37,11 @@ function is_live_storefront_page(): bool {
 	return (bool) apply_filters( 'shopsocket_storefront', is_woocommerce() || is_cart() || is_checkout() );
 }
 
-// Visitors need the realtime client on live storefront pages, and their tokens
-// must keep refreshing while they browse. A token refresh is a bare REST request
-// with no page context, so `is_live_storefront_page()` is false there; allow the
-// token endpoint to mint for anonymous visitors during a REST request too, or
-// the connection dies when the 5-minute JWT expires and never comes back.
-// This makes the storefront a public-client surface (anyone may mint a
-// connection token); the per-plan connection limit is the guard against abuse.
+/*
+ * A token refresh is a bare REST request with no page context, so allow minting
+ * during any REST request too, or a visitor's connection halts when the
+ * five-minute JWT expires. The plan's connection limit guards against abuse.
+ */
 add_filter(
 	'wpsignal_allow_client',
 	static function ( bool $allow ): bool {
@@ -64,9 +56,8 @@ add_filter(
 );
 
 /**
- * The `data-wp-context` attribute for a product or variation's stock element:
- * ids, plus the server-rendered text and class the store falls back to until
- * an event arrives.
+ * The `data-wp-context` for a stock element: ids, plus the rendered text and
+ * class the store falls back to until an event arrives.
  *
  * @param WC_Product $product Product or variation.
  * @param array      $extra   Additional context keys.
@@ -90,9 +81,9 @@ function stock_context( WC_Product $product, array $extra = array() ): string {
 }
 
 /**
- * Replace WooCommerce's availability paragraph with one bound to the store,
- * so a stock event updates it in place. Rendered (hidden) even when
- * WooCommerce has nothing to say, so a later sell-out can appear.
+ * Replace WooCommerce's availability paragraph with one bound to the store.
+ *
+ * Rendered hidden when WooCommerce has nothing to say, so a later sell-out can appear.
  *
  * @param string     $html    Availability markup (may be empty).
  * @param WC_Product $product Product or variation.
@@ -113,12 +104,14 @@ function wrap_stock_html( string $html, WC_Product $product ): string {
 		esc_html( $text )
 	);
 }
+// Classic templates, and the availability markup the variation form swaps in.
 add_filter( 'woocommerce_get_stock_html', __NAMESPACE__ . '\wrap_stock_html', 10, 2 );
 
 /**
- * Block themes: bind the Product Stock Indicator block to the store. On
- * variable products WooCommerce already binds it to its own
- * `woocommerce/products` store, which the script feeds instead.
+ * Block themes: bind the Product Stock Indicator block to the store.
+ *
+ * Variable products keep WooCommerce's own `woocommerce/products` binding,
+ * which the script feeds instead.
  *
  * @param string $content Rendered block.
  * @param array  $block   Parsed block, with `context`.
@@ -143,6 +136,7 @@ function tag_stock_indicator_block( string $content, array $block ): string {
 		substr( $content, strlen( $m[0] ) )
 	);
 }
+// Block themes: the Product Stock Indicator block.
 add_filter( 'render_block_woocommerce/product-stock-indicator', __NAMESPACE__ . '\tag_stock_indicator_block', 10, 2 );
 
 /**
@@ -166,9 +160,8 @@ function in_carts_html( int $product_id ): string {
 }
 
 /**
- * The counter's two sentences, the one source for the server-rendered text and
- * the store's `i18n` (the module picks `one` at exactly 1, `many` otherwise,
- * so both renderings agree).
+ * The counter's two sentences, for the server render and the store's `i18n`
+ * alike: `one` at exactly 1, `many` otherwise.
  *
  * @return array{one: string, many: string}
  */
@@ -182,9 +175,7 @@ function in_carts_strings(): array {
 }
 
 /**
- * The counter is placed by whichever of the two hooks below fires first on a
- * product page (classic summary action, or the Product Price block in block
- * templates); a template may fire both, so it renders once per request.
+ * Render the counter once per request: a template may fire both hooks below.
  *
  * @param int $product_id The page's product.
  * @return string Markup, or '' when already rendered or disabled.
@@ -256,7 +247,20 @@ add_action(
 		if ( ! is_live_storefront_page() ) {
 			return;
 		}
-		wp_register_script_module( STOREFRONT_MODULE, URL . 'build/storefront/storefront.js', array( '@wordpress/interactivity' ), VERSION );
+
+		/*
+		 * Three modules, imported by id so the import map gives each a versioned
+		 * URL: the viewer (basket id, held products, presence), the WooCommerce
+		 * hooks, and the store itself.
+		 */
+		wp_register_script_module( STOREFRONT_MODULE . '/viewer', URL . 'build/storefront/viewer.js', array(), VERSION );
+		wp_register_script_module( STOREFRONT_MODULE . '/woocommerce', URL . 'build/storefront/woocommerce.js', array( '@wordpress/interactivity' ), VERSION );
+		wp_register_script_module(
+			STOREFRONT_MODULE,
+			URL . 'build/storefront/storefront.js',
+			array( '@wordpress/interactivity', STOREFRONT_MODULE . '/viewer', STOREFRONT_MODULE . '/woocommerce' ),
+			VERSION
+		);
 		wp_enqueue_script_module( STOREFRONT_MODULE );
 		wp_enqueue_style( SLUG . '-storefront', URL . 'src/storefront/storefront.css', array(), VERSION );
 
@@ -265,6 +269,10 @@ add_action(
 			array(
 				'productId'         => is_product() ? (int) get_queried_object_id() : 0,
 				'presenceChannel'   => CARTS_PRESENCE_CHANNEL,
+				'channels'          => array(
+					'stock'    => STOCK_CHANNEL,
+					'activity' => ACTIVITY_CHANNEL,
+				),
 				'basketIdUrl'       => rest_url( REST_NS . '/basket-id' ),
 				'nonce'             => wp_create_nonce( 'wp_rest' ),
 				'toasts'            => toasts_enabled(),
@@ -304,8 +312,7 @@ add_action(
 
 
 /**
- * Whether the request carries a WooCommerce session cookie already, so we never
- * create a session for a browser that has no cart.
+ * Whether the request already carries a WooCommerce session cookie.
  *
  * @return bool
  */
@@ -318,9 +325,10 @@ function has_wc_session_cookie(): bool {
 	return false;
 }
 
-// The storefront asks here for its own basket id, which it then enters relay
-// presence under. The WooCommerce session cookie is HttpOnly, so the browser
-// cannot derive the id itself; the server reads the session the request carries.
+/*
+ * The storefront's own basket id, which it enters presence under. The session
+ * cookie is HttpOnly, so the browser cannot derive the id itself.
+ */
 add_action(
 	'rest_api_init',
 	static function (): void {
@@ -339,6 +347,14 @@ add_action(
 					if ( ( has_wc_session_cookie() || is_user_logged_in() ) && function_exists( 'wc_load_cart' ) ) {
 						wc_load_cart();
 					}
+
+					/*
+					 * The row store is a cache of live carts, so every load and every
+					 * reconnect writes this shopper's row back from the real cart: a
+					 * row lost to cache eviction or a cleared transient returns the
+					 * moment its shopper is on the site again.
+					 */
+					record_cart( basket_id() );
 					$state    = current_cart_state();
 					$response = array(
 						'id'       => basket_id(),
@@ -348,9 +364,7 @@ add_action(
 					if ( $product > 0 ) {
 						$response['count'] = count_in_carts( $product );
 					}
-					// Per-visitor identity and a live count: a CDN or full-page cache
-					// must never store this, so the storefront's one on-load fetch
-					// always busts a stale cached page instead of reading its number.
+					// Per-visitor identity and a live count: no CDN or page cache may store this.
 					$rest = rest_ensure_response( $response );
 					$rest->header( 'Cache-Control', 'no-store, max-age=0' );
 					return $rest;

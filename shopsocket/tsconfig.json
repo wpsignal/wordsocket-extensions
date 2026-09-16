@@ -14,7 +14,12 @@
       "es2022",
       "dom",
       "dom.iterable"
-    ]
+    ],
+    "paths": {
+      "shopsocket/storefront/*": [
+        "./src/storefront/*"
+      ]
+    }
   },
   "include": [
     "src/**/*"

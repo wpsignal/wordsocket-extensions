@@ -4,5 +4,8 @@
     "noEmit": false,
     "outDir": "build"
   },
-  "include": ["src/storefront/storefront.ts", "src/types/**/*.d.ts"]
+  "include": [
+    "src/storefront/*.ts",
+    "src/types/**/*.d.ts"
+  ]
 }
