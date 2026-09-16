@@ -25,7 +25,7 @@ add_action(
 		$wps->extensions()->register(
 			SLUG,
 			array(
-				'title'       => __( 'ShopSocket for WooCommerce', 'shopsocket' ),
+				'title'       => __( 'ShopSocket', 'shopsocket' ),
 				'description' => __( 'A live orders board for your team and live stock on product pages.', 'shopsocket' ),
 				'version'     => VERSION,
 				'docs_url'    => 'https://wpsignal.io/extensions/shopsocket',

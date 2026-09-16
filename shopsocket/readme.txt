@@ -1,6 +1,6 @@
-=== ShopSocket for WooCommerce ===
+=== ShopSocket ===
 Contributors: wpsignal
-Tags: woocommerce, realtime, live orders, abandoned cart, stock
+Tags: woocommerce, realtime, live orders, abandoned cart, inventory
 Requires at least: 6.7
 Tested up to: 7.1
 Stable tag: 0.1.0
@@ -35,6 +35,7 @@ Live and abandoned are not guesses from timestamps. A basket is live exactly whi
 * "Someone just added this to their basket" toasts, shown only for products the shopper also holds
 * A shopper holding a product that sells out hears at once, wherever they are, and the cart shows WooCommerce's own notice without a reload
 * The Live Stock block: availability, units left, and the in-cart counter as one block for the Single Product template or any page
+* A card on WordSocket's Extensions tab with the connection state and a link to the board
 
 **How it works**
 
@@ -51,8 +52,8 @@ ShopSocket requires WordSocket and a WPSignal account. WPSignal is an independen
 
 == Installation ==
 
-1. Install and activate WooCommerce and WordSocket, and connect WordSocket to your WPSignal account.
-2. Install and activate ShopSocket for WooCommerce.
+1. Install and activate WooCommerce and WordSocket 0.22 or newer, and connect WordSocket to your WPSignal account.
+2. Install and activate ShopSocket.
 3. Open WooCommerce > ShopSocket for the board. Product pages start updating on their own.
 
 == Frequently Asked Questions ==

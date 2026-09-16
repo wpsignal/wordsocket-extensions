@@ -1,4 +1,4 @@
-/** Payloads and localized config for ShopSocket for WooCommerce. Ambient: no imports or exports. */
+/** Payloads and localized config for ShopSocket. Ambient: no imports or exports. */
 
 interface ShopSocketBoardConfig {
 	/** `GET` here returns fresh WooDashboardData (inc/dashboard.php). */
