@@ -14,12 +14,14 @@ const FROM_CORE = new Set( [
 	'@wordpress/api-fetch',
 	'@wordpress/blocks',
 	'@wordpress/block-editor',
+	'@wordpress/plugins',
 ] );
 
 module.exports = {
 	...defaultConfig,
 	entry: {
 		board: path.resolve( __dirname, 'src/board/index.tsx' ),
+		settings: path.resolve( __dirname, 'src/settings/index.tsx' ),
 		'blocks/live-stock/index': path.resolve( __dirname, 'src/blocks/live-stock/index.tsx' ),
 	},
 	output: {

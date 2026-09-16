@@ -1,0 +1,19 @@
+/* ShopSocket's card in WordSocket's Extensions tab. */
+.shopsocket-settings__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.shopsocket-settings__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #8c8f94;
+  flex: none;
+
+  &.is-live {
+    background: #00a32a;
+  }
+}

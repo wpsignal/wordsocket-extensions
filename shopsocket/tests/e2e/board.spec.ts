@@ -5,6 +5,16 @@ import { addToCart, clearBaskets, createOrder, createProduct, deleteOrder, delet
 const PAGE = "page=shopsocket";
 
 test.describe("ShopSocket dashboard", () => {
+  test("the extension has a card on WordSocket's Extensions tab", async ({ admin, page }) => {
+    await admin.visitAdminPage("admin.php", "page=wordsocket&tab=extensions");
+    const card = page.locator('.wpsignal-extension[data-extension="shopsocket"]');
+    await expect(card).toBeVisible();
+    await expect(card.getByRole("heading", { name: "ShopSocket" })).toBeVisible();
+    await expect(card.getByRole("link", { name: "Open the ShopSocket board" })).toHaveAttribute("href", /page=shopsocket$/);
+    // The site is connected to the rehearsal relay, so the card goes live.
+    await expect(card.locator(".shopsocket-settings__status")).toContainText("Live", { timeout: 20_000 });
+  });
+
   test("live and abandoned follow the shopper's connection", async ({ admin, page, browser, baseURL, requestUtils }) => {
     await admin.visitAdminPage("admin.php", PAGE);
     await expect(page.getByRole("heading", { name: "ShopSocket", level: 1 })).toBeVisible();
