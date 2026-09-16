@@ -18,12 +18,15 @@ export interface Viewer {
   readonly basketId: string | null;
   /** Whether this shopper holds the product. */
   holds(productId: number): boolean;
+  /** How many units of the product this shopper holds, 0 when none. */
+  held(productId: number): number;
 }
 
 /** This shopper's own state, from `GET /shopsocket/v1/basket-id`. */
 interface ViewerState {
   id?: string;
   products?: number[];
+  quantities?: Record<string, number>;
   count?: number;
 }
 
@@ -65,7 +68,8 @@ function visitorId(): string {
  */
 export function startViewer(config: ViewerConfig, onCount: (productId: number, count: number) => void): Viewer {
   let basketId: string | null = null;
-  const products = new Set<number>();
+  // Units held per parent product; replaced on every sync, since the server's answer is the truth.
+  const quantities = new Map<number, number>();
   let inFlight = false;
   let dirty = false;
 
@@ -92,7 +96,10 @@ export function startViewer(config: ViewerConfig, onCount: (productId: number, c
       });
       if (!res.ok) return;
       const viewer: ViewerState = await res.json();
-      (viewer?.products ?? []).forEach((id) => products.add(Number(id)));
+      quantities.clear();
+      (viewer?.products ?? []).forEach((id) => {
+        quantities.set(Number(id), Math.max(1, Number(viewer?.quantities?.[String(id)]) || 1));
+      });
       if (viewer?.id) basketId = viewer.id;
       if (config.productId && typeof viewer?.count === "number") {
         onCount(Number(config.productId), viewer.count);
@@ -173,6 +180,7 @@ export function startViewer(config: ViewerConfig, onCount: (productId: number, c
     get basketId() {
       return basketId;
     },
-    holds: (productId) => products.has(productId),
+    holds: (productId) => quantities.has(productId),
+    held: (productId) => quantities.get(productId) ?? 0,
   };
 }

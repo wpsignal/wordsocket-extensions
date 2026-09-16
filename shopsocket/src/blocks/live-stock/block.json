@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "shopsocket/live-stock",
+  "version": "0.1.0",
+  "title": "Live Stock",
+  "category": "woocommerce",
+  "icon": "visibility",
+  "description": "A product's availability and how many shoppers hold it, kept live over WordSocket.",
+  "keywords": ["stock", "inventory", "cart", "realtime"],
+  "textdomain": "shopsocket",
+  "attributes": {
+    "productId": {
+      "type": "integer",
+      "default": 0
+    }
+  },
+  "usesContext": ["postId", "postType"],
+  "supports": {
+    "html": false,
+    "align": false,
+    "spacing": {
+      "margin": true
+    },
+    "typography": {
+      "fontSize": true
+    }
+  },
+  "editorScript": "file:./index.js"
+}

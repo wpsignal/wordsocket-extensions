@@ -15,6 +15,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@wordpress/block-editor": "^17.1.0",
+    "@wordpress/blocks": "^16.0.0",
     "@wordpress/e2e-test-utils-playwright": "^2.0.0",
     "@wordpress/scripts": "^30.0.0",
     "concurrently": "^10.0.5"

@@ -19,11 +19,15 @@ function shopperSession(productId: number, holdSeconds: number): Promise<void> {
     child.on("error", reject);
   });
 }
-import { anyImageId, createProduct, deleteProduct, visitorContext, waitForLive } from "./helpers";
+import { addToCart, anyImageId, createProduct, deleteProduct, visitorContext, waitForLive } from "./helpers";
 
 /**
  * The shopper's view: an anonymous visitor on a product page sees other
  * shoppers' activity and stock changes without a refresh.
+ *
+ * WooCommerce's own add-to-cart button and quantity input are fed on a best
+ * effort basis and not asserted here: their markup is WooCommerce's and varies
+ * by theme. The Live Stock block is the markup this plugin owns.
  */
 test.describe("Storefront", () => {
   test("a shopper who holds an item sees the count, a toast when another shopper adds it, and a sell-out", async ({ browser, baseURL, requestUtils }) => {
@@ -39,11 +43,10 @@ test.describe("Storefront", () => {
       const toast = page.locator(".shopsocket-toast");
       await expect(counter).toHaveCount(1);
       await expect(counter).toBeHidden();
-      await expect(page.locator(".shopsocket-stock")).toContainText("8 in stock");
+      await expect(page.locator(".shopsocket-stock").first()).toContainText("8 in stock");
 
       // Their own add is never echoed back, yet the counter shows them at once, and no toast.
-      await page.locator(".single_add_to_cart_button").first().click();
-      await expect(page.locator(".woocommerce-message, .wc-block-components-notice-banner").first()).toBeVisible({ timeout: 15_000 });
+      await addToCart(page);
       await expect(counter).toBeVisible();
       await expect(counter).toContainText("1 shopper has this in their cart right now");
       await page.waitForTimeout(1500);
@@ -62,12 +65,16 @@ test.describe("Storefront", () => {
 
       // The product sells out elsewhere, then comes back.
       wp("eval", `wc_update_product_stock( ${product.id}, 0 );`);
-      await expect(page.locator(".shopsocket-stock")).toContainText("Out of stock", { timeout: 15_000 });
-      await expect(page.locator(".shopsocket-stock")).toHaveClass(/out-of-stock/);
-      await expect(page.locator(".single_add_to_cart_button").first()).toBeDisabled();
+      await expect(page.locator(".shopsocket-stock").first()).toContainText("Out of stock", { timeout: 15_000 });
+      await expect(page.locator(".shopsocket-stock").first()).toHaveClass(/out-of-stock/);
+      // The viewer holds it, so they are told at once, sticky, with a way to the cart.
+      await expect(toast).toBeVisible();
+      await expect(toast).toHaveClass(/is-error/);
+      await expect(toast).toContainText("E2E Live Widget just sold out");
+      await expect(toast.locator("a")).toHaveAttribute("href", /\/cart\/?$/);
       wp("eval", `wc_update_product_stock( ${product.id}, 3 );`);
-      await expect(page.locator(".shopsocket-stock")).toContainText("3 in stock", { timeout: 15_000 });
-      await expect(page.locator(".single_add_to_cart_button").first()).toBeEnabled();
+      await expect(page.locator(".shopsocket-stock").first()).toContainText("3 in stock", { timeout: 15_000 });
+      await expect(toast, "enough stock again clears the notice").toBeHidden();
     } finally {
       await visitor.close();
       await deleteProduct(requestUtils, product.id);
@@ -87,8 +94,7 @@ test.describe("Storefront", () => {
       const image = toast.locator(".shopsocket-toast__image");
 
       // Hold it, then another shopper adds it: the toast carries the thumbnail.
-      await page.locator(".single_add_to_cart_button").first().click();
-      await expect(page.locator(".woocommerce-message, .wc-block-components-notice-banner").first()).toBeVisible({ timeout: 15_000 });
+      await addToCart(page);
       const shopper = shopperSession(product.id, 4);
       await expect(toast).toBeVisible({ timeout: 15_000 });
       await expect(image).toBeVisible();
@@ -139,6 +145,124 @@ test.describe("Storefront", () => {
     }
   });
 
+  test("a sell-out reaches the block cart as WooCommerce's own notice, without a reload", async ({ browser, baseURL, requestUtils }) => {
+    const product = await createProduct(requestUtils, "E2E Gone Widget", 3);
+    const visitor = await visitorContext(browser, baseURL);
+    const page = await visitor.newPage();
+    try {
+      await page.goto(product.permalink);
+      await waitForLive(page);
+      await addToCart(page);
+
+      await page.goto("/cart/");
+      await waitForLive(page);
+      await expect(page.getByText("E2E Gone Widget")).toBeVisible();
+
+      // Someone else buys the last units: the cart re-reads itself and shows Woo's notice.
+      wp("eval", `wc_update_product_stock( ${product.id}, 0 );`);
+      await expect(page.locator(".wc-block-components-notice-banner.is-error")).toContainText("is out of stock and cannot be purchased", { timeout: 15_000 });
+      await expect(page.locator(".shopsocket-toast")).toContainText("E2E Gone Widget just sold out");
+
+      // WooCommerce 11.1 leaves the button enabled and refuses at checkout instead.
+      await page.getByRole("link", { name: "Proceed to Checkout" }).click();
+      await expect(page.locator(".wc-block-components-notice-banner.is-error").first()).toContainText(/out of stock|issues with the items/i, { timeout: 15_000 });
+    } finally {
+      await visitor.close();
+      await deleteProduct(requestUtils, product.id);
+    }
+  });
+
+  test("the Live Stock block follows stock and baskets on any page it is placed on", async ({ browser, baseURL, requestUtils }) => {
+    const product = await createProduct(requestUtils, "E2E Block Widget", 8);
+    const pageId = (await requestUtils.rest({
+      method: "POST",
+      path: "/wp/v2/pages",
+      data: { title: "E2E Live Stock", status: "publish", content: `<!-- wp:shopsocket/live-stock {"productId":${product.id}} /-->` },
+    })) as { id: number; link: string };
+    const visitor = await visitorContext(browser, baseURL);
+    const page = await visitor.newPage();
+    try {
+      await page.goto(pageId.link);
+      await waitForLive(page);
+      const block = page.locator(".shopsocket-live-stock");
+      const availability = block.locator(".shopsocket-live-stock__availability");
+      const left = block.locator(".shopsocket-live-stock__left");
+      const counter = block.locator(".shopsocket-in-carts");
+      await expect(availability).toHaveText("8 in stock");
+      await expect(left).toHaveText("8 left");
+      await expect(counter).toBeHidden();
+
+      // Stock moves without a reload, including the units left.
+      wp("eval", `wc_update_product_stock( ${product.id}, 2 );`);
+      await expect(availability).toHaveText("2 in stock", { timeout: 15_000 });
+      await expect(left).toHaveText("2 left");
+
+      // Another shopper picks it up: the counter appears in the block.
+      const shopper = shopperSession(product.id, 4);
+      await expect(counter).toBeVisible({ timeout: 15_000 });
+      await expect(counter).toContainText("1 shopper has this in their cart right now");
+      await shopper;
+
+      // Sold out: the line says so and the units left go away.
+      wp("eval", `wc_update_product_stock( ${product.id}, 0 );`);
+      await expect(availability).toHaveText("Out of stock", { timeout: 15_000 });
+      await expect(availability).toHaveClass(/out-of-stock/);
+      await expect(left).toBeHidden();
+    } finally {
+      await visitor.close();
+      await requestUtils.rest({ method: "DELETE", path: `/wp/v2/pages/${pageId.id}`, params: { force: true } });
+      await deleteProduct(requestUtils, product.id);
+    }
+  });
+
+  test("archive buttons switch between Add to cart and Read more as stock changes", async ({ browser, baseURL, requestUtils }) => {
+    const product = await createProduct(requestUtils, "E2E Shelf Widget", 3);
+    const visitor = await visitorContext(browser, baseURL);
+    const page = await visitor.newPage();
+    try {
+      await page.goto("/shop/?orderby=date");
+      await waitForLive(page);
+      const original = page.locator(`[data-product_id="${product.id}"]`).first();
+      const standIn = page.locator(`a[data-shopsocket-stand-in="${product.id}"]`);
+      await expect(original).toContainText("Add to cart");
+
+      // Sold out: the theme's button steps aside for a Read more link to the product.
+      wp("eval", `wc_update_product_stock( ${product.id}, 0 );`);
+      await expect(standIn).toHaveText("Read more", { timeout: 15_000 });
+      await expect(standIn).toHaveAttribute("href", product.permalink);
+      await expect(original).toBeHidden();
+
+      // Back in stock: the theme's own button returns and the stand-in goes.
+      wp("eval", `wc_update_product_stock( ${product.id}, 2 );`);
+      await expect(original).toBeVisible({ timeout: 15_000 });
+      await expect(standIn).toHaveCount(0);
+    } finally {
+      await visitor.close();
+      await deleteProduct(requestUtils, product.id);
+    }
+  });
+
+  test("a product that was out of stock at load gets an Add to cart link when it returns", async ({ browser, baseURL, requestUtils }) => {
+    const product = await createProduct(requestUtils, "E2E Restock Widget", 0);
+    const visitor = await visitorContext(browser, baseURL);
+    const page = await visitor.newPage();
+    try {
+      await page.goto("/shop/?orderby=date");
+      await waitForLive(page);
+      const original = page.locator(`[data-product_id="${product.id}"]`).first();
+      const standIn = page.locator(`a[data-shopsocket-stand-in="${product.id}"]`);
+      await expect(original).toContainText("Read more");
+
+      wp("eval", `wc_update_product_stock( ${product.id}, 2 );`);
+      await expect(standIn).toHaveText("Add to cart", { timeout: 15_000 });
+      await expect(standIn).toHaveAttribute("href", new RegExp(`add-to-cart=${product.id}$`));
+      await expect(original).toBeHidden();
+    } finally {
+      await visitor.close();
+      await deleteProduct(requestUtils, product.id);
+    }
+  });
+
   test("a shopper who does not hold the item sees the count rise but gets no toast", async ({ browser, baseURL, requestUtils }) => {
     const product = await createProduct(requestUtils, "E2E NoHold Widget", 8);
     const visitor = await visitorContext(browser, baseURL);
@@ -176,8 +300,7 @@ test.describe("Storefront", () => {
       await waitForLive(watching);
       await shopping.goto(product.permalink);
 
-      await shopping.locator(".single_add_to_cart_button").first().click();
-      await expect(shopping.locator(".woocommerce-message, .wc-block-components-notice-banner").first()).toBeVisible({ timeout: 15_000 });
+      await addToCart(shopping);
 
       const counter = watching.locator(".shopsocket-in-carts");
       await expect(counter).toBeVisible({ timeout: 15_000 });

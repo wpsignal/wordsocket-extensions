@@ -74,6 +74,10 @@
     color: inherit;
     text-decoration: underline;
   }
+
+  &.is-error {
+    background: rgb(140 20 20 / 0.95);
+  }
 }
 
 .shopsocket-toast__image {

@@ -33,6 +33,8 @@ Live and abandoned are not guesses from timestamps. A basket is live exactly whi
 * Stock text on product pages updates in place when the product sells out or comes back, and the add-to-cart button follows
 * "N shoppers have this in their cart right now" under the price, kept current as baskets change
 * "Someone just added this to their basket" toasts, shown only for products the shopper also holds
+* A shopper holding a product that sells out hears at once, wherever they are, and the cart shows WooCommerce's own notice without a reload
+* The Live Stock block: availability, units left, and the in-cart counter as one block for the Single Product template or any page
 
 **How it works**
 
@@ -57,7 +59,7 @@ ShopSocket requires WordSocket and a WPSignal account. WPSignal is an independen
 
 = Does it work with block themes? =
 
-Yes. The storefront features bind to the classic templates and to the Product Price and Product Stock Indicator blocks, and the add-to-cart buttons of both.
+Yes. The storefront features bind to the classic templates and to the Product Price and Product Stock Indicator blocks. For markup that is yours to place, add the Live Stock block to the Single Product template, or to any page with a product chosen.
 
 = Does it support High-Performance Order Storage? =
 

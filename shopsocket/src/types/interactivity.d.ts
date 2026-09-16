@@ -23,12 +23,14 @@ interface WooCartStoreSelectors {
 interface WooDataRegistry {
 	subscribe( listener: () => void, storeName?: string ): () => void;
 	select( storeName: string ): WooCartStoreSelectors | undefined;
+	dispatch( storeName: string ): { invalidateResolutionForStoreSelector?( store: string, selector: string ): void } | undefined;
 }
 
 /** Minimal chainable jQuery used for WooCommerce's classic (jQuery) events. */
 interface WooJQueryChain {
 	on( events: string, selector: string, handler: ( ...args: unknown[] ) => void ): WooJQueryChain;
 	on( events: string, handler: ( ...args: unknown[] ) => void ): WooJQueryChain;
+	trigger( event: string ): WooJQueryChain;
 }
 interface WooJQuery {
 	( target: Document | HTMLElement ): WooJQueryChain;

@@ -12,12 +12,15 @@ const FROM_CORE = new Set( [
 	'@wordpress/i18n',
 	'@wordpress/hooks',
 	'@wordpress/api-fetch',
+	'@wordpress/blocks',
+	'@wordpress/block-editor',
 ] );
 
 module.exports = {
 	...defaultConfig,
 	entry: {
 		board: path.resolve( __dirname, 'src/board/index.tsx' ),
+		'blocks/live-stock/index': path.resolve( __dirname, 'src/blocks/live-stock/index.tsx' ),
 	},
 	output: {
 		...defaultConfig.output,

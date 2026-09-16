@@ -63,6 +63,7 @@ require_once DIR . 'inc/payloads.php';
 require_once DIR . 'inc/carts.php';
 require_once DIR . 'inc/triggers.php';
 require_once DIR . 'inc/storefront.php';
+require_once DIR . 'inc/blocks.php';
 require_once DIR . 'inc/dashboard.php';
 if ( is_admin() ) {
 	require_once DIR . 'inc/admin-board.php';

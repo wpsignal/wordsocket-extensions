@@ -80,6 +80,22 @@ function cart_added_payload( WC_Product $product, int $quantity, string $actor, 
 }
 
 /**
+ * Units a shopper could still buy: stock minus what pending checkouts hold,
+ * never below zero. Null when there is no limit to know, because stock is
+ * not managed or backorders are allowed.
+ *
+ * @param WC_Product $product The product or variation.
+ * @return int|null
+ */
+function available_quantity( WC_Product $product ): ?int {
+	$stock = $product->get_stock_quantity();
+	if ( null === $stock || $product->backorders_allowed() ) {
+		return null;
+	}
+	return max( 0, (int) $stock - (int) wc_get_held_stock_quantity( $product ) );
+}
+
+/**
  * Payload for `woo.stock.*` events.
  *
  * @param WC_Product $product The product or variation whose stock changed.
@@ -93,7 +109,9 @@ function stock_payload( WC_Product $product ): array {
 		'product_id'         => $is_variation ? $product->get_parent_id() : $product->get_id(),
 		'variation_id'       => $is_variation ? $product->get_id() : 0,
 		'name'               => $product->get_name(),
+		'permalink'          => $product->get_permalink(),
 		'stock_quantity'     => $product->get_stock_quantity(),
+		'available'          => available_quantity( $product ),
 		'stock_status'       => $product->get_stock_status(),
 		'purchasable'        => $product->is_purchasable() && $product->is_in_stock(),
 		// WooCommerce's own availability text and class, so the storefront needs no stock rules.

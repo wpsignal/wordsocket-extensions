@@ -34,7 +34,8 @@ function is_live_storefront_page(): bool {
 	 *
 	 * @param bool $load Default: WooCommerce pages, cart and checkout.
 	 */
-	return (bool) apply_filters( 'shopsocket_storefront', is_woocommerce() || is_cart() || is_checkout() );
+	$has_block = is_singular() && has_block( LIVE_STOCK_BLOCK );
+	return (bool) apply_filters( 'shopsocket_storefront', is_woocommerce() || is_cart() || is_checkout() || $has_block );
 }
 
 /*
@@ -64,19 +65,28 @@ add_filter(
  * @return string
  */
 function stock_context( WC_Product $product, array $extra = array() ): string {
+	return wp_interactivity_data_wp_context( stock_context_data( $product, $extra ), STORE_NS );
+}
+
+/**
+ * The context values behind `stock_context()`.
+ *
+ * @param WC_Product $product Product or variation.
+ * @param array      $extra   Additional context keys.
+ * @return array<string, mixed>
+ */
+function stock_context_data( WC_Product $product, array $extra = array() ): array {
 	$is_variation = $product->is_type( 'variation' );
 	$availability = $product->get_availability();
-	return wp_interactivity_data_wp_context(
-		array_merge(
-			array(
-				'productId'   => $is_variation ? $product->get_parent_id() : $product->get_id(),
-				'variationId' => $is_variation ? $product->get_id() : 0,
-				'text'        => wp_strip_all_tags( (string) $availability['availability'] ),
-				'class'       => (string) $availability['class'],
-			),
-			$extra
+	return array_merge(
+		array(
+			'productId'   => $is_variation ? $product->get_parent_id() : $product->get_id(),
+			'variationId' => $is_variation ? $product->get_id() : 0,
+			'text'        => wp_strip_all_tags( (string) $availability['availability'] ),
+			'class'       => (string) $availability['class'],
+			'available'   => available_quantity( $product ),
 		),
-		STORE_NS
+		$extra
 	);
 }
 
@@ -118,25 +128,30 @@ add_filter( 'woocommerce_get_stock_html', __NAMESPACE__ . '\wrap_stock_html', 10
  * @return string
  */
 function tag_stock_indicator_block( string $content, array $block ): string {
-	$product_id = (int) ( $block['context']['postId'] ?? get_the_ID() );
-	if ( ! $product_id || str_contains( $content, 'data-wp-interactive' ) || ! preg_match( '/^<div class="([^"]*wc-block-components-product-stock-indicator[^"]*)"/', $content, $m ) ) {
+	$product_id = (int) ( $block['context']['postId'] ?? get_queried_object_id() );
+	if ( ! $product_id ) {
 		return $content;
+	}
+	$tags = new \WP_HTML_Tag_Processor( $content );
+	if ( ! $tags->next_tag( array( 'class_name' => 'wc-block-components-product-stock-indicator' ) ) ) {
+		return $content;
+	}
+	if ( null !== $tags->get_attribute( 'data-wp-interactive' ) ) {
+		return $content; // WooCommerce bound it to its own store already.
 	}
 	$product = wc_get_product( $product_id );
 	if ( ! $product instanceof WC_Product ) {
 		return $content;
 	}
 	// Base classes without the availability modifier, which the store re-adds.
-	$classes = trim( (string) preg_replace( '/\s*wc-block-components-product-stock-indicator--[\w-]+/', '', $m[1] ) );
-	return sprintf(
-		'<div class="%1$s shopsocket-stock" data-wp-interactive="%2$s" %3$s data-wp-bind--class="state.indicatorClassName" data-wp-text="state.stockText"%4$s',
-		esc_attr( $m[1] ),
-		esc_attr( STORE_NS ),
-		stock_context( $product, array( 'classes' => $classes ) ),
-		substr( $content, strlen( $m[0] ) )
-	);
+	$classes = trim( (string) preg_replace( '/\s*wc-block-components-product-stock-indicator--[\w-]+/', '', (string) $tags->get_attribute( 'class' ) ) );
+	$tags->add_class( 'shopsocket-stock' );
+	$tags->set_attribute( 'data-wp-interactive', STORE_NS );
+	$tags->set_attribute( 'data-wp-context', STORE_NS . '::' . wp_json_encode( stock_context_data( $product, array( 'classes' => $classes ) ) ) );
+	$tags->set_attribute( 'data-wp-bind--class', 'state.indicatorClassName' );
+	$tags->set_attribute( 'data-wp-text', 'state.stockText' );
+	return $tags->get_updated_html();
 }
-// Block themes: the Product Stock Indicator block.
 add_filter( 'render_block_woocommerce/product-stock-indicator', __NAMESPACE__ . '\tag_stock_indicator_block', 10, 2 );
 
 /**
@@ -182,7 +197,7 @@ function in_carts_strings(): array {
  */
 function in_carts_once( int $product_id ): string {
 	static $rendered = false;
-	if ( $rendered || ! in_carts_enabled() || ! is_product() || get_queried_object_id() !== $product_id ) {
+	if ( $rendered || ! in_carts_enabled() || ! is_product() || get_queried_object_id() !== $product_id || template_has_live_stock_block() ) {
 		return '';
 	}
 	$rendered = true;
@@ -211,6 +226,24 @@ add_filter(
 	10,
 	2
 );
+
+/**
+ * Which storefront page this is, for the module's page-specific behaviour.
+ *
+ * @return string `product`, `cart`, `checkout`, or `other`.
+ */
+function storefront_page(): string {
+	if ( is_product() ) {
+		return 'product';
+	}
+	if ( is_cart() ) {
+		return 'cart';
+	}
+	if ( is_checkout() ) {
+		return 'checkout';
+	}
+	return 'other';
+}
 
 /**
  * Whether the in-cart counter is shown.
@@ -268,6 +301,8 @@ add_action(
 			STORE_NS,
 			array(
 				'productId'         => is_product() ? (int) get_queried_object_id() : 0,
+				'page'              => storefront_page(),
+				'cartUrl'           => wc_get_cart_url(),
 				'presenceChannel'   => CARTS_PRESENCE_CHANNEL,
 				'channels'          => array(
 					'stock'    => STOCK_CHANNEL,
@@ -283,6 +318,13 @@ add_action(
 					'addedThis'  => __( 'Someone just added this to their basket', 'shopsocket' ),
 					/* translators: %s: product name */
 					'addedOther' => __( 'Someone just added %s to their basket', 'shopsocket' ),
+					/* translators: %s: product name */
+					'soldOut'    => __( '%s just sold out and can no longer be purchased. Please remove it from your cart.', 'shopsocket' ),
+					/* translators: 1: product name, 2: units left */
+					'onlyLeft'   => __( 'Only %2$d of %1$s left, fewer than your cart holds.', 'shopsocket' ),
+					'left'       => left_string(),
+					'addToCart'  => __( 'Add to cart', 'shopsocket' ),
+					'readMore'   => __( 'Read more', 'shopsocket' ),
 				),
 			)
 		);
@@ -297,8 +339,8 @@ add_action(
 			return;
 		}
 		printf(
-			'<div class="shopsocket-toasts" data-wp-interactive="%1$s" aria-live="polite">' .
-				'<div class="shopsocket-toast" role="status" data-wp-bind--hidden="!state.toast.visible" data-wp-class--is-visible="state.toast.visible" hidden>' .
+			'<div class="shopsocket-toasts" data-wp-interactive="%1$s">' .
+				'<div class="shopsocket-toast" role="status" data-wp-bind--role="state.toastRole" data-wp-bind--hidden="!state.toast.visible" data-wp-class--is-visible="state.toast.visible" data-wp-class--is-error="state.toastIsError" hidden>' .
 					'<img class="shopsocket-toast__image" data-wp-bind--hidden="!state.toast.image" data-wp-bind--src="state.toast.image" alt="" hidden>' .
 					'<a data-wp-bind--href="state.toast.href" data-wp-text="state.toast.message"></a>' .
 					'<button type="button" class="shopsocket-toast__close" data-wp-on--click="actions.dismissToast" aria-label="%2$s">&times;</button>' .
@@ -357,8 +399,9 @@ add_action(
 					record_cart( basket_id() );
 					$state    = current_cart_state();
 					$response = array(
-						'id'       => basket_id(),
-						'products' => $state ? $state['products'] : array(),
+						'id'         => basket_id(),
+						'products'   => $state ? $state['products'] : array(),
+						'quantities' => $state ? (object) $state['quantities'] : new \stdClass(),
 					);
 					$product = (int) $request->get_param( 'product' );
 					if ( $product > 0 ) {

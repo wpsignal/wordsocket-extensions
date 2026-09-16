@@ -5,6 +5,8 @@
 
 use function WPSignal\Extensions\ShopSocket\all_baskets;
 use function WPSignal\Extensions\ShopSocket\in_carts_html;
+use function WPSignal\Extensions\ShopSocket\render_live_stock_block;
+use const WPSignal\Extensions\ShopSocket\LIVE_STOCK_BLOCK;
 use function WPSignal\Extensions\ShopSocket\product_import_running;
 use function WPSignal\Extensions\ShopSocket\should_publish_stock;
 use function WPSignal\Extensions\ShopSocket\tag_stock_indicator_block;
@@ -22,9 +24,10 @@ final class StorefrontTest extends ExtensionTestCase {
 	 * @return array
 	 */
 	private function context_of( string $html ): array {
-		$this->assertMatchesRegularExpression( "/data-wp-context='([^']+)'/", $html );
-		preg_match( "/data-wp-context='([^']+)'/", $html, $m );
-		$json = str_starts_with( $m[1], STORE_NS . '::' ) ? substr( $m[1], strlen( STORE_NS ) + 2 ) : $m[1];
+		$this->assertMatchesRegularExpression( '/data-wp-context=([\'"])(.+?)\1/', $html );
+		preg_match( '/data-wp-context=([\'"])(.+?)\1/', $html, $m );
+		$value = html_entity_decode( $m[2], ENT_QUOTES );
+		$json  = str_starts_with( $value, STORE_NS . '::' ) ? substr( $value, strlen( STORE_NS ) + 2 ) : $value;
 		return (array) json_decode( $json, true );
 	}
 
@@ -42,6 +45,7 @@ final class StorefrontTest extends ExtensionTestCase {
 				'variationId' => 0,
 				'text'        => '5 in stock',
 				'class'       => 'in-stock',
+				'available'   => 5,
 			),
 			$this->context_of( $html )
 		);
@@ -63,11 +67,15 @@ final class StorefrontTest extends ExtensionTestCase {
 
 	public function test_the_block_stock_indicator_is_bound_unless_woocommerce_already_made_it_interactive(): void {
 		$product = $this->make_product( 5 );
-		$block   = '<div class="wc-block-components-product-stock-indicator wp-block-woocommerce-product-stock-indicator  wc-block-components-product-stock-indicator--in-stock" style="color:red">In stock</div>';
+		// The block leads with data attributes on current WooCommerce; the class is not the first attribute.
+		$block = '<div data-block-name="woocommerce/product-stock-indicator" class="wc-block-components-product-stock-indicator wp-block-woocommerce-product-stock-indicator  wc-block-components-product-stock-indicator--in-stock" style="color:red">In stock</div>';
 		$tagged  = tag_stock_indicator_block( $block, array( 'context' => array( 'postId' => $product->get_id() ) ) );
 
-		$this->assertStringStartsWith( '<div class="wc-block-components-product-stock-indicator wp-block-woocommerce-product-stock-indicator  wc-block-components-product-stock-indicator--in-stock shopsocket-stock" data-wp-interactive="' . STORE_NS . '"', $tagged );
-		$this->assertStringContainsString( 'data-wp-bind--class="state.indicatorClassName" data-wp-text="state.stockText" style="color:red">In stock</div>', $tagged );
+		$this->assertMatchesRegularExpression( '/class="[^"]*wc-block-components-product-stock-indicator--in-stock[^"]*shopsocket-stock[^"]*"/', $tagged );
+		$this->assertStringContainsString( 'data-wp-interactive="' . STORE_NS . '"', $tagged );
+		$this->assertStringContainsString( 'data-wp-bind--class="state.indicatorClassName"', $tagged );
+		$this->assertStringContainsString( 'data-wp-text="state.stockText"', $tagged );
+		$this->assertStringContainsString( 'style="color:red">In stock</div>', $tagged );
 		$context = $this->context_of( $tagged );
 		$this->assertSame( 'wc-block-components-product-stock-indicator wp-block-woocommerce-product-stock-indicator', $context['classes'], 'base classes without the availability modifier' );
 		$this->assertSame( '5 in stock', $context['text'] );
@@ -111,13 +119,10 @@ final class StorefrontTest extends ExtensionTestCase {
 			wp_set_current_user( 0 );
 			$response = rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/basket-id' ) );
 			$this->assertSame( 200, $response->get_status() );
-			$this->assertSame(
-				array(
-					'id'       => '',
-					'products' => array(),
-				),
-				$response->get_data()
-			);
+			$data = $response->get_data();
+			$this->assertSame( '', $data['id'] );
+			$this->assertSame( array(), $data['products'] );
+			$this->assertEquals( new \stdClass(), $data['quantities'] );
 			$this->assertNull( WC()->cart, 'the request did not load a cart' );
 			$this->assertNull( WC()->session, 'nor start a session' );
 			$this->assertSame( 'no-store, max-age=0', $response->get_headers()['Cache-Control'] );
@@ -145,10 +150,32 @@ final class StorefrontTest extends ExtensionTestCase {
 			$this->assertSame( array( $product->get_id() ), $rows[0]['products'] );
 			$this->assertSame( array( $product->get_id() => 2 ), $rows[0]['quantities'] );
 			$this->assertSame( $rows[0]['id'], $response->get_data()['id'] );
+			$this->assertEquals( (object) array( $product->get_id() => 2 ), $response->get_data()['quantities'], 'the shopper learns how many they hold' );
 		} finally {
 			unset( $_COOKIE['wp_woocommerce_session_phpunit'] );
 			WC()->cart->empty_cart();
 		}
+	}
+
+	public function test_the_live_stock_block_renders_the_availability_units_left_and_counter(): void {
+		$product = $this->make_product( 5 );
+		$this->seed_basket( 'a', array( $product->get_id() ), 5.0 );
+
+		$block = new WP_Block( array( 'blockName' => LIVE_STOCK_BLOCK, 'attrs' => array( 'productId' => $product->get_id() ) ), array() );
+		$html  = render_live_stock_block( array( 'productId' => $product->get_id() ), '', $block );
+
+		$this->assertMatchesRegularExpression( '/<div class="(wp-block-shopsocket-live-stock )?shopsocket-live-stock"/', $html, 'the wp-block class joins in a real block render' );
+		$this->assertStringContainsString( 'data-wp-interactive="' . STORE_NS . '"', $html );
+		$this->assertStringContainsString( 'data-wp-bind--class="state.liveStockClassName"', $html );
+		$this->assertStringContainsString( '>5 in stock</p>', $html );
+		$this->assertStringContainsString( 'data-wp-text="state.stockLeftText">5 left</p>', $html );
+		$this->assertStringContainsString( '1 shopper has this in their cart right now', $html );
+		$context = $this->context_of( $html );
+		$this->assertSame( $product->get_id(), $context['productId'] );
+		$this->assertSame( 5, $context['available'] );
+
+		// No product to show: nothing rendered.
+		$this->assertSame( '', render_live_stock_block( array( 'productId' => 999999999 ), '', $block ) );
 	}
 
 	public function test_stock_changes_are_not_published_during_an_import(): void {

@@ -57,6 +57,24 @@ add_action( 'woocommerce_product_import_before_process_item', static fn() => pro
 const ACTIVITY_THROTTLE = 10;
 
 /**
+ * Whether the product's stock state is news. One save can fire the status
+ * hook and the quantity hook in either order, so both triggers ask here and
+ * only the first to see a state publishes it.
+ *
+ * @param WC_Product $product The product or variation.
+ * @return bool
+ */
+function stock_state_changed( WC_Product $product ): bool {
+	static $last = array();
+	$state       = $product->get_stock_status() . ':' . (string) $product->get_stock_quantity();
+	if ( ( $last[ $product->get_id() ] ?? null ) === $state ) {
+		return false;
+	}
+	$last[ $product->get_id() ] = $state;
+	return true;
+}
+
+/**
  * Whether an add-to-cart should be published: a purchasable product, the
  * feature enabled, and the per-product throttle window elapsed.
  *
@@ -177,8 +195,18 @@ add_action(
 			WPS::trigger( 'woo.stock.changed' )
 				->on( $hook, 10, 1 )
 				->channel( STOCK_CHANNEL )
-				->when( static fn( $product ) => $product instanceof WC_Product && should_publish_stock() )
+				->when( static fn( $product ) => $product instanceof WC_Product && should_publish_stock() && stock_state_changed( $product ) )
 				->data( static fn( WC_Product $product ) => stock_payload( $product ) )
+				->register();
+		}
+
+		// Status flipped (a sell-out, or a manual flip with stock unmanaged): the same event, once per state.
+		foreach ( array( 'woocommerce_product_set_stock_status', 'woocommerce_variation_set_stock_status' ) as $hook ) {
+			WPS::trigger( 'woo.stock.changed' )
+				->on( $hook, 10, 3 )
+				->channel( STOCK_CHANNEL )
+				->when( static fn( $id, $status, $product = null ) => $product instanceof WC_Product && should_publish_stock() && stock_state_changed( $product ) )
+				->data( static fn( $id, $status, WC_Product $product ) => stock_payload( $product ) )
 				->register();
 		}
 

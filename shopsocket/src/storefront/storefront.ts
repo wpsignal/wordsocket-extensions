@@ -14,7 +14,15 @@
  */
 import { store, getContext } from "@wordpress/interactivity";
 import { startViewer } from "shopsocket/storefront/viewer";
-import { feedWooCommerceStore, syncAddToCart, syncInjected, watchVariationForm } from "shopsocket/storefront/woocommerce";
+import {
+  feedWooCommerceStore,
+  refreshCart,
+  setQuantityMax,
+  syncAddToCart,
+  syncArchiveButtons,
+  syncInjected,
+  watchVariationForm,
+} from "shopsocket/storefront/woocommerce";
 import type { CartEventData, Ctx, StockEntry, StockEventData, StorefrontActions, StorefrontState } from "./types";
 
 const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -32,7 +40,16 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
   state: {
     stock: {},
     pulses: {},
-    toast: { message: "", href: "", visible: false, image: "" },
+    toast: { message: "", href: "", visible: false, image: "", kind: "info", sticky: false, key: "" },
+
+    /** Whether the toast on screen is an error, styled and announced as one. */
+    get toastIsError(): boolean {
+      return state.toast.kind === "error";
+    },
+    /** `alert` interrupts the screen reader for an error; `status` waits its turn. */
+    get toastRole(): "status" | "alert" {
+      return state.toast.kind === "error" ? "alert" : "status";
+    },
 
     /** How many baskets hold this element's product. */
     get inCartsCount(): number {
@@ -78,6 +95,18 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
       const ctx = getContext<Ctx>();
       return `${ctx.classes ?? ""} wc-block-components-product-stock-indicator--${state.stockClass} shopsocket-stock${state.stockPulse ? " shopsocket-stock--updated" : ""}`;
     },
+    /** The Live Stock block's availability line: the classic classes plus its own. */
+    get liveStockClassName(): string {
+      return `${state.stockClassName} shopsocket-live-stock__availability`;
+    },
+    /** "N left" for this element's product, empty when unknown or gone. */
+    get stockLeftText(): string {
+      const ctx = getContext<Ctx>();
+      const entry = state.stockEntry;
+      const available = entry ? entry.available : (ctx.available ?? null);
+      if (available === null || available <= 0) return "";
+      return (state.i18n?.left ?? "%d left").replace("%d", String(available));
+    },
     /** Whether this element's stock just changed. */
     get stockPulse(): boolean {
       const { productId, variationId } = getContext<Ctx>();
@@ -91,11 +120,22 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
       state.toast.visible = false;
     },
 
-    /** Show a toast for TOAST_MS, replacing any on screen. */
-    showToast(message, href, image) {
+    /** Show a toast, replacing any on screen unless a sticky error is up and this is not one. Errors stay until dismissed or cleared. */
+    showToast(message, href, image, options) {
       if (!message) return;
-      state.toast = { message, href: href ?? "", visible: true, image: image ?? "" };
+      const kind = options?.kind ?? "info";
+      if (state.toast.visible && state.toast.sticky && state.toast.kind === "error" && kind !== "error") return;
+      state.toast = {
+        message,
+        href: href ?? "",
+        visible: true,
+        image: image ?? "",
+        kind,
+        sticky: options?.sticky ?? false,
+        key: options?.key ?? "",
+      };
       clearTimeout(toastTimer);
+      if (state.toast.sticky) return;
       toastTimer = setTimeout(() => {
         state.toast.visible = false;
       }, TOAST_MS);
@@ -111,6 +151,7 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
         class: data.availability_class ?? "",
         status: data.stock_status,
         purchasable: data.purchasable !== false,
+        available: typeof data.available === "number" ? data.available : null,
       };
       const selected = Number(state.selectedVariation) || 0;
       const key = stockKey(productId, variationId);
@@ -124,6 +165,14 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
       feedWooCommerceStore(productId, variationId, entry);
       syncInjected(productId, variationId, entry, selected, PULSE_MS);
       syncAddToCart(productId, variationId, entry, Number(state.productId), selected);
+      setQuantityMax(productId, variationId, entry.available, Number(state.productId), selected);
+      if (variationId === 0) {
+        syncArchiveButtons(productId, entry.purchasable, webUrl(data.permalink, true), {
+          addToCart: state.i18n?.addToCart ?? "Add to cart",
+          readMore: state.i18n?.readMore ?? "Read more",
+        });
+      }
+      warnHolder(productId, entry, String(data.name ?? ""));
     },
 
     /** Another shopper added a product: update its count, and toast if this shopper holds it too. */
@@ -186,6 +235,28 @@ function pulse(key: string): void {
       state.pulses[key] = false;
     }, PULSE_MS),
   );
+}
+
+/*
+ * A held product just sold out, or fewer remain than this shopper holds: say so
+ * at once, sticky, with a way to the cart, and have WooCommerce re-read the cart
+ * so its own notice and limits appear. Enough stock again clears the notice.
+ */
+function warnHolder(productId: number, entry: StockEntry, name: string): void {
+  const held = viewer.held(productId);
+  if (held === 0) return;
+  const key = `stock:${productId}`;
+  const soldOut = !entry.purchasable || entry.available === 0;
+  const short = !soldOut && entry.available !== null && entry.available < held;
+  if (soldOut || short) {
+    const message = soldOut
+      ? (state.i18n?.soldOut ?? "%s").replace("%s", name)
+      : (state.i18n?.onlyLeft ?? "%2$d of %1$s").replace("%1$s", name).replace("%2$d", String(entry.available));
+    actions.showToast(message, state.page === "cart" ? "" : webUrl(state.cartUrl, true), "", { kind: "error", sticky: true, key });
+  } else if (state.toast.visible && state.toast.key === key) {
+    actions.dismissToast();
+  }
+  refreshCart(state.page);
 }
 
 /** `value` as an http(s) URL, on this site when `sameOrigin`, else "". */

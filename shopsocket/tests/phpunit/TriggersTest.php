@@ -66,13 +66,15 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertSame( $product->get_id(), $data['product_id'] );
 		$this->assertSame( 0, $data['variation_id'] );
 		$this->assertSame( 4, $data['stock_quantity'] );
+		$this->assertSame( 4, $data['available'], 'nothing held, so all of it can be bought' );
+		$this->assertStringContainsString( 'phpunit-widget', $data['permalink'] );
 		$this->assertSame( 'instock', $data['stock_status'] );
 		$this->assertTrue( $data['purchasable'] );
 		// Availability in WooCommerce's own words, so the storefront needs no stock rules.
 		$this->assertSame( '4 in stock', $data['availability_text'] );
 		$this->assertSame( 'in-stock', $data['availability_class'] );
 		$this->assertSame(
-			array( 'product_id', 'variation_id', 'name', 'stock_quantity', 'stock_status', 'purchasable', 'availability_text', 'availability_class' ),
+			array( 'product_id', 'variation_id', 'name', 'permalink', 'stock_quantity', 'available', 'stock_status', 'purchasable', 'availability_text', 'availability_class' ),
 			array_keys( $data )
 		);
 
@@ -82,6 +84,49 @@ final class TriggersTest extends ExtensionTestCase {
 		$events = $this->events_on( STOCK_CHANNEL, 'woo.stock.changed' );
 		$this->assertSame( 'Out of stock', end( $events )['data']['availability_text'] );
 		$this->assertSame( 'out-of-stock', end( $events )['data']['availability_class'] );
+	}
+
+	public function test_available_subtracts_stock_held_by_pending_checkouts(): void {
+		$product = $this->make_product( 5 );
+		$order   = $this->make_order( $product, 2 );
+		wc_reserve_stock_for_order( $order );
+		try {
+			$this->assertSame( 2, wc_get_held_stock_quantity( $product ) );
+
+			$this->published = array();
+			wc_update_product_stock( $product, 4 );
+			$this->assertSame( 2, $this->events_on( STOCK_CHANNEL, 'woo.stock.changed' )[0]['data']['available'], 'stock minus what the pending order holds' );
+
+			// Backorders allowed, or stock unmanaged: no limit to report.
+			$product->set_backorders( 'yes' );
+			$product->save();
+			$this->published = array();
+			wc_update_product_stock( $product, 3 );
+			$this->assertNull( $this->events_on( STOCK_CHANNEL, 'woo.stock.changed' )[0]['data']['available'] );
+		} finally {
+			wc_release_stock_for_order( $order );
+		}
+	}
+
+	public function test_a_status_change_publishes_once_whether_or_not_stock_is_managed(): void {
+		$loose = $this->make_product( 5 );
+		$loose->set_manage_stock( false );
+		$loose->set_stock_status( 'instock' );
+		$loose->save();
+		$this->published = array();
+
+		$loose->set_stock_status( 'outofstock' );
+		$loose->save();
+		$events = $this->events_on( STOCK_CHANNEL, 'woo.stock.changed' );
+		$this->assertCount( 1, $events, 'a status-only flip is still a stock change' );
+		$this->assertFalse( $events[0]['data']['purchasable'] );
+		$this->assertNull( $events[0]['data']['available'] );
+
+		// A managed product's sell-out flips the status in the same save: one event, not two.
+		$managed = $this->make_product( 1 );
+		$this->published = array();
+		wc_update_product_stock( $managed, 0 );
+		$this->assertCount( 1, $this->events_on( STOCK_CHANNEL, 'woo.stock.changed' ) );
 	}
 
 	public function test_selling_across_the_low_and_out_of_stock_thresholds_notifies_staff(): void {
