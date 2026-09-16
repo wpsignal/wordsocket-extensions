@@ -3,10 +3,9 @@ const DependencyExtractionWebpackPlugin = require( '@wordpress/dependency-extrac
 const path = require( 'path' );
 
 /**
- * WordPress packages the board takes from core (`wp.*` globals). Everything
- * else under `@wordpress/` is bundled: DataViews 19 needs `@wordpress/components`
- * 40, which core does not ship, and that in turn needs its own `compose`,
- * `private-apis`, `ui`, and friends at matching versions.
+ * Packages the board takes from core as `wp.*` globals. Every other
+ * `@wordpress/*` package is bundled: DataViews 19 needs components 40, which
+ * core does not ship, along with its own compose, private-apis, and friends.
  */
 const FROM_CORE = new Set( [
 	'@wordpress/element',
@@ -23,9 +22,11 @@ module.exports = {
 	output: {
 		...defaultConfig.output,
 		path: path.resolve( __dirname, 'build' ),
-		// wp-scripts cleans `build/` before every compile (start included), keeping
-		// only fonts and images; keep the storefront module too, which `tsc`
-		// emits there (`tsconfig.storefront.json`) rather than webpack.
+		/*
+		 * wp-scripts cleans `build/` before every compile (start included), keeping
+		 * only fonts and images; keep the storefront module too, which `tsc`
+		 * emits there (`tsconfig.storefront.json`) rather than webpack.
+		 */
 		clean: { keep: /^(fonts|images|storefront)\// },
 	},
 	plugins: [
