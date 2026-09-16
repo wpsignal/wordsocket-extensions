@@ -21,3 +21,6 @@ phpunit.xml.dist
 playwright.config.ts
 /tests
 /vendor
+/dist
+/wp-org-assets
+CHANGELOG.md

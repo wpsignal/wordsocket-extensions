@@ -1,0 +1,196 @@
+name: Extension Release
+
+# One pipeline for every plugin in this repository. The tag names the plugin:
+#
+#   shopsocket/v1.0.0   → builds shopsocket/, releases "ShopSocket v1.0.0",
+#                          publishes to plugins.svn.wordpress.org/shopsocket
+#
+# Jobs, in order, so nothing reaches WordPress.org that was not built and
+# verified first:
+#   1. build    typecheck, build, POT, zip (bin/dist.sh <plugin>); the zip's
+#               header and stable tag must match the tag.
+#   2. github   create the GitHub release with <plugin>.zip attached.
+#   3. wporg    publish the same zip to WordPress.org SVN (bin/svn.sh <plugin>)
+#               with the WPORG_SVN_USERNAME / WPORG_SVN_PASSWORD secrets.
+#
+# Triggers:
+#   Tag push  : npm run release -- [--tested <wp>] <version>  (inside the plugin
+#               directory; bin/release.sh bumps, commits, tags <plugin>/vX.Y.Z
+#               and pushes). Publishes for real.
+#   Manual    : Actions > Extension Release > Run workflow, pick the plugin.
+#               Builds the zip and creates a draft release; never touches SVN.
+#
+# A failed run publishes nothing. Fix the cause, then move the tag onto the fix:
+#   git tag -fs <plugin>/vX.Y.Z -m "Release <plugin> vX.Y.Z" && git push --force origin <plugin>/vX.Y.Z
+
+on:
+  push:
+    tags:
+      - '*/v*'
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: Plugin directory to build
+        required: true
+        default: shopsocket
+        type: choice
+        options:
+          - shopsocket
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      plugin: ${{ steps.meta.outputs.plugin }}
+      version: ${{ steps.meta.outputs.version }}
+      name: ${{ steps.meta.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Which plugin
+        id: meta
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            plugin="${GITHUB_REF_NAME%%/v*}"
+          else
+            plugin="${{ inputs.plugin }}"
+          fi
+          [[ -f "$plugin/package.json" && -f "$plugin/$plugin.php" ]] || { echo "::error::no plugin at $plugin/"; exit 1; }
+          version="$(node -p "require('./$plugin/package.json').version")"
+          name="$(grep -m1 'Plugin Name:' "$plugin/$plugin.php" | sed 's/.*Plugin Name:[[:space:]]*//')"
+          echo "plugin=$plugin" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "$name $version from $plugin/"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ steps.meta.outputs.plugin }}/package-lock.json
+
+      - name: Install WP-CLI
+        run: |
+          curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+          chmod +x wp-cli.phar
+          sudo mv wp-cli.phar /usr/local/bin/wp
+
+      - name: Install dependencies
+        working-directory: ${{ steps.meta.outputs.plugin }}
+        run: npm ci
+
+      - name: Build release zip
+        run: bash bin/dist.sh "${{ steps.meta.outputs.plugin }}"
+
+      - name: Verify the zip matches the tag
+        run: |
+          set -euo pipefail
+          plugin="${{ steps.meta.outputs.plugin }}"
+          version="${{ steps.meta.outputs.version }}"
+          zip="$plugin/dist/$plugin.zip"
+          header=$(unzip -p "$zip" "$plugin/$plugin.php" | grep -m1 'Version:' | sed 's/.*Version:[[:space:]]*//' | tr -d '[:space:]')
+          stable=$(unzip -p "$zip" "$plugin/readme.txt" | grep -m1 '^Stable tag:' | sed 's/Stable tag:[[:space:]]*//' | tr -d '[:space:]')
+          echo "package.json=$version header=$header stable=$stable ref=${{ github.ref_name }}"
+          [[ "$header" == "$version" && "$stable" == "$version" ]] || { echo "::error::zip version does not match package.json"; exit 1; }
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            [[ "${{ github.ref_name }}" == "$plugin/v$version" ]] || { echo "::error::tag ${{ github.ref_name }} does not match $plugin/v$version"; exit 1; }
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: ${{ steps.meta.outputs.plugin }}/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  github:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Set release tag
+        id: tag
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "draft=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${{ needs.build.outputs.plugin }}/v${{ needs.build.outputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "draft=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ needs.build.outputs.name }} v${{ needs.build.outputs.version }}
+          draft: ${{ steps.tag.outputs.draft }}
+          files: dist/${{ needs.build.outputs.plugin }}.zip
+          body: |
+            Install via **Plugins > Add New > Upload Plugin** in your WordPress admin.
+
+            Download `${{ needs.build.outputs.plugin }}.zip` below. Needs WordSocket.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  wporg:
+    # Real tags only, and only when the SVN credentials are configured.
+    needs: [build, github]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment: wordpress-org
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check credentials
+        id: creds
+        env:
+          USERNAME: ${{ secrets.WPORG_SVN_USERNAME }}
+          PASSWORD: ${{ secrets.WPORG_SVN_PASSWORD }}
+        run: |
+          if [[ -z "$USERNAME" || -z "$PASSWORD" ]]; then
+            echo "::warning::WPORG_SVN_USERNAME / WPORG_SVN_PASSWORD not set; skipping the WordPress.org publish"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.creds.outputs.ok == 'true'
+        with:
+          node-version: '22'
+
+      - uses: actions/download-artifact@v4
+        if: steps.creds.outputs.ok == 'true'
+        with:
+          name: dist
+          path: ${{ needs.build.outputs.plugin }}/dist
+
+      - name: Install Subversion
+        if: steps.creds.outputs.ok == 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq subversion
+
+      - name: Sparse checkout of the WordPress.org repository
+        if: steps.creds.outputs.ok == 'true'
+        run: |
+          set -euo pipefail
+          plugin="${{ needs.build.outputs.plugin }}"
+          svn checkout --quiet --depth immediates "https://plugins.svn.wordpress.org/$plugin" "../$plugin-svn"
+          cd "../$plugin-svn"
+          svn update --quiet --set-depth infinity trunk assets
+
+      - name: Publish to WordPress.org
+        if: steps.creds.outputs.ok == 'true'
+        env:
+          SVN_USERNAME: ${{ secrets.WPORG_SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.WPORG_SVN_PASSWORD }}
+          SVN_DIR: ${{ github.workspace }}/../${{ needs.build.outputs.plugin }}-svn
+        run: bash bin/svn.sh "${{ needs.build.outputs.plugin }}"

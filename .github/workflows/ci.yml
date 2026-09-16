@@ -1,0 +1,63 @@
+name: CI
+
+# Every plugin in the repository, on every push and pull request: types, PHP
+# coding standards, and a build. PHPUnit and Playwright stay local; they need
+# a live WooCommerce site and the relay.
+
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['**']
+  pull_request:
+
+jobs:
+  plugins:
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.find.outputs.list }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find plugins
+        id: find
+        run: |
+          list=$(for d in */; do d="${d%/}"; [[ -f "$d/package.json" && -f "$d/$d.php" ]] && echo "$d"; done | jq -R . | jq -sc .)
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "plugins: $list"
+
+  check:
+    needs: plugins
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: ${{ fromJson(needs.plugins.outputs.list) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.plugin }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ matrix.plugin }}/package-lock.json
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          composer install --no-interaction --no-progress --quiet
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: PHP coding standards
+        run: vendor/bin/phpcs -q --standard=phpcs.xml "${{ matrix.plugin }}.php" inc
+
+      - name: Build
+        run: npm run build

@@ -11,7 +11,10 @@
     "make-pot": "php -d memory_limit=512M \"$(command -v wp)\" i18n make-pot . languages/shopsocket.pot --slug=shopsocket --domain=shopsocket --exclude=node_modules,vendor,tests,artifacts,src",
     "test:php": "vendor/bin/phpunit",
     "test:e2e": "wp-scripts test-playwright",
-    "test": "npm run test:php && npm run test:e2e"
+    "test": "npm run test:php && npm run test:e2e",
+    "dist": "bash ../bin/dist.sh shopsocket",
+    "svn": "bash ../bin/svn.sh shopsocket",
+    "release": "bash ../bin/release.sh shopsocket"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
