@@ -3,7 +3,7 @@ import { expect, test } from "@wordpress/e2e-test-utils-playwright";
 import { execSync, spawn, type ChildProcess } from "node:child_process";
 import { request } from "@playwright/test";
 import { WP_ROOT, WPS_API_URL, WPS_E2E_EMAIL, WPS_E2E_PASSWORD } from "./env";
-import { clearBaskets, createProduct, deleteProduct, visitorContext, waitForLive } from "./helpers";
+import { addToCart, clearBaskets, createProduct, deleteProduct, visitorContext, waitForLive } from "./helpers";
 
 const PAGE = "page=shopsocket";
 
@@ -48,8 +48,7 @@ test.describe("Relay restart", () => {
       const shop = await visitor.newPage();
       await shop.goto(product.permalink);
       await waitForLive(shop);
-      await shop.locator(".single_add_to_cart_button").first().click();
-      await expect(shop.locator(".woocommerce-message, .wc-block-components-notice-banner").first()).toBeVisible({ timeout: 15_000 });
+      await addToCart(shop);
       const liveLink = page.locator(".shopsocket-live-products a", { hasText: "E2E Restart Widget" });
       await expect(liveLink).toBeVisible({ timeout: 15_000 });
 

@@ -1,6 +1,6 @@
 import "./env";
 import { expect, test } from "@wordpress/e2e-test-utils-playwright";
-import { clearBaskets, createOrder, createProduct, deleteOrder, deleteProduct, num, visitorContext, waitForLive } from "./helpers";
+import { addToCart, clearBaskets, createOrder, createProduct, deleteOrder, deleteProduct, num, visitorContext, waitForLive } from "./helpers";
 
 const PAGE = "page=shopsocket";
 
@@ -35,8 +35,7 @@ test.describe("ShopSocket dashboard", () => {
       const shop = await visitor.newPage();
       await shop.goto(product.permalink);
       await waitForLive(shop);
-      await shop.locator(".single_add_to_cart_button").first().click();
-      await expect(shop.locator(".woocommerce-message, .wc-block-components-notice-banner").first()).toBeVisible({ timeout: 15_000 });
+      await addToCart(shop);
 
       // The basket is live, with its revenue, and nothing new is abandoned.
       await expect.poll(num(liveShoppers), { timeout: 15_000 }).toBeGreaterThanOrEqual(live0 + 1);
@@ -82,6 +81,8 @@ test.describe("ShopSocket dashboard", () => {
        * load writes it back from their real cart, so the product is live again.
        */
       clearBaskets(product.id);
+      // The board re-reads its rows when the tab comes back into view; no need to wait for its poll.
+      await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
       await expect(liveLink).toHaveCount(0, { timeout: 10_000 });
       await reopened.reload();
       await waitForLive(reopened);
@@ -108,8 +109,7 @@ test.describe("ShopSocket dashboard", () => {
     try {
       await shop.goto(product.permalink);
       await waitForLive(shop);
-      await shop.locator(".single_add_to_cart_button").first().click();
-      await expect(shop.locator(".woocommerce-message, .wc-block-components-notice-banner").first()).toBeVisible({ timeout: 15_000 });
+      await addToCart(shop);
 
       // The logged-in shopper's own basket is live, and nothing new is abandoned.
       await expect.poll(num(liveShoppers), { timeout: 15_000 }).toBeGreaterThanOrEqual(live0 + 1);

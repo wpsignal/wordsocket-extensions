@@ -2,6 +2,20 @@ import { expect, type Browser, type BrowserContext, type Locator, type Page } fr
 import type { RequestUtils } from "@wordpress/e2e-test-utils-playwright";
 import { wp } from "./env";
 
+/**
+ * Add the page's product to the cart and wait for WooCommerce to confirm: the
+ * classic form reloads with a notice, the Interactivity form flips the button
+ * to "in cart" without a reload.
+ */
+export async function addToCart(page: Page): Promise<void> {
+  await page.locator(".single_add_to_cart_button").first().click();
+  await expect(
+    page
+      .locator('.woocommerce-message, .wc-block-components-notice-banner.is-success, .single_add_to_cart_button:has-text("in cart")')
+      .first(),
+  ).toBeVisible({ timeout: 15_000 });
+}
+
 /** Wait until window.WPS reports a connection on the current page. */
 export async function waitForLive(page: Page): Promise<void> {
   await expect.poll(() => page.evaluate(() => window.WPS?.state.connected ?? false), { timeout: 20_000 }).toBe(true);
