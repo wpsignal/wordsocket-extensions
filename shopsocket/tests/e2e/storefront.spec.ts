@@ -4,15 +4,14 @@ import { WP_ROOT, wp } from "./env";
 import { spawn } from "node:child_process";
 
 /**
- * One shopper's session, as a background wp-cli process: add to cart, keep
- * the session alive for `holdSeconds`, then empty the cart. Two separate
- * wp-cli calls would be two WooCommerce sessions, not one shopper.
+ * One shopper as a background wp-cli process: add to cart, hold for
+ * `holdSeconds`, empty the cart. Two wp-cli calls would be two sessions.
  */
 function shopperSession(productId: number, holdSeconds: number): Promise<void> {
-  // Zero the per-product publish throttle for this add so the event always fires:
-  // the viewer's own add moments earlier would otherwise consume the 10s window
-  // and suppress this shopper's `woo.cart.added`. The filter lives only in this
-  // wp-cli process, where `should_publish_cart_add` runs during add_to_cart.
+  /*
+   * Zero the 10s per-product publish throttle in this process, or the viewer's
+   * own add moments earlier swallows this shopper's `woo.cart.added`.
+   */
   const script = `add_filter( 'shopsocket_activity_throttle', '__return_zero' ); WC()->cart->add_to_cart( ${productId}, 1 ); sleep( ${holdSeconds} ); WC()->cart->empty_cart();`;
   return new Promise((resolve, reject) => {
     const child = spawn("php", ["-d", "error_reporting=0", "-d", "memory_limit=512M", "/opt/homebrew/bin/wp", `--path=${WP_ROOT}`, "eval", script], { stdio: "ignore" });
@@ -24,8 +23,7 @@ import { anyImageId, createProduct, deleteProduct, visitorContext, waitForLive }
 
 /**
  * The shopper's view: an anonymous visitor on a product page sees other
- * shoppers' activity and stock changes without a refresh. The page is driven
- * by the `shopsocket/storefront` Interactivity store.
+ * shoppers' activity and stock changes without a refresh.
  */
 test.describe("Storefront", () => {
   test("a shopper who holds an item sees the count, a toast when another shopper adds it, and a sell-out", async ({ browser, baseURL, requestUtils }) => {
@@ -43,8 +41,7 @@ test.describe("Storefront", () => {
       await expect(counter).toBeHidden();
       await expect(page.locator(".shopsocket-stock")).toContainText("8 in stock");
 
-      // The shopper adds it themselves: the counter reflects them at once (their
-      // own add is never echoed back to them), with no toast for their own action.
+      // Their own add is never echoed back, yet the counter shows them at once, and no toast.
       await page.locator(".single_add_to_cart_button").first().click();
       await expect(page.locator(".woocommerce-message, .wc-block-components-notice-banner").first()).toBeVisible({ timeout: 15_000 });
       await expect(counter).toBeVisible();
@@ -52,8 +49,7 @@ test.describe("Storefront", () => {
       await page.waitForTimeout(1500);
       await expect(toast).toBeHidden();
 
-      // Another shopper adds the same product: now a toast fires (the viewer holds it)
-      // and the count rises to two.
+      // Another shopper adds the same product: the viewer holds it, so a toast, and two in carts.
       const shopper = shopperSession(product.id, 6);
       await expect(toast).toBeVisible({ timeout: 15_000 });
       await expect(toast).toContainText("Someone just added this to their basket");
@@ -115,9 +111,10 @@ test.describe("Storefront", () => {
       await waitForLive(page);
       const toast = page.locator(".shopsocket-toast");
 
-      // The block product button adds through WooCommerce's Interactivity cart
-      // store, which fires neither the jQuery event nor a wp.data change; the
-      // plugin must still learn that the viewer now holds the product.
+      /*
+       * The block button adds through WooCommerce's Interactivity cart store,
+       * which fires neither the jQuery event nor a wp.data change.
+       */
       await page.locator(`.add_to_cart_button[data-product_id="${product.id}"]`).click();
       await expect
         .poll(
@@ -167,8 +164,10 @@ test.describe("Storefront", () => {
 
   test("a shopper's own add updates the count but never toasts, even before they have a session", async ({ browser, baseURL, requestUtils }) => {
     const product = await createProduct(requestUtils, "E2E Own Widget", 8);
-    // A brand-new visitor: no WooCommerce session cookie until the first add,
-    // so the server cannot yet tag the event with this shopper's hash.
+    /*
+     * A brand-new visitor has no session cookie until the first add, so the
+     * server cannot yet tag the event with this shopper's basket id.
+     */
     const visitor = await visitorContext(browser, baseURL);
     const watching = await visitor.newPage();
     const shopping = await visitor.newPage();
@@ -192,9 +191,10 @@ test.describe("Storefront", () => {
   });
 
   test("an anonymous visitor can refresh its token, so the connection survives past the 5-minute JWT", async ({ browser, baseURL }) => {
-    // The client refreshes by POSTing to the token endpoint with no page context.
-    // If that is refused for anonymous visitors, the storefront connection dies
-    // when the JWT expires and never returns.
+    /*
+     * A refresh is a bare POST with no page context; refuse it for visitors and
+     * the storefront connection dies when the JWT expires.
+     */
     const visitor = await visitorContext(browser, baseURL);
     try {
       const res = await visitor.request.post("/wp-json/wpsignal/v1/token");
@@ -210,8 +210,7 @@ test.describe("Storefront", () => {
   });
 
   test("a visitor's token carries only public channels", async ({ browser, baseURL }) => {
-    // The client consumes the server-minted token at boot, so read it from the
-    // page source, where WordSocket localises it for the first connection.
+    // The first token is localised into the page source, so read it from there.
     const visitor = await visitorContext(browser, baseURL);
     try {
       const html = await (await visitor.request.get("/shop/")).text();
@@ -224,6 +223,12 @@ test.describe("Storefront", () => {
       expect(prefixes.some((p) => p.includes(":woo:orders"))).toBe(false);
       expect(prefixes.some((p) => p.endsWith(":woo:stock"))).toBe(true);
       expect(prefixes.some((p) => p.endsWith(":woo:activity"))).toBe(true);
+      /*
+       * Writing is presence on the carts namespace, nothing else: the public
+       * channels cannot be spoofed from a browser.
+       */
+      const publish = payload.allowed_publish_prefixes as string[];
+      expect(publish.map((p) => p.replace(/^site:[^:]+:/, ""))).toEqual(["woo:carts:"]);
     } finally {
       await visitor.close();
     }

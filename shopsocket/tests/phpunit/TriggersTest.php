@@ -1,7 +1,6 @@
 <?php
 /**
- * The WooCommerce hooks publish the right events on the right channels with
- * the intended payloads.
+ * Triggers: the WooCommerce hooks publish the right events, channels, and payloads.
  */
 
 use WPSignal\WPS;
@@ -34,9 +33,14 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertNotContains( 'site:site123:' . ORDERS_CHANNEL, $visitor_channels );
 		$visitor_prefixes = $channels->allowed_prefixes( 0, $site_id, $visitor_channels );
 		$this->assertNotContains( 'site:site123:woo:orders:', $visitor_prefixes );
-		// Visitors may write presence on the carts namespace, but never subscribe to it.
-		$this->assertContains( 'site:site123:woo:carts:', $visitor_prefixes );
+
+		/*
+		 * Visitors write presence on the carts namespace and nothing else; they
+		 * cannot read it, so a shopper never sees another's membership.
+		 */
+		$this->assertNotContains( 'site:site123:woo:carts:', $visitor_prefixes );
 		$this->assertNotContains( 'site:site123:' . CARTS_PRESENCE_CHANNEL, $visitor_channels );
+		$this->assertSame( array( 'site:site123:woo:carts:' ), $channels->allowed_publish_prefixes( 0, $site_id ) );
 
 		$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
 		$this->assertNotEmpty( $admins );
@@ -47,6 +51,8 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertContains( 'site:site123:' . CARTS_PRESENCE_CHANNEL, $staff_channels, 'and to shopper presence' );
 		$this->assertNotContains( 'site:site123:' . CONNECTIONS_CHANNEL, $visitor_channels );
 		$this->assertContains( 'site:site123:woo:orders:', $channels->allowed_prefixes( $admin_id, $site_id, $staff_channels ) );
+		// Staff read the orders feed but PHP is its only publisher; presence stays writable for their own storefront visits.
+		$this->assertSame( array( 'site:site123:woo:carts:' ), $channels->allowed_publish_prefixes( $admin_id, $site_id ) );
 	}
 
 	public function test_a_stock_change_publishes_publicly_and_a_product_save_does_not_publish_post_updated(): void {
@@ -79,9 +85,10 @@ final class TriggersTest extends ExtensionTestCase {
 	}
 
 	public function test_selling_across_the_low_and_out_of_stock_thresholds_notifies_staff(): void {
-		// WooCommerce raises woocommerce_low_stock / woocommerce_no_stock only
-		// when an order reduces stock (wc_reduce_stock_levels), not on a manual
-		// edit; manual edits still reach staff through woo.stock.changed.
+		/*
+		 * WooCommerce raises low_stock / no_stock only when an order reduces stock,
+		 * never on a manual edit (those still reach staff as woo.stock.changed).
+		 */
 		$product = $this->make_product( 3, 2 );
 
 		$first = $this->make_order( $product, 1 );

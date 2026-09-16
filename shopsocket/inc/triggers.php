@@ -37,9 +37,8 @@ function should_publish_stock(): bool {
 }
 
 /**
- * Whether the WooCommerce CSV importer is processing items in this request.
- * It does not set WP_IMPORTING; it fires a hook per item, which flips a flag
- * for the rest of the request (each importer batch is its own request).
+ * Whether the WooCommerce CSV importer is running in this request. It does not
+ * set WP_IMPORTING, so its per-item hook flips this flag instead.
  *
  * @param bool|null $set Internal: mark the import as running.
  * @return bool
@@ -51,6 +50,7 @@ function product_import_running( ?bool $set = null ): bool {
 	}
 	return $running;
 }
+// The CSV importer's per-item hook: mark the import as running for the rest of the request.
 add_action( 'woocommerce_product_import_before_process_item', static fn() => product_import_running( true ) );
 
 /** Seconds between publishes for the same product. Filter `shopsocket_activity_throttle`. */
@@ -99,29 +99,27 @@ function should_publish_cart_add( $cart_item_key, $product_id, $quantity, $varia
 }
 
 /**
- * A stable, anonymous id for a shopper's WooCommerce session: the first 16 hex
- * of SHA-256 of the session customer id. Two uses need it to match between PHP
- * and the browser, so it is a plain hash (no server secret): the shopper's own
- * browser ignores its own add-to-basket event, and the storefront enters relay
- * presence under this id so the dashboard can tie a live connection to a basket
- * row. The browser derives the same value from its WooCommerce session cookie.
- * Not reversible to the session, and empty when there is no session yet.
+ * A stable, anonymous id for the shopper: the first 16 hex of a keyed hash.
+ *
+ * Other shoppers see this id on public activity events, so it is an HMAC
+ * with the site's auth salt: a plain hash of a small user id would be
+ * trivial to reverse. Empty while there is no session.
  *
  * @return string
  */
 function basket_id(): string {
-	// Logged-in shoppers: key on the user id, which is identical across the
-	// add request, the Store API, and the REST id lookup. Guests have no stable
-	// account, so fall back to their WooCommerce session id (they carry the
-	// session cookie that ties those requests together).
+	/*
+	 * For a logged-in shopper only the user id matches across the add request,
+	 * the Store API, and REST; guests key on their session id instead.
+	 */
 	if ( is_user_logged_in() ) {
-		return substr( hash( 'sha256', 'user:' . get_current_user_id() ), 0, 16 );
+		return substr( hash_hmac( 'sha256', 'user:' . get_current_user_id(), wp_salt( 'auth' ) ), 0, 16 );
 	}
 	$customer_id = function_exists( 'WC' ) && WC()->session ? (string) WC()->session->get_customer_id() : '';
 	if ( '' === $customer_id ) {
 		return '';
 	}
-	return substr( hash( 'sha256', 'guest:' . $customer_id ), 0, 16 );
+	return substr( hash_hmac( 'sha256', 'guest:' . $customer_id, wp_salt( 'auth' ) ), 0, 16 );
 }
 
 /**
@@ -135,13 +133,14 @@ function resolve_order( $order_or_id ): ?\WC_Order {
 	return $order instanceof \WC_Order ? $order : null;
 }
 
+// The triggers, registered once WordSocket is ready.
 add_action(
 	'wpsignal_loaded',
 	static function (): void {
-		// New order (any status, including pending checkout). WooCommerce fires
-		// this on the order's first save: storefront checkouts add their items
-		// first, programmatic `wc_create_order()` calls add them afterwards, so
-		// consumers must treat later status and paid events as the row's update.
+		/*
+		 * New order, any status. A programmatic `wc_create_order()` fires this before
+		 * its items are added, so the later status and paid events update the row.
+		 */
 		WPS::trigger( 'woo.order.created' )
 			->on( 'woocommerce_new_order', 10, 2 )
 			->channel( ORDERS_CHANNEL )
@@ -173,8 +172,7 @@ add_action(
 			)
 			->register();
 
-		// Stock level changed (checkout, refund, manual edit): public. Silent
-		// during imports, which would otherwise publish once per product.
+		// Stock level changed (checkout, refund, manual edit): public, silent during imports.
 		foreach ( array( 'woocommerce_product_set_stock', 'woocommerce_variation_set_stock' ) as $hook ) {
 			WPS::trigger( 'woo.stock.changed' )
 				->on( $hook, 10, 1 )
@@ -184,8 +182,7 @@ add_action(
 				->register();
 		}
 
-		// Someone added a product to their basket: public social proof, at most
-		// one publish per product every ACTIVITY_THROTTLE seconds.
+		// Someone added a product to their basket: public, throttled per product.
 		WPS::trigger( 'woo.cart.added' )
 			->on( 'woocommerce_add_to_cart', 10, 4 )
 			->channel( ACTIVITY_CHANNEL )

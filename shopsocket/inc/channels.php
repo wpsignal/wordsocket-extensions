@@ -1,11 +1,9 @@
 <?php
 /**
- * Channels: the reserved staff namespace and the public stock channel.
+ * Channels: the staff namespaces and the public channels every token carries.
  *
- * Registered on `wpsignal_loaded`, which WordSocket fires on `plugins_loaded`
- * after its own boot. Reserving a namespace switches the site to WordSocket's
- * strict channel list, so every channel this plugin subscribes to must also be
- * registered through `wpsignal_token_channels`.
+ * Reserving a namespace puts the site on WordSocket's strict channel list, so
+ * every channel this plugin subscribes to must go through `wpsignal_token_channels`.
  *
  * @package WPSignal\Extensions\ShopSocket
  */
@@ -18,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+// Catalogue entry, the two reserved namespaces, and no generic post events for products.
 add_action(
 	'wpsignal_loaded',
 	static function (): void {
@@ -34,25 +33,30 @@ add_action(
 			)
 		);
 
-		// Orders carry totals and customer names: staff only.
-		$wps->channels()->reserve( ORDERS_NS, STAFF_CAP );
+		/*
+		 * Orders carry totals and customer names: staff only, and PHP is the
+		 * only publisher, so no browser writes here.
+		 */
+		$wps->channels()->reserve( ORDERS_NS, STAFF_CAP, '__return_false' );
 
-		// Every shopper may enter presence on the carts namespace (write only:
-		// they never subscribe, so no shopper sees another's membership). Staff
-		// subscribe to read it. The grant is open because presence carries only
-		// a non-reversible basket id, and the relay ties each membership to its
-		// own connection, so a token can only ever announce itself.
-		$wps->channels()->reserve( CARTS_NS, static fn(): bool => true );
+		/*
+		 * Every shopper enters presence on the carts namespace, only staff may
+		 * read it: presence carries a keyed basket id and the relay ties each
+		 * membership to its own connection, so a token can only announce itself.
+		 */
+		$wps->channels()->reserve( CARTS_NS, STAFF_CAP, '__return_true' );
 
-		// Products are posts: without this, every product save would also
-		// publish WordSocket's generic post.updated next to woo.stock.changed.
+		/*
+		 * Products are posts: without this, every product save would also
+		 * publish WordSocket's generic post.updated next to woo.stock.changed.
+		 */
 		$wps->trigger_registry()->exclude_default_post_type( 'product' );
 		$wps->trigger_registry()->exclude_default_post_type( 'product_variation' );
 	}
 );
 
 /**
- * The public stock channel, for every token (visitors included).
+ * The public channels (stock and activity), for every token, visitors included.
  *
  * @param string[] $channels Channels the client auto-subscribes to.
  * @param int      $user_id  Token owner (0 for visitors).
@@ -65,14 +69,14 @@ function register_stock_channel( array $channels, int $user_id, string $site_id 
 	$channels[] = 'site:' . $site_id . ':' . ACTIVITY_CHANNEL;
 	return $channels;
 }
+// Every token, visitors included.
 add_filter( 'wpsignal_token_channels', __NAMESPACE__ . '\register_stock_channel', 10, 3 );
 
 /**
- * Staff channels, auto-subscribed so the dashboard needs no extra subscribe
- * call: the orders feed, and the relay's own `wps:connections` channel, which
- * carries `wps.connections` (browsers connected right now) whenever the count
- * changes. Non-staff tokens never get the orders prefix, so listing the
- * channel for them would only produce a refused subscribe: skip it.
+ * Staff channels, auto-subscribed so the board never calls subscribe itself.
+ *
+ * Skipped for everyone else: their tokens lack the orders prefix, so the
+ * subscribe would only be refused.
  *
  * @param string[] $channels Channels the client auto-subscribes to.
  * @param int      $user_id  Token owner.
@@ -87,4 +91,5 @@ function register_orders_channel( array $channels, int $user_id, string $site_id
 	}
 	return $channels;
 }
+// Staff tokens only.
 add_filter( 'wpsignal_token_channels', __NAMESPACE__ . '\register_orders_channel', 10, 3 );

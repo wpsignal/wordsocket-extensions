@@ -6,6 +6,7 @@ import { __, sprintf } from "@wordpress/i18n";
 import { useMemo, useState } from "@wordpress/element";
 import { DataViews, filterSortAndPaginate, type Field, type View } from "@wordpress/dataviews";
 import type { OrderRow } from "./useLiveOrders";
+import { adminUrlOrNull } from "./trust";
 
 const FRESH_MS = 4000;
 
@@ -24,8 +25,10 @@ type Props = {
   rows: OrderRow[];
   statuses: ShopSocketBoardConfig["statuses"];
   currencySymbol: string;
+  adminUrl: string;
 };
 
+/** An amount in the browser's locale, or symbol plus two decimals when the currency is unknown. */
 function formatMoney(amount: number, currency: string, fallbackSymbol: string): string {
   try {
     return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
@@ -34,13 +37,21 @@ function formatMoney(amount: number, currency: string, fallbackSymbol: string): 
   }
 }
 
+/** The order's creation time as hours and minutes, or empty when unknown. */
 function timeOf(row: OrderRow): string {
   const when = row.created_at ? new Date(row.created_at) : null;
   return when ? when.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "";
 }
 
-export function LiveOrders({ rows, statuses, currencySymbol }: Props) {
+/** The orders table; the view (search, filters, sort, page) is component state. */
+export function LiveOrders({ rows, statuses, currencySymbol, adminUrl }: Props) {
   const [view, setView] = useState<View>(DEFAULT_VIEW);
+  // Edit links come from event data, so only follow them into this site's admin.
+  const editUrl = (row: OrderRow) => adminUrlOrNull(row.edit_url, adminUrl);
+  const open = (row: OrderRow) => {
+    const url = editUrl(row);
+    if (url) window.location.assign(url);
+  };
 
   const fields = useMemo<Field<OrderRow>[]>(
     () => [
@@ -52,7 +63,7 @@ export function LiveOrders({ rows, statuses, currencySymbol }: Props) {
         render: ({ item }) => (
           <a
             key={item.updatedAt}
-            href={item.edit_url}
+            href={editUrl(item) ?? undefined}
             data-order-id={item.order_id}
             className={`shopsocket-order${item.updatedAt && Date.now() - item.updatedAt < FRESH_MS ? " is-fresh" : ""}`}
           >
@@ -101,7 +112,7 @@ export function LiveOrders({ rows, statuses, currencySymbol }: Props) {
         label: __("Payment", "shopsocket"),
       },
     ],
-    [statuses, currencySymbol],
+    [statuses, currencySymbol, adminUrl],
   );
 
   const { data, paginationInfo } = useMemo(() => filterSortAndPaginate(rows, view, fields), [rows, view, fields]);
@@ -117,14 +128,14 @@ export function LiveOrders({ rows, statuses, currencySymbol }: Props) {
       defaultLayouts={{ table: {} }}
       searchLabel={__("Search orders", "shopsocket")}
       isItemClickable={() => true}
-      onClickItem={(row) => window.location.assign(row.edit_url)}
+      onClickItem={open}
       actions={[
         {
           id: "open",
           label: __("Open order", "shopsocket"),
           isPrimary: true,
           callback: ([row]) => {
-            if (row) window.location.assign(row.edit_url);
+            if (row) open(row);
           },
         },
       ]}
