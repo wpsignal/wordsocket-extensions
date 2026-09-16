@@ -1,9 +1,15 @@
 /**
- * ShopSocket for WooCommerce: the screen staff keep open all day. Tiles for
+ * ShopSocket: the screen staff keep open all day. Tiles for
  * what is happening in the store right now, then the live orders board.
  */
-import { __, sprintf } from "@wordpress/i18n";
-import { useCallback, useEffect, useMemo, useRef, useState } from "@wordpress/element";
+import { __, _n, sprintf } from "@wordpress/i18n";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "@wordpress/element";
 import { Button, Notice, ToggleControl } from "@wordpress/components";
 import { useLiveOrders, useStockAlerts } from "./useLiveOrders";
 import { useConnectionState } from "./useConnectionState";
@@ -68,8 +74,8 @@ export function Dashboard() {
 
   return (
     <div className={`shopsocket-board${fullscreen ? " is-fullscreen" : ""}`}>
-      <header className="shopsocket-board__header">
-        <h1>{__("ShopSocket", "shopsocket")}</h1>
+      {/* The page title and meta links are PHP-rendered above the board (`render_header()`). */}
+      <div className="shopsocket-board__header">
         <div className="shopsocket-board__controls">
           <ConnectionBadge state={connection} />
           <ToggleControl
@@ -78,21 +84,36 @@ export function Dashboard() {
             onChange={setSound}
           />
           <Button variant="secondary" onClick={() => setFullscreen((f) => !f)}>
-            {fullscreen ? __("Exit full screen", "shopsocket") : __("Full screen", "shopsocket")}
+            {fullscreen
+              ? __("Exit full screen", "shopsocket")
+              : __("Full screen", "shopsocket")}
           </Button>
         </div>
-      </header>
+      </div>
 
       <Tiles snapshot={snapshot} stale={stale} />
       <LiveProductsPanel products={snapshot.liveProducts} />
 
       {alerts.length > 0 && (
-        <Notice status="warning" isDismissible={false} className="shopsocket-board__stock">
+        <Notice
+          status="warning"
+          isDismissible={false}
+          className="shopsocket-board__stock"
+        >
           <strong>{__("Stock", "shopsocket")}:</strong>{" "}
           {alerts.map((a) => (
-            <span key={`${a.product_id}-${a.variation_id}`} className={`shopsocket-stock-alert is-${a.kind}`}>
+            <span
+              key={`${a.product_id}-${a.variation_id}`}
+              className={`shopsocket-stock-alert is-${a.kind}`}
+            >
               {a.kind === "out"
-                ? sprintf(/* translators: %s: product name */ __("%s is out of stock", "shopsocket"), a.name)
+                ? sprintf(
+                    /* translators: %s: product name */ __(
+                      "%s is out of stock",
+                      "shopsocket",
+                    ),
+                    a.name,
+                  )
                 : sprintf(
                     /* translators: 1: product name, 2: quantity */
                     __("%1$s is low (%2$d left)", "shopsocket"),
@@ -104,9 +125,32 @@ export function Dashboard() {
         </Notice>
       )}
 
-      <section className="shopsocket-board__orders" aria-labelledby="shopsocket-orders-heading">
-        <h2 id="shopsocket-orders-heading">{__("Live orders", "shopsocket")}</h2>
-        <LiveOrders rows={rows} statuses={config.statuses} currencySymbol={config.currencySymbol} adminUrl={config.adminUrl} />
+      <section
+        className="shopsocket-board__orders"
+        aria-labelledby="shopsocket-orders-heading"
+      >
+        <div className="shopsocket-board__orders-head">
+          <h2 id="shopsocket-orders-heading">
+            {__("Live orders", "shopsocket")}
+          </h2>
+          <span className="shopsocket-board__orders-count">
+            {sprintf(
+              /* translators: %d: number of orders on the board */ _n(
+                "%d order",
+                "%d orders",
+                rows.length,
+                "shopsocket",
+              ),
+              rows.length,
+            )}
+          </span>
+        </div>
+        <LiveOrders
+          rows={rows}
+          statuses={config.statuses}
+          currencySymbol={config.currencySymbol}
+          adminUrl={config.adminUrl}
+        />
       </section>
     </div>
   );
@@ -117,36 +161,61 @@ type BasketSegment = WooDashboardSnapshot["baskets"]["live"];
 /** A whole-unit amount in the browser's locale, or a rounded number when the currency is unknown. */
 function money(amount: number, currency: string): string {
   try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(amount);
   } catch {
     return String(Math.round(amount));
   }
 }
 
 /** The "right now" figures: users online, open connections, and the baskets panel. */
-function Tiles({ snapshot, stale }: { snapshot: WooDashboardSnapshot; stale: boolean }) {
+function Tiles({
+  snapshot,
+  stale,
+}: {
+  snapshot: WooDashboardSnapshot;
+  stale: boolean;
+}) {
   const { baskets, usersOnline, online } = snapshot;
   return (
-    <div className={`shopsocket-summary${stale ? " is-stale" : ""}`} aria-live="polite">
+    <div
+      className={`shopsocket-summary${stale ? " is-stale" : ""}`}
+      aria-live="polite"
+    >
       <div className="shopsocket-tiles">
         <div className="shopsocket-tile is-users">
           <span className="shopsocket-tile__value">{String(usersOnline)}</span>
-          <span className="shopsocket-tile__label">{__("Users online", "shopsocket")}</span>
+          <span className="shopsocket-tile__label">
+            {__("Users online", "shopsocket")}
+          </span>
           <span className="shopsocket-tile__detail">
             {__("Unique visitors on the storefront right now", "shopsocket")}
           </span>
         </div>
         <div className="shopsocket-tile is-connections">
-          <span className="shopsocket-tile__value">{online ? String(online.active_connections) : "\u2014"}</span>
-          <span className="shopsocket-tile__label">{__("Open connections", "shopsocket")}</span>
+          <span className="shopsocket-tile__value">
+            {online ? String(online.active_connections) : "\u2014"}
+          </span>
+          <span className="shopsocket-tile__label">
+            {__("Open connections", "shopsocket")}
+          </span>
           <span className="shopsocket-tile__detail">
             {online
               ? sprintf(
                   /* translators: %d: plan connection limit */
-                  __("All browser connections, of %d on your plan", "shopsocket"),
+                  __(
+                    "All browser connections, of %d on your plan",
+                    "shopsocket",
+                  ),
                   online.max_connections,
                 )
-              : __("Connections between your storefront and wpsignal.io", "shopsocket")}
+              : __(
+                  "Connections between your storefront and wpsignal.io",
+                  "shopsocket",
+                )}
           </span>
         </div>
       </div>
@@ -156,7 +225,13 @@ function Tiles({ snapshot, stale }: { snapshot: WooDashboardSnapshot; stale: boo
 }
 
 /** Shoppers, products, and revenue, split into live and abandoned baskets. */
-function BasketsPanel({ live, abandoned }: { live: BasketSegment; abandoned: BasketSegment }) {
+function BasketsPanel({
+  live,
+  abandoned,
+}: {
+  live: BasketSegment;
+  abandoned: BasketSegment;
+}) {
   return (
     <div className="shopsocket-baskets">
       <table>
@@ -165,17 +240,29 @@ function BasketsPanel({ live, abandoned }: { live: BasketSegment; abandoned: Bas
             <th scope="col">{__("Baskets", "shopsocket")}</th>
             <th scope="col" className="is-live">
               {__("Live", "shopsocket")}
-              <span className="shopsocket-baskets__hint">{__("shopper here now", "shopsocket")}</span>
+              <span className="shopsocket-baskets__hint">
+                {__("shopper here now", "shopsocket")}
+              </span>
             </th>
             <th scope="col" className="is-abandoned">
               {__("Abandoned", "shopsocket")}
-              <span className="shopsocket-baskets__hint">{__("left, basket still held", "shopsocket")}</span>
+              <span className="shopsocket-baskets__hint">
+                {__("left, basket still held", "shopsocket")}
+              </span>
             </th>
           </tr>
         </thead>
         <tbody>
-          <BasketRow label={__("Shoppers", "shopsocket")} live={String(live.shoppers)} abandoned={String(abandoned.shoppers)} />
-          <BasketRow label={__("Products", "shopsocket")} live={String(live.products)} abandoned={String(abandoned.products)} />
+          <BasketRow
+            label={__("Shoppers", "shopsocket")}
+            live={String(live.shoppers)}
+            abandoned={String(abandoned.shoppers)}
+          />
+          <BasketRow
+            label={__("Products", "shopsocket")}
+            live={String(live.products)}
+            abandoned={String(abandoned.products)}
+          />
           <BasketRow
             label={__("Revenue", "shopsocket")}
             live={money(live.revenue, live.currency)}
@@ -190,10 +277,19 @@ function BasketsPanel({ live, abandoned }: { live: BasketSegment; abandoned: Bas
 const LIVE_PRODUCTS = 100;
 
 /** Products in live baskets, most held first, at most LIVE_PRODUCTS of them, each linking to its edit screen. */
-function LiveProductsPanel({ products }: { products: WooDashboardSnapshot["liveProducts"] }) {
+function LiveProductsPanel({
+  products,
+}: {
+  products: WooDashboardSnapshot["liveProducts"];
+}) {
   // Rank by live baskets before asking for names, so the fetch stays bounded.
   const top = useMemo(
-    () => [...products].sort((a, b) => b.baskets - a.baskets || b.units - a.units || a.id - b.id).slice(0, LIVE_PRODUCTS),
+    () =>
+      [...products]
+        .sort(
+          (a, b) => b.baskets - a.baskets || b.units - a.units || a.id - b.id,
+        )
+        .slice(0, LIVE_PRODUCTS),
     [products],
   );
   const ref = useProductNames(
@@ -215,17 +311,31 @@ function LiveProductsPanel({ products }: { products: WooDashboardSnapshot["liveP
   );
 
   return (
-    <section className="shopsocket-live-products" aria-labelledby="shopsocket-live-products-heading">
-      <h2 id="shopsocket-live-products-heading">{__("Products in live baskets", "shopsocket")}</h2>
+    <section
+      className="shopsocket-live-products"
+      aria-labelledby="shopsocket-live-products-heading"
+    >
+      <h2 id="shopsocket-live-products-heading">
+        {__("Products in live baskets", "shopsocket")}
+      </h2>
       {rows.length === 0 ? (
-        <p className="shopsocket-board__empty">{__("No shopper with a basket is on the site right now.", "shopsocket")}</p>
+        <p className="shopsocket-board__empty">
+          {__(
+            "No shopper with a basket is on the site right now.",
+            "shopsocket",
+          )}
+        </p>
       ) : (
         <table>
           <thead>
             <tr>
               <th scope="col">{__("Product", "shopsocket")}</th>
-              <th scope="col" className="shopsocket-live-products__count">{__("Live baskets", "shopsocket")}</th>
-              <th scope="col" className="shopsocket-live-products__count">{__("Units", "shopsocket")}</th>
+              <th scope="col" className="shopsocket-live-products__count">
+                {__("Live baskets", "shopsocket")}
+              </th>
+              <th scope="col" className="shopsocket-live-products__count">
+                {__("Units", "shopsocket")}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -234,14 +344,28 @@ function LiveProductsPanel({ products }: { products: WooDashboardSnapshot["liveP
               const label = product
                 ? product.name
                 : product === null
-                  ? sprintf(/* translators: %d: product id */ __("Product #%d (removed)", "shopsocket"), id)
+                  ? sprintf(
+                      /* translators: %d: product id */ __(
+                        "Product #%d (removed)",
+                        "shopsocket",
+                      ),
+                      id,
+                    )
                   : `#${id}`;
-              const href = product ? adminUrlOrNull(product.edit_url, config.adminUrl) : null;
+              const href = product
+                ? adminUrlOrNull(product.edit_url, config.adminUrl)
+                : null;
               return (
                 <tr key={id}>
-                  <th scope="row">{href ? <a href={href}>{label}</a> : label}</th>
-                  <td className="shopsocket-live-products__count">{String(baskets)}</td>
-                  <td className="shopsocket-live-products__count">{String(units)}</td>
+                  <th scope="row">
+                    {href ? <a href={href}>{label}</a> : label}
+                  </th>
+                  <td className="shopsocket-live-products__count">
+                    {String(baskets)}
+                  </td>
+                  <td className="shopsocket-live-products__count">
+                    {String(units)}
+                  </td>
                 </tr>
               );
             })}
@@ -253,7 +377,15 @@ function LiveProductsPanel({ products }: { products: WooDashboardSnapshot["liveP
 }
 
 /** One row of the baskets table. */
-function BasketRow({ label, live, abandoned }: { label: string; live: string; abandoned: string }) {
+function BasketRow({
+  label,
+  live,
+  abandoned,
+}: {
+  label: string;
+  live: string;
+  abandoned: string;
+}) {
   return (
     <tr>
       <th scope="row">{label}</th>
@@ -266,10 +398,16 @@ function BasketRow({ label, live, abandoned }: { label: string; live: string; ab
 /** The WordSocket connection in a word, with the retry countdown while down. */
 function ConnectionBadge({ state }: { state: WPSConnectionState | null }) {
   if (!state) {
-    return <span className="shopsocket-conn is-off">{__("Realtime client not loaded", "shopsocket")}</span>;
+    return (
+      <span className="shopsocket-conn is-off">
+        {__("Realtime client not loaded", "shopsocket")}
+      </span>
+    );
   }
   if (state.connected) {
-    return <span className="shopsocket-conn is-on">{__("Live", "shopsocket")}</span>;
+    return (
+      <span className="shopsocket-conn is-on">{__("Live", "shopsocket")}</span>
+    );
   }
   if (state.error?.code === "authentication-failed") {
     return (
@@ -289,5 +427,9 @@ function ConnectionBadge({ state }: { state: WPSConnectionState | null }) {
       </span>
     );
   }
-  return <span className="shopsocket-conn is-off">{__("Connecting", "shopsocket")}</span>;
+  return (
+    <span className="shopsocket-conn is-off">
+      {__("Connecting", "shopsocket")}
+    </span>
+  );
 }

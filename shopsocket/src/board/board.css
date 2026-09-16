@@ -6,17 +6,170 @@
   }
 }
 
+/* Page header: PHP-rendered, in WordSocket's shape (title, meta links, mark). */
+.shopsocket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.shopsocket-meta-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  a {
+    display: flex;
+    align-items: center;
+  }
+}
+
+.shopsocket-logo {
+  color: #888;
+
+  svg {
+    width: 1rem;
+    height: auto;
+  }
+
+  &:hover {
+    color: #000;
+  }
+}
+
+.shopsocket-intro {
+  max-width: 68ch;
+  margin: 4px 0 16px;
+  color: #50575e;
+}
+
+/* Skeleton: the board's shapes until the script mounts (render_skeleton() in PHP). */
+@keyframes shopsocket-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.shopsocket-skeleton__shimmer {
+  background: #e8e8e8;
+  background-image: linear-gradient(90deg, #e8e8e8 0%, #f2f2f2 50%, #e8e8e8 100%);
+  background-size: 200% 100%;
+  border-radius: 3px;
+  animation: shopsocket-shimmer 1.5s ease-in-out infinite;
+}
+
+.shopsocket-skeleton__shimmer-invert {
+  background: #f2f2f2;
+  background-image: linear-gradient(90deg, #f2f2f2 0%, #e8e8e8 50%, #f2f2f2 100%);
+  background-size: 200% 100%;
+  border-radius: 3px;
+  animation: shopsocket-shimmer 1.5s ease-in-out infinite;
+}
+
+.shopsocket-skeleton__controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-block: 8px 16px;
+}
+
+.shopsocket-skeleton__badge {
+  width: 64px;
+  height: 22px;
+  border-radius: 999px;
+}
+
+.shopsocket-skeleton__toggle {
+  width: 170px;
+  height: 20px;
+  border-radius: 10px;
+}
+
+.shopsocket-skeleton__button {
+  width: 100px;
+  height: 32px;
+}
+
+.shopsocket-skeleton__summary {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.6fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.shopsocket-skeleton__tiles {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.shopsocket-skeleton__tile,
+.shopsocket-skeleton__panel {
+  background: #fff;
+  border: 1px solid #dcdcde;
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shopsocket-skeleton__panel.is-orders {
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+
+.shopsocket-skeleton__value {
+  width: 48px;
+  height: 32px;
+}
+
+.shopsocket-skeleton__label {
+  width: 120px;
+  height: 13px;
+}
+
+.shopsocket-skeleton__detail {
+  width: 70%;
+  height: 11px;
+}
+
+.shopsocket-skeleton__heading {
+  width: 140px;
+  height: 16px;
+  margin-bottom: 6px;
+}
+
+.shopsocket-skeleton__search {
+  width: 220px;
+  height: 32px;
+  margin-bottom: 8px;
+}
+
+.shopsocket-skeleton__row {
+  width: 100%;
+  height: 34px;
+}
+
+@media (max-width: 782px) {
+  .shopsocket-skeleton__summary {
+    grid-template-columns: 1fr;
+  }
+}
+
 .shopsocket-board__header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   flex-wrap: wrap;
   margin-block: 8px 16px;
-
-  h1 {
-    margin: 0;
-  }
 }
 
 .shopsocket-board__controls {
@@ -72,22 +225,138 @@
 
 .shopsocket-board__orders {
   background: #fff;
-  border: 1px solid #c3c4c7;
-  border-radius: 4px;
-  padding: 0 16px 8px;
+  border: 1px solid #dcdcde;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  padding: 20px 24px 12px;
 
   .dataviews-wrapper {
     min-height: 200px;
   }
+
+  /* The toolbar wraps on a phone rather than squeezing the search box. */
+  .dataviews__view-actions {
+    flex-wrap: wrap;
+  }
+
+  .dataviews-view-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  /* Column headings: quiet labels, the same colour whether or not they sort. */
+  .dataviews-view-table thead th {
+    color: #757575;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid #e0e0e0;
+    padding-block: 12px;
+  }
+
+  .dataviews-view-table thead th .components-button,
+  .dataviews-view-table thead th .components-button:not(:hover) {
+    color: #757575;
+    font-size: inherit;
+    letter-spacing: inherit;
+  }
+
+  .dataviews-view-table thead th .components-button:hover {
+    color: #1e1e1e;
+  }
+
+  /* The first column is the order and customer: head it from the left, like its cells. */
+  .dataviews-view-table thead th:first-child,
+  .dataviews-view-table thead th:first-child .components-button {
+    text-align: left;
+    justify-content: flex-start;
+  }
+
+  .dataviews-view-table thead th,
+  .dataviews-view-table tbody td,
+  .dataviews-view-table tbody th {
+    padding-inline: 12px;
+  }
+
+  .dataviews-view-table tr > :first-child {
+    padding-left: 4px;
+  }
+
+  .dataviews-view-table tr > :last-child {
+    padding-right: 4px;
+  }
+
+  .dataviews-view-table tbody tr {
+    border-bottom: 1px solid #f0f0f1;
+    transition: background-color 0.15s;
+  }
+
+  .dataviews-view-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .dataviews-view-table tbody tr:hover {
+    background: #f6f7f7;
+  }
+
+  .dataviews-view-table tbody td,
+  .dataviews-view-table tbody th {
+    padding-block: 14px;
+    vertical-align: middle;
+    font-size: 14px;
+  }
+
+  /* The customer sits under the order number. */
+  .dataviews-view-table__primary-column-content .dataviews-title-field {
+    font-size: 15px;
+  }
+
+  .dataviews-view-table__primary-column-content > :not(:first-child),
+  .dataviews-view-table__primary-column-content .dataviews-view-table__cell-content-wrapper:not(:first-child) {
+    color: #646970;
+    font-size: 13px;
+    margin-top: 2px;
+  }
+}
+
+.shopsocket-board__orders-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  h2 {
+    margin: 0;
+    font-size: 16px;
+  }
+}
+
+.shopsocket-board__orders-count {
+  font-size: 13px;
+  color: #757575;
+  font-variant-numeric: tabular-nums;
 }
 
 .shopsocket-order {
   font-weight: 600;
   text-decoration: none;
+  border-radius: 4px;
 
   &.is-fresh {
     animation: shopsocket-flash 4s ease-out;
   }
+}
+
+.shopsocket-order__time,
+.shopsocket-order__total {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.shopsocket-order__time {
+  color: #646970;
+}
+
+.shopsocket-order__total {
+  font-weight: 600;
 }
 
 @keyframes shopsocket-flash {
@@ -98,6 +367,12 @@
   to {
     background-color: transparent;
     box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shopsocket-order.is-fresh {
+    animation: none;
   }
 }
 
@@ -127,30 +402,50 @@
   }
 }
 
+/* Status pills: a dot plus the label, tinted per state. */
 .shopsocket-status {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
   background: #f0f0f1;
+  color: #3c434a;
   font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
   white-space: nowrap;
 
+  &::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentcolor;
+    opacity: 0.7;
+  }
+
   &.status-processing {
-    background: #c6e1c6;
+    background: #e6f4ea;
+    color: #1e6f33;
   }
 
   &.status-completed {
-    background: #c8d7e1;
+    background: #e7eef5;
+    color: #2c4a66;
   }
 
-  &.status-on-hold {
-    background: #f8dda7;
+  &.status-on-hold,
+  &.status-pending {
+    background: #fcf1dc;
+    color: #8a5a00;
   }
 
   &.status-cancelled,
   &.status-failed,
   &.status-refunded {
-    background: #eba3a3;
+    background: #fbe9e9;
+    color: #a12a2a;
   }
 }
 
@@ -167,7 +462,8 @@
 body.shopsocket-fullscreen {
   #adminmenumain,
   #wpadminbar,
-  #wpfooter {
+  #wpfooter,
+  .shopsocket-header {
     display: none;
   }
 
@@ -318,5 +614,34 @@ body.shopsocket-fullscreen {
 @media (max-width: 782px) {
   .shopsocket-summary {
     grid-template-columns: 1fr;
+  }
+
+  .shopsocket-board__orders {
+    padding: 16px 12px 8px;
+    border-radius: 6px;
+  }
+
+  .shopsocket-board__orders .dataviews-view-table tbody td,
+  .shopsocket-board__orders .dataviews-view-table tbody th {
+    padding-block: 12px;
+  }
+
+  .shopsocket-board__orders .dataviews-view-table thead th,
+  .shopsocket-board__orders .dataviews-view-table tbody td,
+  .shopsocket-board__orders .dataviews-view-table tbody th {
+    padding-inline: 8px;
+  }
+
+  .shopsocket-board__orders .dataviews-view-table tr > :first-child {
+    padding-left: 2px;
+  }
+
+  .shopsocket-board__orders .dataviews-view-table tr > :last-child {
+    padding-right: 2px;
+  }
+
+  .shopsocket-status {
+    padding: 2px 8px;
+    font-size: 11px;
   }
 }
