@@ -52,7 +52,11 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertNotContains( 'site:site123:' . CONNECTIONS_CHANNEL, $visitor_channels );
 		$this->assertContains( 'site:site123:woo:orders:', $channels->allowed_prefixes( $admin_id, $site_id, $staff_channels ) );
 		// Staff read the orders feed but PHP is its only publisher; presence stays writable for their own storefront visits.
-		$this->assertSame( array( 'site:site123:woo:carts:' ), $channels->allowed_publish_prefixes( $admin_id, $site_id ) );
+		$staff_publish = $channels->allowed_publish_prefixes( $admin_id, $site_id );
+		$this->assertContains( 'site:site123:woo:carts:', $staff_publish );
+		$this->assertNotContains( 'site:site123:woo:orders:', $staff_publish );
+		// WordSocket's own collaboration namespace rides along for anyone who edits posts; none of ShopSocket's business.
+		$this->assertSame( array( 'site:site123:woo:carts:' ), array_values( array_filter( $staff_publish, static fn( $p ) => ! str_ends_with( $p, ':yjs:' ) ) ) );
 	}
 
 	public function test_a_stock_change_publishes_publicly_and_a_product_save_does_not_publish_post_updated(): void {

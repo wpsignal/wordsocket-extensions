@@ -3,7 +3,7 @@ import { expect, test } from "@wordpress/e2e-test-utils-playwright";
 import { execSync, spawn, type ChildProcess } from "node:child_process";
 import { request } from "@playwright/test";
 import { WP_ROOT, WPS_API_URL, WPS_E2E_EMAIL, WPS_E2E_PASSWORD } from "./env";
-import { addToCart, clearBaskets, createProduct, deleteProduct, visitorContext, waitForLive } from "./helpers";
+import { addToCart, clearBaskets, createProduct, deleteProduct, num, visitorContext, waitForLive } from "./helpers";
 
 const PAGE = "page=shopsocket";
 
@@ -65,10 +65,27 @@ test.describe("Relay restart", () => {
        */
       relay = await startRelay();
       await expect.poll(connectedOf(page), { timeout: 90_000 }).toBe(true);
+
+      /*
+       * The board is back before the shopper: a reloaded board shows the basket
+       * abandoned. The shopper then adds another unit in the still-open tab,
+       * whatever state their client is in; that must bring the basket back
+       * live (presence is re-sent on the next connection if not at once).
+       */
+      await page.reload();
+      await waitForLive(page);
+      const abandonedShoppers = page.locator(".shopsocket-baskets tbody tr").nth(0).locator("td.is-abandoned");
+      const liveShoppers = page.locator(".shopsocket-baskets tbody tr").nth(0).locator("td.is-live");
+      const shopperTransportBefore = await transportOf(shop)();
+      await addToCart(shop);
+      await expect(liveLink, `live again after adding (shopper was on ${shopperTransportBefore})`).toBeVisible({ timeout: 60_000 });
+      await expect.poll(async () => (await num(liveShoppers)()) >= 1, { timeout: 30_000 }).toBe(true);
+
       await expect.poll(connectedOf(shop), { timeout: 90_000 }).toBe(true);
       await expect.poll(transportOf(shop), { timeout: 30_000 }).toBe("ws");
       await expect.poll(transportOf(page), { timeout: 30_000 }).toBe("ws");
       await expect(liveLink).toBeVisible({ timeout: 30_000 });
+      await expect.poll(num(abandonedShoppers), { timeout: 30_000 }).toBe(0);
     } finally {
       await visitor.close();
       clearBaskets(product.id);
