@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-17T17:43:06+00:00\n"
+"POT-Creation-Date: 2026-09-17T18:10:39+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 3.0.0-alpha-01b1b10\n"
 "X-Domain: shopsocket\n"
@@ -254,13 +254,13 @@ msgid "Unique visitors on the storefront right now"
 msgstr ""
 
 #: build/board.js:186
-msgid "Open connections"
+msgid "Open Tabs"
 msgstr ""
 
 #. translators: %d: plan connection limit
 #: build/board.js:187
 #, js-format
-msgid "All browser connections, of %d on your plan"
+msgid "All browser tabs/connections, of %d on your plan"
 msgstr ""
 
 #: build/board.js:187

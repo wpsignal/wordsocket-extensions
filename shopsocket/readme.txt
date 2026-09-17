@@ -50,11 +50,24 @@ ShopSocket requires WordSocket and a WPSignal account. WPSignal is an independen
 * A shopper's basket is identified by a keyed hash of their WooCommerce session, never by anything reversible, and presence carries a random per-browser id plus that hash.
 * When the site runs over HTTPS, WordSocket encrypts event payloads before they leave the site.
 
+= Third-Party Service =
+
+ShopSocket relies on the **WPSignal service** at api.wpsignal.io, reached through the WordSocket plugin. ShopSocket opens no connection of its own: everything below travels over the connection WordSocket already holds for your site.
+
+* **Event publishing**: when an order is placed or changes status, stock changes, or a product is added to a basket, WordSocket sends an HMAC-signed HTTP request to the service with the event described under "What leaves your site".
+* **Realtime connections**: browsers on your storefront and the staff board connect to the service over WebSocket (or SSE) to receive those events. Shoppers' browsers also announce their presence on the site, which is how the board tells a live basket from an abandoned one.
+* **Connection count**: the board asks the service how many browsers are connected to your site right now.
+
+Events are relayed in realtime and are **not stored** on the service. Over HTTPS, payloads are AES-256-GCM encrypted before they leave WordPress, and the service relays ciphertext it cannot read. A WPSignal account is required; the free plan is enough to start.
+
+* [Terms of Service](https://wpsignal.io/terms)
+* [Privacy Policy](https://wpsignal.io/privacy)
+
 == Installation ==
 
 1. Install and activate WooCommerce and WordSocket 0.22 or newer, and connect WordSocket to your WPSignal account.
 2. Install and activate ShopSocket.
-3. Open WooCommerce > ShopSocket for the board. Product pages start updating on their own.
+3. Open Analytics > Realtime for the board (WooCommerce > ShopSocket when WooCommerce Analytics is switched off). Product pages start updating on their own.
 
 == Frequently Asked Questions ==
 
@@ -74,11 +87,22 @@ Filters: `shopsocket_storefront` controls which pages load the live storefront (
 
 Users with the `manage_woocommerce` capability. Order and basket events travel on a channel only their connection tokens can read.
 
+== Screenshots ==
+
+1. The Realtime board under Analytics: users online, open connections, live and abandoned baskets, products in live baskets, and live orders.
+
 == Changelog ==
 
-= 0.1.1 =
-* Test the release pipeline
+= 0.2.0 =
+* First public release
+* The Realtime board under WooCommerce Analytics: users online, live and abandoned baskets from relay presence, products in live baskets with units, and live orders that update in place
+* Live stock on product pages, the shop, and the cart: availability text, add-to-cart buttons, quantity limits, and "N shoppers have this in their cart"
+* Sell-out notices: a shopper holding a product that sells out hears at once, and the cart shows WooCommerce's own notice without a reload
+* "Someone just added this to their basket" toasts, shown only for products the shopper also holds
+* The Live Stock block for the Single Product template or any page
+* A card on WordSocket's Extensions tab
 
+== Upgrade Notice ==
 
-= 0.1.0 =
-* First release: the live orders board, live and abandoned baskets from relay presence, products in live baskets, live stock and basket counts on product pages, and added-to-basket toasts
+= 0.2.0 =
+First public release.

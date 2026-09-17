@@ -1,3 +1,5 @@
+**0.2.0** - First public release: the Realtime board under WooCommerce Analytics (users online, live and abandoned baskets, products in live baskets, live orders), live stock and sell-out notices on the storefront, added-to-basket toasts, the Live Stock block, and a card on WordSocket's Extensions tab.
+
 **0.1.1** - Test the release pipeline.
 
 **0.1.0** - In development: the live orders board, live and abandoned baskets, live stock, sell-out notices, and the Live Stock block.
