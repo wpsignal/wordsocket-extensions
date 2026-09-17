@@ -12,6 +12,11 @@
  * (WooCommerce, WordSocket and this plugin active). It creates and deletes
  * products and orders there; global-setup refuses production and any site
  * whose WordSocket server is not the rehearsal server.
+ *
+ * `SHOPSOCKET_HTTP=1` (`npm run test:e2e:http`) runs the same suite against a
+ * second, plain-HTTP site (`wpRootHttp`, `wpBaseUrlHttp`): developers try the
+ * plugin on `http://something.local` first, where the page is not a secure
+ * context, payloads are not encrypted, and `crypto.randomUUID` does not exist.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -32,9 +37,18 @@ const KEYS = {
   localTls: "WPS_LOCAL_TLS",
 } as const;
 
-const local: Partial<Record<keyof typeof KEYS, string>> = existsSync(LOCAL_CONFIG)
+const local: Partial<Record<keyof typeof KEYS | "wpRootHttp" | "wpBaseUrlHttp", string>> = existsSync(LOCAL_CONFIG)
   ? JSON.parse(readFileSync(LOCAL_CONFIG, "utf8"))
   : {};
+
+// The plain-HTTP run swaps in the second site; explicit WP_ROOT / WP_BASE_URL still win.
+if (process.env.SHOPSOCKET_HTTP) {
+  if (!local.wpRootHttp || !local.wpBaseUrlHttp) {
+    throw new Error("SHOPSOCKET_HTTP needs wpRootHttp and wpBaseUrlHttp in tests/local.json (a WooCommerce site served over plain http).");
+  }
+  local.wpRoot = local.wpRootHttp;
+  local.wpBaseUrl = local.wpBaseUrlHttp;
+}
 
 const missing: string[] = [];
 for (const [key, envName] of Object.entries(KEYS)) {

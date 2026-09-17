@@ -14,6 +14,14 @@ export async function addToCart(page: Page): Promise<void> {
       .locator('.woocommerce-message, .wc-block-components-notice-banner.is-success, .single_add_to_cart_button:has-text("in cart")')
       .first(),
   ).toBeVisible({ timeout: 15_000 });
+  /*
+   * The Interactivity button says "in cart" optimistically, before the Store
+   * API request has finished; navigating away at that moment aborts the add.
+   * The cart cookie is WooCommerce's own proof that the server has the item.
+   */
+  await expect
+    .poll(async () => (await page.context().cookies()).some((c) => c.name === "woocommerce_items_in_cart"), { timeout: 15_000 })
+    .toBe(true);
 }
 
 /** Wait until window.WPS reports a connection on the current page. */
@@ -92,6 +100,11 @@ export async function deleteOrder(requestUtils: RequestUtils, id: number): Promi
 
 /** The id of any image already in the media library, or undefined when there is none. */
 export async function anyImageId(requestUtils: RequestUtils): Promise<number | undefined> {
-  const media = (await requestUtils.rest({ path: "/wp/v2/media", params: { media_type: "image", per_page: 1 } })) as { id: number }[];
-  return media[0]?.id;
+  const media = (await requestUtils.rest({ path: "/wp/v2/media", params: { media_type: "image", per_page: 20 } })) as {
+    id: number;
+    slug?: string;
+    source_url?: string;
+  }[];
+  // WooCommerce's own placeholder is an image too, but it has no thumbnail sizes: a fresh site has nothing else.
+  return media.find((m) => !/woocommerce-placeholder/.test(`${m.slug ?? ""} ${m.source_url ?? ""}`))?.id;
 }

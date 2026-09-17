@@ -6,5 +6,7 @@
   "apiUrl": "https://api.example.test:8443",
   "dashboardEmail": "e2e@example.test",
   "dashboardPassword": "change-me",
-  "localTls": "../../api/scripts/local-tls.sh"
+  "localTls": "../../api/scripts/local-tls.sh",
+  "wpRootHttp": "/path/to/a/second/woocommerce/site/served/over/http",
+  "wpBaseUrlHttp": "http://nossl.woo.example.local"
 }

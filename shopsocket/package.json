@@ -14,7 +14,8 @@
     "test": "npm run test:php && npm run test:e2e",
     "dist": "bash ../bin/dist.sh shopsocket",
     "svn": "bash ../bin/svn.sh shopsocket",
-    "release": "bash ../bin/release.sh shopsocket"
+    "release": "bash ../bin/release.sh shopsocket",
+    "test:e2e:http": "SHOPSOCKET_HTTP=1 wp-scripts test-playwright"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
