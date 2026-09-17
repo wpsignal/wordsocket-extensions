@@ -200,14 +200,14 @@ function Tiles({
             {online ? String(online.active_connections) : "\u2014"}
           </span>
           <span className="shopsocket-tile__label">
-            {__("Open connections", "shopsocket")}
+            {__("Open Tabs", "shopsocket")}
           </span>
           <span className="shopsocket-tile__detail">
             {online
               ? sprintf(
                   /* translators: %d: plan connection limit */
                   __(
-                    "All browser connections, of %d on your plan",
+                    "All browser tabs/connections, of %d on your plan",
                     "shopsocket",
                   ),
                   online.max_connections,
