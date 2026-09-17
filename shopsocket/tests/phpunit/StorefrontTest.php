@@ -178,6 +178,17 @@ final class StorefrontTest extends ExtensionTestCase {
 		$this->assertSame( '', render_live_stock_block( array( 'productId' => 999999999 ), '', $block ) );
 	}
 
+	public function test_the_live_storefront_loads_on_every_front_end_page_unless_a_filter_narrows_it(): void {
+		// A request that is no WooCommerce page at all (this one) still gets it: presence must follow the shopper.
+		$this->assertTrue( \WPSignal\Extensions\ShopSocket\is_live_storefront_page() );
+		add_filter( 'shopsocket_storefront', '__return_false' );
+		try {
+			$this->assertFalse( \WPSignal\Extensions\ShopSocket\is_live_storefront_page() );
+		} finally {
+			remove_filter( 'shopsocket_storefront', '__return_false' );
+		}
+	}
+
 	public function test_stock_changes_are_not_published_during_an_import(): void {
 		$product = $this->make_product( 5 );
 

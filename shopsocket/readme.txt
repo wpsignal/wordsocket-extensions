@@ -68,7 +68,7 @@ Yes. ShopSocket declares HPOS compatibility and reads orders through WooCommerce
 
 = Can I turn parts of it off? =
 
-Filters: `shopsocket_storefront` controls which pages load the live storefront (WooCommerce pages, cart and checkout by default), `shopsocket_in_carts_enabled` the basket counter, `shopsocket_activity_enabled` the added-to-basket toasts, `shopsocket_activity_throttle` how often one product may announce an add, and `shopsocket_publish_stock` whether stock changes are published (they are silent during imports).
+Filters: `shopsocket_storefront` controls which pages load the live storefront (every front-end page by default, so a shopper stays live wherever they browse), `shopsocket_in_carts_enabled` the basket counter, `shopsocket_activity_enabled` the added-to-basket toasts, `shopsocket_activity_throttle` how often one product may announce an add, and `shopsocket_publish_stock` whether stock changes are published (they are silent during imports).
 
 = Who can see the board? =
 

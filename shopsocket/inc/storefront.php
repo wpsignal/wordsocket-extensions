@@ -21,7 +21,11 @@ const STOREFRONT_MODULE = 'shopsocket/storefront';
 const STORE_NS          = 'shopsocket/storefront';
 
 /**
- * Whether this request is a storefront page that gets the live features.
+ * Whether this request gets the live storefront: every front-end page while
+ * WooCommerce is active. A shopper's presence rides on the page they are on,
+ * so the board only counts them live while the module is loaded; limiting it
+ * to shop pages made a basket look abandoned the moment its shopper opened
+ * My Account or a blog post.
  *
  * @return bool
  */
@@ -32,10 +36,9 @@ function is_live_storefront_page(): bool {
 	/**
 	 * Filters whether the live storefront features load on this request.
 	 *
-	 * @param bool $load Default: WooCommerce pages, cart and checkout.
+	 * @param bool $load Default: true on every front-end page.
 	 */
-	$has_block = is_singular() && has_block( LIVE_STOCK_BLOCK );
-	return (bool) apply_filters( 'shopsocket_storefront', is_woocommerce() || is_cart() || is_checkout() || $has_block );
+	return (bool) apply_filters( 'shopsocket_storefront', true );
 }
 
 /*
