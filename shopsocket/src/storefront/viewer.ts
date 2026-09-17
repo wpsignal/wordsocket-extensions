@@ -30,37 +30,6 @@ interface ViewerState {
   count?: number;
 }
 
-/*
- * A random per-browser id in localStorage, shared by a shopper's tabs, so the
- * board counts visitors rather than connections. Nothing identifying goes into
- * it, and cleared storage simply makes a new visitor.
- */
-const VISITOR_KEY = "shopsocket-visitor";
-let cachedVisitorId: string | null = null;
-
-/** A UUID, or a time-and-random string where `randomUUID` is missing (HTTP). */
-function randomId(): string {
-  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
-}
-
-/** This browser's visitor id, created and stored on first use. */
-function visitorId(): string {
-  if (cachedVisitorId) return cachedVisitorId;
-  try {
-    let id = window.localStorage.getItem(VISITOR_KEY);
-    if (!id) {
-      id = randomId();
-      window.localStorage.setItem(VISITOR_KEY, id);
-    }
-    cachedVisitorId = id;
-  } catch {
-    // Storage blocked: a per-load id, so this visitor's tabs may over-count.
-    cachedVisitorId = randomId();
-  }
-  return cachedVisitorId;
-}
-
 /**
  * Start following this shopper: one sync on load, then on every change to
  * their own cart and on every recovered connection. `onCount` receives the
@@ -107,10 +76,10 @@ export function startViewer(config: ViewerConfig, onCount: (productId: number, c
       const wps = window.WPS;
       if (wps && config.presenceChannel) {
         /*
-         * `v` counts the visitor as online, `b` ties the basket to this connection;
-         * the board dedupes `v` across a shopper's tabs.
+         * `v` (WordSocket's per-browser visitor id) counts the visitor as online,
+         * `b` ties the basket to this connection; the board dedupes `v` across tabs.
          */
-        wps.setPresence(config.presenceChannel, { v: visitorId(), b: viewer?.id ?? null });
+        wps.setPresence(config.presenceChannel, { v: wps.visitorId(), b: viewer?.id ?? null });
       }
     } catch {
       // Offline or blocked: the seeded values and live events still apply.

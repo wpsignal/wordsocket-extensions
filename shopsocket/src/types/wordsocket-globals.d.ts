@@ -1,6 +1,6 @@
 /**
  * The part of WordSocket's client API (`window.WPS`, wp-plugin/src/types,
- * WordSocket 0.21) this plugin uses. Update when the contract changes.
+ * WordSocket 0.23) this plugin uses. Update when the contract changes.
  */
 
 type WPSEventHandler = ( data: Record< string, unknown >, channel: string ) => void;
@@ -49,4 +49,10 @@ interface WPSApi {
 	 * when the socket closes and the client re-sends on reconnect.
 	 */
 	setPresence( channel: string, state: Record< string, unknown > | null ): void;
+	/** A version-4 UUID that also works on plain HTTP pages. */
+	uuid(): string;
+	/** This browser's stable id, shared by every tab and extension on the site. */
+	visitorId(): string;
+	/** Whether `channel` is `expected`, allowing the qualified `site:{id}:` spelling. */
+	onChannel( channel: string, expected: string ): boolean;
 }

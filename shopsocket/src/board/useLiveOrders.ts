@@ -4,7 +4,6 @@
  * when it changes so a busy board always shows the latest activity.
  */
 import { useEffect, useState } from "@wordpress/element";
-import { onChannel } from "./trust";
 
 /** An order on the board; `updatedAt` is 0 for the server-rendered rows and drives the "fresh" flash. */
 export type OrderRow = WooOrderEvent & { updatedAt: number };
@@ -29,7 +28,7 @@ export function useLiveOrders(initial: WooOrderEvent[], onNewOrder: (order: WooO
     if (!wps) return undefined;
     const offs = ["woo.order.created", "woo.order.paid", "woo.order.status"].map((name) =>
       wps.on(name, (data, channel) => {
-        if (!onChannel(channel, channels.orders)) return;
+        if (!wps.onChannel(channel, channels.orders)) return;
         const event = data as unknown as WooOrderEvent;
         setRows((current) => upsert(current, event));
         if (name === "woo.order.created") onNewOrder(event);
@@ -50,7 +49,7 @@ export function useStockAlerts(channels: Channels) {
     if (!wps) return undefined;
     // A handler that files the event as an alert of `kind`, replacing any for the same product.
     const add = (kind: "low" | "out") => (data: Record<string, unknown>, channel: string) => {
-      if (!onChannel(channel, channels.orders)) return;
+      if (!wps.onChannel(channel, channels.orders)) return;
       const event = data as unknown as WooStockEvent;
       setAlerts((current) => [
         { ...event, kind },
@@ -61,7 +60,7 @@ export function useStockAlerts(channels: Channels) {
     // A restock clears the alert: stock changes are public events staff also receive.
     offs.push(
       wps.on("woo.stock.changed", (data, channel) => {
-        if (!onChannel(channel, channels.stock)) return;
+        if (!wps.onChannel(channel, channels.stock)) return;
         const event = data as unknown as WooStockEvent;
         if (event.stock_status === "instock" && (event.stock_quantity ?? 0) > 0) {
           setAlerts((current) =>

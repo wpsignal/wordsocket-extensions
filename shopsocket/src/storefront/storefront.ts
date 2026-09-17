@@ -276,7 +276,7 @@ function webUrl(value: unknown, sameOrigin: boolean): string {
 function relayed<T>(e: Event, expected?: string): T | null {
   const detail = (e as CustomEvent<{ data?: T; channel?: string }>).detail;
   const channel = detail?.channel ?? "";
-  if (!expected || !(channel === expected || channel.endsWith(`:${expected}`))) return null;
+  if (!expected || !window.WPS?.onChannel(channel, expected)) return null;
   return (detail?.data ?? {}) as T;
 }
 

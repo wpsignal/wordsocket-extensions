@@ -48,12 +48,13 @@ const CARTS_NS = 'woo:carts';
 /** The presence channel: staff subscribe, shoppers enter (and never subscribe). */
 const CARTS_PRESENCE_CHANNEL = 'woo:carts:live';
 
-/** The WordSocket release that brought presence, publish grants, and the stats route. */
-const MIN_WORDSOCKET = '0.22.0';
+/** The WordSocket release this plugin needs: presence, publish grants, the stats route (0.22), and the `window.WPS` id and channel helpers (0.23). */
+const MIN_WORDSOCKET = '0.23.0';
 
 /**
  * Whether the active WordSocket is new enough, judged by what this plugin
- * uses rather than a version string: version-2 tokens and the stats route.
+ * uses rather than a version string: version-2 tokens, the stats route, and
+ * the browser API that carries `uuid()`, `visitorId()`, and `onChannel()`.
  *
  * @return bool
  */
@@ -61,7 +62,9 @@ function wordsocket_ready(): bool {
 	return class_exists( \WPSignal\Token::class )
 		&& defined( '\WPSignal\Token::TOKEN_VERSION' )
 		&& \WPSignal\Token::TOKEN_VERSION >= 2
-		&& method_exists( \WPSignal\Publisher::class, 'stats' );
+		&& method_exists( \WPSignal\Publisher::class, 'stats' )
+		&& defined( '\WPSignal\Client::API_VERSION' )
+		&& \WPSignal\Client::API_VERSION >= 2;
 }
 
 // HPOS compatibility, declared before WooCommerce checks it.

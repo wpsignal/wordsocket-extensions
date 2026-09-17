@@ -6,7 +6,6 @@
  */
 import { useEffect, useMemo, useState } from "@wordpress/element";
 import apiFetch from "@wordpress/api-fetch";
-import { onChannel } from "./trust";
 
 const POLL_MS = 30_000;
 const AFTER_EVENT_MS = 1_500;
@@ -140,7 +139,7 @@ export function useDashboardSnapshot(config: Config) {
        */
       offs.push(
         wps.on(PRESENCE_EVENT, (data, channel) => {
-          if (!onChannel(channel, config.channels.presence)) return;
+          if (!wps.onChannel(channel, config.channels.presence)) return;
           const p = data as {
             action?: string;
             id?: string;
@@ -181,7 +180,7 @@ export function useDashboardSnapshot(config: Config) {
       );
       offs.push(
         wps.on(BASKETS_EVENT, (data, channel) => {
-          if (!onChannel(channel, config.channels.orders)) return;
+          if (!wps.onChannel(channel, config.channels.orders)) return;
           const payload = data as { baskets?: WooBasketRow[] };
           if (Array.isArray(payload.baskets)) {
             setRows(payload.baskets);
@@ -191,7 +190,7 @@ export function useDashboardSnapshot(config: Config) {
       );
       offs.push(
         wps.on(CONNECTIONS_EVENT, (data, channel) => {
-          if (!onChannel(channel, config.channels.connections)) return;
+          if (!wps.onChannel(channel, config.channels.connections)) return;
           const o = data as unknown as NonNullable<WooDashboardData["online"]>;
           if (typeof o.active_connections === "number") {
             setOnline({ ...o });
