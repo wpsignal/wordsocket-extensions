@@ -10,9 +10,10 @@
 #   dist/<plugin>.zip     the plugin, staged per .distignore
 #   dist/svn-assets/      icons, banners, screenshots for the SVN assets/ directory
 #
-# Assets come from <plugin>/wp-org-assets/ (or $WPS_ASSETS_DIR), named either
-# the WordPress.org way (icon-128x128.png, banner-772x250.jpg, screenshot-1.png)
-# or prefixed with the slug (shopsocket-128x128.png, shopsocket-772x250.jpg).
+# Assets come from <plugin>/wp-org-assets/ or <plugin>/wporg-assets/ (or
+# $WPS_ASSETS_DIR), named the WordPress.org way (icon-128x128.png,
+# banner-772x250.jpg, screenshot-1.png), with a `wporg-` prefix on those names
+# (wporg-icon-128x128.png), or prefixed with the slug (shopsocket-128x128.png).
 #
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -50,7 +51,7 @@ while IFS= read -r line; do
   [[ -z "$line" || "$line" == \#* ]] && continue
   RSYNC_EXCLUDES+=(--exclude="$line")
 done < "$PLUGIN_DIR/.distignore"
-RSYNC_EXCLUDES+=(--exclude="/dist/" --exclude="/wp-org-assets/" --exclude="/.DS_Store" --exclude="**/.DS_Store")
+RSYNC_EXCLUDES+=(--exclude="/dist/" --exclude="/wp-org-assets/" --exclude="/wporg-assets/" --exclude="/.DS_Store" --exclude="**/.DS_Store")
 rsync -a --no-owner --no-group "${RSYNC_EXCLUDES[@]}" "$PLUGIN_DIR/" "$STAGE_DIR/"
 ok "Files staged"
 
@@ -68,9 +69,14 @@ ok "Version $VERSION in header and stable tag"
 
 echo ""
 bold "SVN assets"
-ASSETS_SRC="${WPS_ASSETS_DIR:-$PLUGIN_DIR/wp-org-assets}"
-if [[ ! -d "$ASSETS_SRC" ]]; then
-  warn "No $PLUGIN_SLUG/wp-org-assets/ directory: icons, banners, and screenshots are not staged."
+ASSETS_SRC="${WPS_ASSETS_DIR:-}"
+if [[ -z "$ASSETS_SRC" ]]; then
+  for candidate in "$PLUGIN_DIR/wp-org-assets" "$PLUGIN_DIR/wporg-assets"; do
+    [[ -d "$candidate" ]] && { ASSETS_SRC="$candidate"; break; }
+  done
+fi
+if [[ -z "$ASSETS_SRC" || ! -d "$ASSETS_SRC" ]]; then
+  warn "No $PLUGIN_SLUG/wp-org-assets/ (or wporg-assets/) directory: icons, banners, and screenshots are not staged."
 else
   SVN_ASSETS_DIR="$DIST_DIR/svn-assets"
   mkdir -p "$SVN_ASSETS_DIR"
@@ -81,6 +87,7 @@ else
     case "$name" in
       "${PLUGIN_SLUG}"-128x128.*|"${PLUGIN_SLUG}"-256x256.*)   dest="icon-${name#"${PLUGIN_SLUG}"-}" ;;
       "${PLUGIN_SLUG}"-772x250.*|"${PLUGIN_SLUG}"-1544x500.*)  dest="banner-${name#"${PLUGIN_SLUG}"-}" ;;
+      wporg-icon-*|wporg-banner-*|wporg-screenshot-*) dest="${name#wporg-}" ;;
       icon-*|banner-*|screenshot-*) dest="$name" ;;
       *) continue ;;
     esac
