@@ -13,6 +13,12 @@ const AFTER_EVENT_MS = 1_500;
 const BASKETS_EVENT = "woo.baskets";
 const CONNECTIONS_EVENT = "wps.connections";
 const PRESENCE_EVENT = "wps.presence";
+/*
+ * A page navigation closes the shopper's socket before the next page has
+ * connected and rejoined, so the relay's leave arrives a second or two ahead
+ * of the join that reverses it. A leaving member is held this long first.
+ */
+const LEAVE_GRACE_MS = 6_000;
 
 type Config = Pick<ShopSocketBoardConfig, "dashboardUrl" | "nonce" | "snapshot" | "channels">;
 
@@ -105,6 +111,15 @@ export function useDashboardSnapshot(config: Config) {
      */
     type Member = { v?: string; b?: string | null };
     const members = new Map<string, Member>();
+    // Leaves waiting out their grace period, by connection id.
+    const pendingLeaves = new Map<string, ReturnType<typeof setTimeout>>();
+    const cancelLeave = (id: string) => {
+      const timer = pendingLeaves.get(id);
+      if (timer !== undefined) {
+        clearTimeout(timer);
+        pendingLeaves.delete(id);
+      }
+    };
     // Derive the live basket ids and the distinct visitor count from the members.
     const applyPresent = () => {
       if (!alive) return;
@@ -133,12 +148,31 @@ export function useDashboardSnapshot(config: Config) {
             members?: Array<{ id: string; state?: Member }>;
           };
           if (p.action === "sync") {
+            // The relay's authoritative list: nothing is pending any more.
+            pendingLeaves.forEach((timer) => clearTimeout(timer));
+            pendingLeaves.clear();
             members.clear();
             (p.members ?? []).forEach((m) => m.id && members.set(m.id, m.state ?? {}));
           } else if (p.action === "join" && p.id) {
+            cancelLeave(p.id);
             members.set(p.id, p.state ?? {});
           } else if (p.action === "leave" && p.id) {
-            members.delete(p.id);
+            /*
+             * Hold the member: if the same shopper is back on the next page
+             * within the grace, the sets in applyPresent() dedupe the overlap
+             * by visitor and basket id, so nothing flickers and nothing doubles.
+             */
+            const id = p.id;
+            cancelLeave(id);
+            pendingLeaves.set(
+              id,
+              setTimeout(() => {
+                pendingLeaves.delete(id);
+                members.delete(id);
+                applyPresent();
+              }, LEAVE_GRACE_MS),
+            );
+            return;
           } else {
             return;
           }
@@ -178,6 +212,8 @@ export function useDashboardSnapshot(config: Config) {
     return () => {
       alive = false;
       clearTimeout(timer);
+      pendingLeaves.forEach((pending) => clearTimeout(pending));
+      pendingLeaves.clear();
       offs.forEach((off) => off());
       document.removeEventListener("visibilitychange", onVisibility);
     };

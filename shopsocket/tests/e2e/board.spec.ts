@@ -67,13 +67,33 @@ test.describe("ShopSocket dashboard", () => {
       await expect(liveCells).toHaveText(["1", "2"], { timeout: 15_000 });
 
       /*
-       * Closing the tab drops the connection: the relay reports the leave and the
-       * basket moves to abandoned at once, no beacon and no timeout.
+       * Browsing on does not flicker the board: each navigation closes the
+       * socket before the next page rejoins, and the board holds the member
+       * through that gap. Sample the live figure while the shopper moves.
+       */
+      const samples: number[] = [];
+      const sampling = (async () => {
+        for (let i = 0; i < 16; i++) {
+          samples.push(await num(liveShoppers)());
+          await page.waitForTimeout(250);
+        }
+      })();
+      await shop.goto("/my-account/");
+      await shop.goto("/");
+      await sampling;
+      await waitForLive(shop);
+      expect(Math.min(...samples), `live shoppers dipped while browsing: ${samples.join(",")}`).toBeGreaterThanOrEqual(liveWithShopper);
+      await expect(liveLink).toBeVisible();
+
+      /*
+       * Closing the tab drops the connection: the relay reports the leave, the
+       * board waits out the grace in case it is a navigation, then the basket
+       * moves to abandoned. No beacon and no server-side timeout.
        */
       await shop.close();
-      await expect.poll(num(abandonedShoppers), { timeout: 10_000 }).toBeGreaterThanOrEqual(abandoned0 + 1);
-      await expect.poll(num(liveShoppers), { timeout: 10_000 }).toBeLessThanOrEqual(liveWithShopper - 1);
-      await expect(liveLink).toHaveCount(0, { timeout: 10_000 });
+      await expect.poll(num(abandonedShoppers), { timeout: 20_000 }).toBeGreaterThanOrEqual(abandoned0 + 1);
+      await expect.poll(num(liveShoppers), { timeout: 20_000 }).toBeLessThanOrEqual(liveWithShopper - 1);
+      await expect(liveLink).toHaveCount(0, { timeout: 20_000 });
 
       /*
        * Reopening the tab (same session, same basket) reconnects and it goes live
@@ -163,9 +183,9 @@ test.describe("ShopSocket dashboard", () => {
       await waitForLive(otherTab);
       await expect.poll(users, { timeout: 10_000 }).toBe(withShopper + 1);
 
-      // Closing the first browser (both its tabs) drops exactly one user.
+      // Closing the first browser (both its tabs) drops exactly one user, once the leave grace is out.
       await shopper.close();
-      await expect.poll(users, { timeout: 10_000 }).toBe(withShopper);
+      await expect.poll(users, { timeout: 20_000 }).toBe(withShopper);
       await other.close();
     } finally {
       if (shopper.pages().length) await shopper.close().catch(() => {});
