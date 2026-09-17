@@ -1,6 +1,6 @@
 {
     "name": "wpsignal/shopsocket",
-    "description": "ShopSocket for WooCommerce: a live orders board and live stock on product pages.",
+    "description": "ShopSocket: a live orders board and live stock on product pages.",
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
     "config": {
