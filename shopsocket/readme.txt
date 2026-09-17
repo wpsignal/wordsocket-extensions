@@ -3,7 +3,7 @@ Contributors: wpsignal
 Tags: woocommerce, realtime, live orders, abandoned cart, inventory
 Requires at least: 6.7
 Tested up to: 7.1
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 Requires PHP: 8.2
 Requires Plugins: wordsocket, woocommerce
 License: GPL-2.0-or-later
@@ -101,6 +101,12 @@ Users with the `manage_woocommerce` capability. Order and basket events travel o
 
 == Changelog ==
 
+= 0.2.1 =
+* Requires WordSocket 0.23: the visitor id and channel check now come from WordSocket
+* Fixed: the Live Stock block's in-cart count was missing on load on pages other than the product's own
+* Works on plain HTTP sites
+
+
 = 0.2.0 =
 * First public release
 * The Realtime board under WooCommerce Analytics: users online, live and abandoned baskets from relay presence, products in live baskets with units, and live orders that update in place
@@ -111,6 +117,9 @@ Users with the `manage_woocommerce` capability. Order and basket events travel o
 * A card on WordSocket's Extensions tab
 
 == Upgrade Notice ==
+
+= 0.2.1 =
+Requires WordSocket 0.23: the visitor id and channel check now come from WordSocket
 
 = 0.2.0 =
 First public release.

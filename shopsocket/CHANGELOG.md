@@ -1,3 +1,5 @@
+**0.2.1** - Requires WordSocket 0.23: the visitor id and channel check now come from WordSocket.
+
 **0.2.0** - First public release: the Realtime board under WooCommerce Analytics (users online, live and abandoned baskets, products in live baskets, live orders), live stock and sell-out notices on the storefront, added-to-basket toasts, the Live Stock block, and a card on WordSocket's Extensions tab.
 
 **0.1.1** - Test the release pipeline.
