@@ -91,6 +91,10 @@ else
       icon-*|banner-*|screenshot-*) dest="$name" ;;
       *) continue ;;
     esac
+    # WordPress.org matches captions to screenshot-1, screenshot-2, ...: no leading zeros.
+    if [[ "$dest" =~ ^screenshot-0+([1-9][0-9]*)(\..*)$ ]]; then
+      dest="screenshot-${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+    fi
     cp "$f" "$SVN_ASSETS_DIR/$dest"
     info "  $name → svn-assets/$dest"
     COPIED=$(( COPIED + 1 ))
