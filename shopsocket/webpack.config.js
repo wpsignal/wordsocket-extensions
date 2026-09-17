@@ -22,6 +22,7 @@ module.exports = {
 	entry: {
 		board: path.resolve( __dirname, 'src/board/index.tsx' ),
 		settings: path.resolve( __dirname, 'src/settings/index.tsx' ),
+		page: path.resolve( __dirname, 'src/page/index.ts' ),
 		'blocks/live-stock/index': path.resolve( __dirname, 'src/blocks/live-stock/index.tsx' ),
 	},
 	output: {

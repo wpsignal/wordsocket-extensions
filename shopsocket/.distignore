@@ -24,3 +24,4 @@ playwright.config.ts
 /dist
 /wp-org-assets
 CHANGELOG.md
+/build/page.js

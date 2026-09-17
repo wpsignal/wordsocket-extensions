@@ -116,6 +116,8 @@ function render_dashboard(): void {
 		return;
 	}
 
+	enqueue_page_styles();
+
 	// Too old a WordSocket: say so here, on this screen only, and leave the board out.
 	if ( ! wordsocket_ready() ) {
 		echo '<div class="wrap">';
@@ -186,6 +188,19 @@ function render_dashboard(): void {
 	render_skeleton();
 	echo '</div>';
 	echo '</div>';
+}
+
+/**
+ * The page's own stylesheet (header, intro, notice, skeleton), enqueued
+ * before anything else on the screen so it is there even when the board is not.
+ *
+ * @return void
+ */
+function enqueue_page_styles(): void {
+	$asset_file = DIR . 'build/page.asset.php';
+	$asset      = file_exists( $asset_file ) ? require $asset_file : array( 'version' => VERSION );
+	wp_enqueue_style( SLUG . '-page', URL . 'build/page.css', array(), $asset['version'] );
+	wp_style_add_data( SLUG . '-page', 'rtl', 'replace' );
 }
 
 /**

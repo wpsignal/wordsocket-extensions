@@ -1,0 +1,165 @@
+/*
+ * The board page as PHP renders it, before (or without) the board script:
+ * header, intro, the WordSocket notice, and the skeleton. Its own bundle so
+ * these load whether or not the board does (render_dashboard() enqueues it
+ * first, ahead of the WordSocket guard).
+ */
+/* Page header: PHP-rendered, in WordSocket's shape (title, meta links, mark). */
+.shopsocket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.shopsocket-meta-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  a {
+    display: flex;
+    align-items: center;
+  }
+}
+
+.shopsocket-logo {
+  color: #888;
+
+  svg {
+    width: 1rem;
+    height: auto;
+  }
+
+  &:hover {
+    color: #000;
+  }
+}
+
+.shopsocket-intro {
+  margin: 4px 0 16px;
+  color: #50575e;
+}
+
+/* Skeleton: the board's shapes until the script mounts (render_skeleton() in PHP). */
+@keyframes shopsocket-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.shopsocket-skeleton__shimmer {
+  background: #e8e8e8;
+  background-image: linear-gradient(90deg, #e8e8e8 0%, #f2f2f2 50%, #e8e8e8 100%);
+  background-size: 200% 100%;
+  border-radius: 3px;
+  animation: shopsocket-shimmer 1.5s ease-in-out infinite;
+}
+
+.shopsocket-skeleton__shimmer-invert {
+  background: #f2f2f2;
+  background-image: linear-gradient(90deg, #f2f2f2 0%, #e8e8e8 50%, #f2f2f2 100%);
+  background-size: 200% 100%;
+  border-radius: 3px;
+  animation: shopsocket-shimmer 1.5s ease-in-out infinite;
+}
+
+.shopsocket-skeleton__controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-block: 8px 16px;
+}
+
+.shopsocket-skeleton__badge {
+  width: 64px;
+  height: 22px;
+  border-radius: 999px;
+}
+
+.shopsocket-skeleton__toggle {
+  width: 170px;
+  height: 20px;
+  border-radius: 10px;
+}
+
+.shopsocket-skeleton__button {
+  width: 100px;
+  height: 32px;
+}
+
+.shopsocket-skeleton__summary {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.6fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.shopsocket-skeleton__tiles {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.shopsocket-skeleton__tile,
+.shopsocket-skeleton__panel {
+  background: #fff;
+  border: 1px solid #dcdcde;
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shopsocket-skeleton__panel.is-orders {
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+
+.shopsocket-skeleton__value {
+  width: 48px;
+  height: 32px;
+}
+
+.shopsocket-skeleton__label {
+  width: 120px;
+  height: 13px;
+}
+
+.shopsocket-skeleton__detail {
+  width: 70%;
+  height: 11px;
+}
+
+.shopsocket-skeleton__heading {
+  width: 140px;
+  height: 16px;
+  margin-bottom: 6px;
+}
+
+.shopsocket-skeleton__search {
+  width: 220px;
+  height: 32px;
+  margin-bottom: 8px;
+}
+
+.shopsocket-skeleton__row {
+  width: 100%;
+  height: 34px;
+}
+
+@media (max-width: 782px) {
+  .shopsocket-skeleton__summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.shopsocket-notice {
+  margin: 0 0 16px;
+}
