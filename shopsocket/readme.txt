@@ -65,7 +65,7 @@ Events are relayed in realtime and are **not stored** on the service. Over HTTPS
 
 == Installation ==
 
-1. Install and activate WooCommerce and WordSocket 0.22 or newer, and connect WordSocket to your WPSignal account.
+1. Install and activate WooCommerce and WordSocket 0.23 or newer, and connect WordSocket to your WPSignal account.
 2. Install and activate ShopSocket.
 3. Open Analytics > Realtime for the board (WooCommerce > ShopSocket when WooCommerce Analytics is switched off). Product pages start updating on their own.
 
@@ -74,6 +74,10 @@ Events are relayed in realtime and are **not stored** on the service. Over HTTPS
 = Does it work with block themes? =
 
 Yes. The storefront features bind to the classic templates and to the Product Price and Product Stock Indicator blocks. For markup that is yours to place, add the Live Stock block to the Single Product template, or to any page with a product chosen.
+
+= Does it work on a local site over plain HTTP? =
+
+Yes. The connection to the relay is always TLS, even from an `http://` page. The one difference is that WordSocket only encrypts event payloads when the site itself runs over HTTPS, so on a plain HTTP site the relay can read the events it forwards. Use HTTPS in production.
 
 = Does it support High-Performance Order Storage? =
 
@@ -89,7 +93,11 @@ Users with the `manage_woocommerce` capability. Order and basket events travel o
 
 == Screenshots ==
 
-1. The Realtime board under Analytics: users online, open connections, live and abandoned baskets, products in live baskets, and live orders.
+1. The Realtime board under Analytics, before the first shopper arrives.
+2. The board with a busy store: users online, live and abandoned baskets with their revenue, the products in live baskets, and orders as they are placed.
+3. A product page: live stock, how many shoppers hold the product right now, and a toast when someone else adds it.
+4. The cart at the moment a held product sells out elsewhere: WooCommerce's own notice appears without a reload, with ShopSocket's alert beside it.
+5. The Live Stock block on an ordinary page: availability, units left, and the in-cart count, all live.
 
 == Changelog ==
 
