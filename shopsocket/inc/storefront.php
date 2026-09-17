@@ -178,6 +178,20 @@ function in_carts_html( int $product_id ): string {
 }
 
 /**
+ * Basket counts already seeded by counters rendered earlier in the request, as
+ * an object (so it stays `{}` in JSON when empty). Block themes render the
+ * template before scripts are enqueued, so the main state must keep these
+ * rather than reset them: a Live Stock block on an ordinary page has no other
+ * source for its first count.
+ *
+ * @return object
+ */
+function seeded_carts(): object {
+	$state = wp_interactivity_state( STORE_NS );
+	return (object) (array) ( $state['carts'] ?? array() );
+}
+
+/**
  * The counter's two sentences, for the server render and the store's `i18n`
  * alike: `one` at exactly 1, `many` otherwise.
  *
@@ -316,7 +330,7 @@ add_action(
 				'toasts'            => toasts_enabled(),
 				'inCarts'           => in_carts_enabled(),
 				'selectedVariation' => 0,
-				'carts'             => new \stdClass(), // An object even when empty, keyed by product ID.
+				'carts'             => seeded_carts(),
 				'i18n'              => in_carts_strings() + array(
 					'addedThis'  => __( 'Someone just added this to their basket', 'shopsocket' ),
 					/* translators: %s: product name */

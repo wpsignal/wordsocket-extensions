@@ -198,8 +198,17 @@ test.describe("Storefront", () => {
       await expect(left).toHaveText("2 left");
 
       // Another shopper picks it up: the counter appears in the block.
-      const shopper = shopperSession(product.id, 4);
+      const shopper = shopperSession(product.id, 10);
       await expect(counter).toBeVisible({ timeout: 15_000 });
+      await expect(counter).toContainText("1 shopper has this in their cart right now");
+
+      /*
+       * And it is there on load, not only after an event: on a page that is not
+       * the product's own, the count the block rendered is the only source, and
+       * the main state seeding used to reset it on block themes.
+       */
+      await page.reload();
+      await expect(counter).toBeVisible();
       await expect(counter).toContainText("1 shopper has this in their cart right now");
       await shopper;
 

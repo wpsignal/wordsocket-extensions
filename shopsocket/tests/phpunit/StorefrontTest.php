@@ -178,6 +178,18 @@ final class StorefrontTest extends ExtensionTestCase {
 		$this->assertSame( '', render_live_stock_block( array( 'productId' => 999999999 ), '', $block ) );
 	}
 
+	public function test_counts_seeded_by_a_rendered_counter_survive_the_main_state_seeding(): void {
+		$product = $this->make_product( 5 );
+		$this->seed_basket( 'a', array( $product->get_id() ), 5.0 );
+		$this->seed_basket( 'b', array( $product->get_id() ), 5.0 );
+
+		// Block themes render the counter first, then the scripts hook seeds the rest of the state.
+		in_carts_html( $product->get_id() );
+		$carts = \WPSignal\Extensions\ShopSocket\seeded_carts();
+		$this->assertSame( 2, $carts->{ (string) $product->get_id() }, 'the count the block rendered is kept, not reset to empty' );
+		$this->assertSame( '{}', wp_json_encode( (object) array() ), 'and an empty set still serialises as an object' );
+	}
+
 	public function test_the_live_storefront_loads_on_every_front_end_page_unless_a_filter_narrows_it(): void {
 		// A request that is no WooCommerce page at all (this one) still gets it: presence must follow the shopper.
 		$this->assertTrue( \WPSignal\Extensions\ShopSocket\is_live_storefront_page() );
