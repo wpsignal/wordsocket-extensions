@@ -3,7 +3,7 @@ Contributors: wpsignal
 Tags: woocommerce, realtime, live orders, abandoned cart, inventory
 Requires at least: 6.7
 Tested up to: 7.1
-Stable tag: 0.1.0
+Stable tag: 0.1.1
 Requires PHP: 8.2
 Requires Plugins: wordsocket, woocommerce
 License: GPL-2.0-or-later
@@ -75,6 +75,10 @@ Filters: `shopsocket_storefront` controls which pages load the live storefront (
 Users with the `manage_woocommerce` capability. Order and basket events travel on a channel only their connection tokens can read.
 
 == Changelog ==
+
+= 0.1.1 =
+* Test the release pipeline
+
 
 = 0.1.0 =
 * First release: the live orders board, live and abandoned baskets from relay presence, products in live baskets, live stock and basket counts on product pages, and added-to-basket toasts
