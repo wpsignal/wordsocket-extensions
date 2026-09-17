@@ -10,7 +10,7 @@ test.describe("ShopSocket dashboard", () => {
     const card = page.locator('.wpsignal-extension[data-extension="shopsocket"]');
     await expect(card).toBeVisible();
     await expect(card.getByRole("heading", { name: "ShopSocket" })).toBeVisible();
-    await expect(card.getByRole("link", { name: "Open the ShopSocket board" })).toHaveAttribute("href", /page=shopsocket$/);
+    await expect(card.getByRole("link", { name: "View ShopSocket" })).toHaveAttribute("href", /page=shopsocket$/);
     // The site is connected to the rehearsal relay, so the card goes live.
     await expect(card.locator(".shopsocket-settings__status")).toContainText("Live", { timeout: 20_000 });
   });
