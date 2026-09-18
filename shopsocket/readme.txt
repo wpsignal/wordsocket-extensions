@@ -101,6 +101,9 @@ Users with the `manage_woocommerce` capability. Order and basket events travel o
 
 == Changelog ==
 
+= 0.2.2 =
+* The plugin is listed under WordSocket on the Plugins screen, where WordSocket 0.24 and later keep the family together
+
 = 0.2.1 =
 * Requires WordSocket 0.23: the visitor id and channel check now come from WordSocket
 * Fixed: the Live Stock block's in-cart count was missing on load on pages other than the product's own

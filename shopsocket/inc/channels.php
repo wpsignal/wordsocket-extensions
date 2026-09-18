@@ -29,6 +29,7 @@ add_action(
 				'description' => __( 'A live orders board for your team and live stock on product pages.', 'shopsocket' ),
 				'version'     => VERSION,
 				'docs_url'    => 'https://wpsignal.io/extensions/shopsocket',
+				'file'        => plugin_basename( DIR . 'shopsocket.php' ),
 				'requires'    => array( 'woocommerce/woocommerce.php' => 'WooCommerce' ),
 			)
 		);
