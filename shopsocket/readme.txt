@@ -101,7 +101,7 @@ Users with the `manage_woocommerce` capability. Order and basket events travel o
 
 == Changelog ==
 
-= 0.2.2 =
+= 0.3.0 =
 * The plugin is listed under WordSocket on the Plugins screen, where WordSocket 0.24 and later keep the family together
 
 = 0.2.1 =
