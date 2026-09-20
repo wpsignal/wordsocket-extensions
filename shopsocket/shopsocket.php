@@ -11,7 +11,6 @@
  * Text Domain:       shopsocket
  * Domain Path:       /languages
  * Requires at least: 6.7
- * Tested up to:      7.1
  * Requires PHP:      8.2
  * Requires Plugins:  wordsocket, woocommerce
  * WC requires at least: 9.0
@@ -29,7 +28,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 const VERSION = '0.2.1';
 const SLUG    = 'shopsocket';
 const DIR     = __DIR__ . '/';
-const URL     = WP_PLUGIN_URL . '/' . SLUG . '/';
+
+/*
+ * Derived from this file so the plugin works from a directory that is not
+ * named after the slug. It cannot be a `const`: those take constant
+ * expressions only, and plugin_dir_url() is a function call. define() is
+ * namespace aware, so unqualified `URL` still resolves across the plugin.
+ */
+define( __NAMESPACE__ . '\URL', plugin_dir_url( __FILE__ ) );
 
 /** Capability that makes a user staff: the orders namespace, the dashboard route, and the board screen. */
 const STAFF_CAP = 'manage_woocommerce';

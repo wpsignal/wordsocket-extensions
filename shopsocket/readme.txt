@@ -63,6 +63,17 @@ Events are relayed in realtime and are **not stored** on the service. Over HTTPS
 * [Terms of Service](https://wpsignal.io/terms)
 * [Privacy Policy](https://wpsignal.io/privacy)
 
+= Source code and build steps =
+
+ShopSocket is developed in the open. The full, uncompiled source for everything in `build/`, together with the build tooling, lives at [github.com/wpsignal/wordsocket-extensions](https://github.com/wpsignal/wordsocket-extensions) under `shopsocket/`.
+
+The compiled files in `build/` are generated from `src/` with:
+
+`npm install`
+`npm run build`
+
+That runs [@wordpress/scripts](https://www.npmjs.com/package/@wordpress/scripts) (webpack) for the board, settings and block bundles, and `tsc` for the Interactivity API storefront modules. The bundled styles under `build/style-*.css` are produced by that same build from [@wordpress/components](https://www.npmjs.com/package/@wordpress/components), which is GPL-2.0-or-later.
+
 == Installation ==
 
 1. Install and activate WooCommerce and WordSocket 0.23 or newer, and connect WordSocket to your WPSignal account.
