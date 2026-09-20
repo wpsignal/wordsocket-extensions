@@ -1,39 +1,39 @@
 {
-  "name": "shopsocket",
-  "version": "0.2.1",
-  "private": true,
-  "description": "ShopSocket for WooCommerce: a live orders board and live stock on product pages.",
-  "license": "GPL-2.0-or-later",
-  "scripts": {
-    "build": "wp-scripts build && tsc -p tsconfig.storefront.json",
-    "start": "concurrently -k -n board,storefront \"wp-scripts start\" \"tsc -p tsconfig.storefront.json --watch --preserveWatchOutput\"",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tests/e2e/tsconfig.json",
-    "make-pot": "php -d memory_limit=512M \"$(command -v wp)\" i18n make-pot . languages/shopsocket.pot --slug=shopsocket --domain=shopsocket --exclude=node_modules,vendor,tests,artifacts,src",
-    "test:php": "vendor/bin/phpunit",
-    "test:e2e": "wp-scripts test-playwright",
-    "test": "npm run test:php && npm run test:e2e",
-    "dist": "bash ../bin/dist.sh shopsocket",
-    "svn": "bash ../bin/svn.sh shopsocket",
-    "release": "bash ../bin/release.sh shopsocket",
-    "test:e2e:http": "SHOPSOCKET_HTTP=1 wp-scripts test-playwright"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.63.0",
-    "@wordpress/block-editor": "^17.1.0",
-    "@wordpress/blocks": "^16.0.0",
-    "@wordpress/e2e-test-utils-playwright": "^2.0.0",
-    "@wordpress/scripts": "^35.0.0",
-    "concurrently": "^10.0.5"
-  },
-  "dependencies": {
-    "@wordpress/api-fetch": "^7.0.0",
-    "@wordpress/components": "^40.1.0",
-    "@wordpress/dataviews": "^19.0.0",
-    "@wordpress/element": "^6.0.0",
-    "@wordpress/i18n": "^5.0.0"
-  },
-  "engines": {
-    "node": ">=22.19.0",
-    "npm": "^11"
-  }
+	"name": "shopsocket",
+	"version": "0.3.0",
+	"private": true,
+	"description": "ShopSocket for WooCommerce: a live orders board and live stock on product pages.",
+	"license": "GPL-2.0-or-later",
+	"scripts": {
+		"build": "wp-scripts build && tsc -p tsconfig.storefront.json",
+		"start": "concurrently -k -n board,storefront \"wp-scripts start\" \"tsc -p tsconfig.storefront.json --watch --preserveWatchOutput\"",
+		"typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tests/e2e/tsconfig.json",
+		"make-pot": "php -d memory_limit=512M \"$(command -v wp)\" i18n make-pot . languages/shopsocket.pot --slug=shopsocket --domain=shopsocket --exclude=node_modules,vendor,tests,artifacts,src",
+		"test:php": "vendor/bin/phpunit",
+		"test:e2e": "wp-scripts test-playwright",
+		"test": "npm run test:php && npm run test:e2e",
+		"dist": "bash ../bin/dist.sh shopsocket",
+		"svn": "bash ../bin/svn.sh shopsocket",
+		"release": "bash ../bin/release.sh shopsocket",
+		"test:e2e:http": "SHOPSOCKET_HTTP=1 wp-scripts test-playwright"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.63.0",
+		"@wordpress/block-editor": "^17.1.0",
+		"@wordpress/blocks": "^16.0.0",
+		"@wordpress/e2e-test-utils-playwright": "^2.0.0",
+		"@wordpress/scripts": "^35.0.0",
+		"concurrently": "^10.0.5"
+	},
+	"dependencies": {
+		"@wordpress/api-fetch": "^7.0.0",
+		"@wordpress/components": "^40.1.0",
+		"@wordpress/dataviews": "^19.0.0",
+		"@wordpress/element": "^6.0.0",
+		"@wordpress/i18n": "^5.0.0"
+	},
+	"engines": {
+		"node": ">=22.19.0",
+		"npm": "^11"
+	}
 }

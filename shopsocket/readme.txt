@@ -3,7 +3,7 @@ Contributors: wpsignal
 Tags: woocommerce, realtime, live orders, abandoned cart, inventory
 Requires at least: 6.7
 Tested up to: 7.1
-Stable tag: 0.2.1
+Stable tag: 0.3.0
 Requires PHP: 8.2
 Requires Plugins: wordsocket, woocommerce
 License: GPL-2.0-or-later
@@ -131,6 +131,9 @@ Users with the `manage_woocommerce` capability. Order and basket events travel o
 * A card on WordSocket's Extensions tab
 
 == Upgrade Notice ==
+
+= 0.3.0 =
+The plugin is listed under WordSocket on the Plugins screen, with WordSocket 0.24 and later.
 
 = 0.2.1 =
 Requires WordSocket 0.23: the visitor id and channel check now come from WordSocket
