@@ -43,12 +43,18 @@ WordSocket carries the events over one WebSocket per browser, with an SSE fallba
 
 ShopSocket requires WordSocket and a WPSignal account. WPSignal is an independent service and is not affiliated with or endorsed by the WordPress project or by WooCommerce.
 
-**What leaves your site**
+**What leaves your site, and who can read it**
 
-* Order events go to a staff-only channel and carry the order number, status, total, item count, payment method, and the customer's first name and last initial. No email, address, or line items.
-* Stock and basket-activity events are public to the storefront and carry product names, permalinks, thumbnails, and counts.
-* A shopper's basket is identified by a keyed hash of their WooCommerce session, never by anything reversible, and presence carries a random per-browser id plus that hash.
-* When the site runs over HTTPS, WordSocket encrypts event payloads before they leave the site.
+**Everything is encrypted before it leaves WordPress, and WPSignal cannot read it.** WordSocket encrypts the contents of every event with AES-256-GCM before it is sent, on HTTPS and plain HTTP sites alike. The key is derived from your site's own WordPress salts in wp-config.php, which never leave your server and which WPSignal never has. The service relays ciphertext it has no way to open: it never sees an order total, a customer name, a product, or a stock level.
+
+What is inside those encrypted events:
+
+* Order events, on a staff-only channel: the order number, status, total, item count, payment method, and the customer's first name and last initial. No email, address, or line items.
+* Stock and basket-activity events, public to your storefront: product names, permalinks, thumbnails, and counts, plus the anonymous basket id of the shopper behind the change, so a shopper's own adds and purchases are never announced back to them.
+
+What the service does see, only because it needs it to route messages: channel names, how many browsers are connected, and each shopper's presence, which is a random per-browser id and a keyed hash identifying their basket. None of it is personal, and none of it is reversible.
+
+That holds on plain HTTP sites too, with WordSocket 0.25 or later. Older versions of WordSocket encrypt only over HTTPS.
 
 = Third-Party Service =
 
@@ -58,7 +64,7 @@ ShopSocket relies on the **WPSignal service** at api.wpsignal.io, reached throug
 * **Realtime connections**: browsers on your storefront and the staff board connect to the service over WebSocket (or SSE) to receive those events. Shoppers' browsers also announce their presence on the site, which is how the board tells a live basket from an abandoned one.
 * **Connection count**: the board asks the service how many browsers are connected to your site right now.
 
-Events are relayed in realtime and are **not stored** on the service. Over HTTPS, payloads are AES-256-GCM encrypted before they leave WordPress, and the service relays ciphertext it cannot read. A WPSignal account is required; the free plan is enough to start.
+Events are relayed in realtime and are **not stored** on the service. Event contents are AES-256-GCM encrypted before they leave WordPress, with a key derived from your site's own WordPress salts, so the service relays ciphertext it cannot read. A WPSignal account is required; the free plan is enough to start.
 
 * [Terms of Service](https://wpsignal.io/terms)
 * [Privacy Policy](https://wpsignal.io/privacy)
@@ -88,7 +94,7 @@ Yes. The storefront features bind to the classic templates and to the Product Pr
 
 = Does it work on a local site over plain HTTP? =
 
-Yes. The connection to the relay is always TLS, even from an `http://` page. The one difference is that WordSocket only encrypts event payloads when the site itself runs over HTTPS, so on a plain HTTP site the relay can read the events it forwards. Use HTTPS in production.
+Yes. The connection to the relay is always TLS, even from an `http://` page, and with WordSocket 0.25 or later event contents are encrypted there too, so the relay cannot read them. Older versions of WordSocket send them unencrypted on plain HTTP. Use HTTPS in production regardless: it protects the page itself.
 
 = Does it support High-Performance Order Storage? =
 
