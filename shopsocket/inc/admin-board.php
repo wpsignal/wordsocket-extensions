@@ -48,7 +48,7 @@ add_action(
 	'admin_menu',
 	static function (): void {
 		$menu = board_menu();
-		add_submenu_page(
+		$hook = add_submenu_page(
 			$menu['parent'],
 			__( 'ShopSocket', 'shopsocket' ),
 			$menu['label'],
@@ -57,6 +57,9 @@ add_action(
 			__NAMESPACE__ . '\render_dashboard',
 			$menu['position']
 		);
+		if ( is_string( $hook ) ) {
+			add_action( 'load-' . $hook, __NAMESPACE__ . '\enqueue_page_styles' );
+		}
 	},
 	60 // After WooCommerce has added its own submenu items.
 );
@@ -115,8 +118,6 @@ function render_dashboard(): void {
 	if ( ! current_user_can( STAFF_CAP ) ) {
 		return;
 	}
-
-	enqueue_page_styles();
 
 	// Too old a WordSocket: say so here, on this screen only, and leave the board out.
 	if ( ! wordsocket_ready() ) {
@@ -191,8 +192,11 @@ function render_dashboard(): void {
 }
 
 /**
- * The page's own stylesheet (header, intro, notice, skeleton), enqueued
- * before anything else on the screen so it is there even when the board is not.
+ * The page's own stylesheet (header, intro, notice, skeleton), enqueued on the
+ * page's `load-{hook}` action so it prints in `<head>`. Enqueued from the render
+ * callback instead, it arrived as a late style in the footer, after the header
+ * had painted: the logo showed at the full width of the screen, in the admin's
+ * link blue, until the stylesheet caught up.
  *
  * @return void
  */
@@ -246,7 +250,8 @@ function render_header(): void {
 		echo '<span aria-hidden="true"> / </span>';
 	}
 	echo '<a class="shopsocket-logo" href="' . esc_url( 'https://wpsignal.io/extensions/shopsocket/' . UTM ) . '" target="_blank" rel="noopener noreferrer" aria-label="' . esc_attr__( 'ShopSocket home (opens in a new tab)', 'shopsocket' ) . '">';
-	echo '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 536.42 558.21" aria-hidden="true" focusable="false">';
+	// Sized in markup as well as CSS, so it is never drawn at the full width of the screen.
+	echo '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 536.42 558.21" width="16" height="17" aria-hidden="true" focusable="false">';
 	echo '<path fill="currentColor" d="M298.74,517.76c9.92,9.26,31.68,24.34,50.59,30.98,57.29,20.12,107.78,5.9,141.87-26.1,50.95-47.83,65.17-133.96,9.5-195.47,0,0-151.54-161.12-157.92-174.68-6.68-14.2-7.98-38.29,8.77-55.04,38.89-43.3,86.54.34,105.29,22.33l57.43-51.05c-69.47-108.12-247.3-89.47-258.43,61.42-.46,101.32,140.32,183.9,194.61,273.59,9.58,19.93,3.2,50.24-24.72,66.99-27.92,16.75-53.41-.83-63.81-9.57-62.96-52.93-256.17-269-274.38-308.68-16.75-36.51,21.95-85.05,62.22-71.78,20.74,4.78,51.84,39.08,51.84,39.08l57.43-51.05C189.59-39.38,11.7-20.72.59,130.16c-3.99,51.05,30.88,93.9,30.88,93.9,0,0,237.78,266.18,267.27,293.7Z"/>';
 	echo '<path fill="currentColor" d="M250.94,511.13c-33.26,53.47-128.56,59.24-179.76,28.18C41.48,522.79,0,467.48,0,467.48l66.85-47.15c33.16,37.91,82.58,97.22,128.2,25.54l55.89,65.26Z"/>';
 	echo '</svg>';
