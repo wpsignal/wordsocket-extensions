@@ -4,6 +4,7 @@
  */
 
 use PHPUnit\Framework\TestCase;
+use WPSignal\WPS;
 
 abstract class ExtensionTestCase extends TestCase {
 
@@ -39,14 +40,37 @@ abstract class ExtensionTestCase extends TestCase {
 		update_option( 'wpsignal_site_key', 'phpunitkey' );
 		update_option( 'wpsignal_site_secret', 'phpunitsecret' );
 		update_option( 'wpsignal_jwt_secret', 'phpunitjwt' );
-		unset( $_SERVER['HTTPS'] ); // plain bodies, so events are readable
+		unset( $_SERVER['HTTPS'] );
 		$this->published   = array();
 		$this->clear_baskets();
 		$this->http_filter = function ( $pre, $args, $url ) {
 			if ( ! str_ends_with( (string) $url, '/publish' ) ) {
 				return $pre;
 			}
-			$body              = json_decode( (string) $args['body'], true );
+			$body = json_decode( (string) $args['body'], true );
+			/*
+			 * WordSocket encrypts every publish, plain HTTP included, so open the
+			 * envelope to read the event the storefront and board will see.
+			 */
+			if ( 'encrypted' === ( $body['event'] ?? '' ) ) {
+				$raw   = base64_decode( (string) $body['data']['p'] );
+				$inner = json_decode(
+					(string) openssl_decrypt(
+						substr( $raw, 12, -16 ),
+						'aes-256-gcm',
+						WPS::instance()->config()->encryption_key(),
+						OPENSSL_RAW_DATA,
+						substr( $raw, 0, 12 ),
+						substr( $raw, -16 )
+					),
+					true
+				);
+				$body  = array(
+					'channel' => $body['channel'],
+					'event'   => $inner['event'],
+					'data'    => $inner['data'],
+				);
+			}
 			$this->published[] = array(
 				'channel' => (string) $body['channel'],
 				'event'   => (string) $body['event'],

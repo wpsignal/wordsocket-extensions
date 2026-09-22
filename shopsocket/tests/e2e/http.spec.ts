@@ -5,8 +5,9 @@ import { wp } from "./env";
 
 /**
  * Plain HTTP, where developers try the plugin first. `http://something.local`
- * is not a secure context: no SubtleCrypto, no `crypto.randomUUID`, and
- * WordSocket sends payloads unencrypted. Everything must still work. The rest
+ * is not a secure context: no SubtleCrypto and no `crypto.randomUUID`. Since
+ * WordSocket 0.25 payloads are encrypted here too, and the client decrypts them
+ * with its bundled AES-GCM instead of SubtleCrypto. Everything must still work. The rest
  * of the suite runs on this site too (`npm run test:e2e:http`); these tests
  * pin the parts that only differ over HTTP, and skip on an HTTPS target.
  */
@@ -28,6 +29,8 @@ test.describe("Plain HTTP site", () => {
       }));
       expect(context.secure, "the point of this site is that it is not a secure context").toBe(false);
       expect(context.randomUUID).toBe("undefined");
+      // Without SubtleCrypto, only the client's bundled cipher can open the envelope below.
+      expect(context.subtle).toBe("undefined");
 
       // The relay socket is wss:// even from an http:// page, and it connects.
       await waitForLive(page);
@@ -38,7 +41,7 @@ test.describe("Plain HTTP site", () => {
         .poll(() => page.evaluate(() => window.localStorage.getItem("wordsocket-visitor") ?? ""), { timeout: 10_000 })
         .toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 
-      // Unencrypted events arrive and are read like any other: stock moves without a reload.
+      // Encrypted events arrive and are decrypted without SubtleCrypto: stock moves without a reload.
       await expect(page.locator(".shopsocket-stock").first()).toContainText("6 in stock");
       wp("eval", `wc_update_product_stock( ${product.id}, 2 );`);
       await expect(page.locator(".shopsocket-stock").first()).toContainText("2 in stock", { timeout: 15_000 });
