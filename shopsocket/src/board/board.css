@@ -65,16 +65,16 @@
 
 /* Live orders */
 
+.shopsocket-board__stock {
+  margin-bottom: 16px;
+}
+
 .shopsocket-board__orders {
   background: #fff;
   border: 1px solid #dcdcde;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
   padding: 20px 24px 12px;
-
-  .dataviews-wrapper {
-    min-height: 200px;
-  }
 
   /* The toolbar wraps on a phone rather than squeezing the search box. */
   .dataviews__view-actions {
