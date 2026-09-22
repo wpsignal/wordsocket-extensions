@@ -1,3 +1,5 @@
+**0.3.1** - A shopper who buys the last unit is no longer told it has sold out, and the board's logo no longer flashes before its styles load.
+
 **0.3.0** - The plugin's row sits under WordSocket on the Plugins screen (needs WordSocket 0.24).
 
 **0.2.1** - Requires WordSocket 0.23: the visitor id and channel check now come from WordSocket.

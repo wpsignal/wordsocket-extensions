@@ -3,13 +3,13 @@ Contributors: wpsignal
 Tags: woocommerce, realtime, live orders, abandoned cart, inventory
 Requires at least: 6.7
 Tested up to: 7.1
-Stable tag: 0.3.0
+Stable tag: 0.3.1
 Requires PHP: 8.2
 Requires Plugins: wordsocket, woocommerce
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-A live orders board for your team and live stock on product pages, over the WordSocket realtime connection. No polling, no page reloads.
+A live orders board for your team and live stock on product pages, pushed over the WordSocket realtime connection. No page reloads.
 
 == Description ==
 
@@ -39,13 +39,13 @@ Live and abandoned are not guesses from timestamps. A basket is live exactly whi
 
 **How it works**
 
-WordSocket carries the events over one WebSocket per browser, with an SSE fallback. ShopSocket publishes order, stock, and basket events from WooCommerce's own hooks, and reads presence from the relay to tell live baskets from abandoned ones. Nothing polls: the storefront fetches once per page load and then only reacts to events.
+WordSocket carries the events over one WebSocket per browser, with an SSE fallback. ShopSocket publishes order, stock, and basket events from WooCommerce's own hooks, and reads presence from the relay to tell live baskets from abandoned ones. The storefront never polls: it fetches once per page load and then only reacts to events. The board does the same, plus a quiet refresh every 30 seconds as a safety net in case an event is ever missed.
 
 ShopSocket requires WordSocket and a WPSignal account. WPSignal is an independent service and is not affiliated with or endorsed by the WordPress project or by WooCommerce.
 
 **What leaves your site, and who can read it**
 
-**Everything is encrypted before it leaves WordPress, and WPSignal cannot read it.** WordSocket encrypts the contents of every event with AES-256-GCM before it is sent, on HTTPS and plain HTTP sites alike. The key is derived from your site's own WordPress salts in wp-config.php, which never leave your server and which WPSignal never has. The service relays ciphertext it has no way to open: it never sees an order total, a customer name, a product, or a stock level.
+**Every event is encrypted before it leaves WordPress, and WPSignal cannot read it.** WordSocket encrypts the contents of every event with AES-256-GCM before it is sent: always on HTTPS sites, and on plain HTTP sites too with WordSocket 0.25 or later (older versions encrypt only over HTTPS). The key is derived from your site's own WordPress salts in wp-config.php, which never leave your server and which WPSignal never has. The service relays ciphertext it has no way to open: it never sees an order total, a customer name, a product, or a stock level.
 
 What is inside those encrypted events:
 
@@ -53,8 +53,6 @@ What is inside those encrypted events:
 * Stock and basket-activity events, public to your storefront: product names, permalinks, thumbnails, and counts, plus the anonymous basket id of the shopper behind the change, so a shopper's own adds and purchases are never announced back to them.
 
 What the service does see, only because it needs it to route messages: channel names, how many browsers are connected, and each shopper's presence, which is a random per-browser id and a keyed hash identifying their basket. None of it is personal, and none of it is reversible.
-
-That holds on plain HTTP sites too, with WordSocket 0.25 or later. Older versions of WordSocket encrypt only over HTTPS.
 
 = Third-Party Service =
 
@@ -64,7 +62,7 @@ ShopSocket relies on the **WPSignal service** at api.wpsignal.io, reached throug
 * **Realtime connections**: browsers on your storefront and the staff board connect to the service over WebSocket (or SSE) to receive those events. Shoppers' browsers also announce their presence on the site, which is how the board tells a live basket from an abandoned one.
 * **Connection count**: the board asks the service how many browsers are connected to your site right now.
 
-Events are relayed in realtime and are **not stored** on the service. Event contents are AES-256-GCM encrypted before they leave WordPress, with a key derived from your site's own WordPress salts, so the service relays ciphertext it cannot read. A WPSignal account is required; the free plan is enough to start.
+Events are relayed in realtime and are **not stored** on the service. Event contents are AES-256-GCM encrypted before they leave WordPress (on HTTPS sites, and on plain HTTP ones with WordSocket 0.25 or later), with a key derived from your site's own WordPress salts, so the service relays ciphertext it cannot read. A WPSignal account is required; the free plan is enough to start.
 
 * [Terms of Service](https://wpsignal.io/terms)
 * [Privacy Policy](https://wpsignal.io/privacy)
@@ -118,6 +116,11 @@ Users with the `manage_woocommerce` capability. Order and basket events travel o
 
 == Changelog ==
 
+= 0.3.1 =
+* Fixed: a shopper who buys the last unit is no longer told it has sold out (stock events now carry the buyer's anonymous basket id)
+* Fixed: the board's logo no longer flashes at full screen width before its styles load
+* The readme spells out what leaves your site and what the relay can read
+
 = 0.3.0 =
 * The plugin is listed under WordSocket on the Plugins screen, where WordSocket 0.24 and later keep the family together
 
@@ -137,6 +140,9 @@ Users with the `manage_woocommerce` capability. Order and basket events travel o
 * A card on WordSocket's Extensions tab
 
 == Upgrade Notice ==
+
+= 0.3.1 =
+Fixes a sold-out notice shown to the shopper who bought the last unit.
 
 = 0.3.0 =
 The plugin is listed under WordSocket on the Plugins screen, with WordSocket 0.24 and later.

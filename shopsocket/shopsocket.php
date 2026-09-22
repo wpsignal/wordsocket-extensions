@@ -3,7 +3,7 @@
  * Plugin Name:       ShopSocket
  * Plugin URI:        https://wpsignal.io/extensions/shopsocket
  * Description:       A live orders board for your team and live stock on product pages, powered by WordSocket and WPSignal realtime.
- * Version:           0.3.0
+ * Version:           0.3.1
  * Author:            WPSignal
  * Author URI:        https://wpsignal.io
  * License:           GPL-2.0-or-later
@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 const SLUG    = 'shopsocket';
 const DIR     = __DIR__ . '/';
 
