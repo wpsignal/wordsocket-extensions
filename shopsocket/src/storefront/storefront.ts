@@ -172,7 +172,7 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
           readMore: state.i18n?.readMore ?? "Read more",
         });
       }
-      warnHolder(productId, entry, String(data.name ?? ""));
+      warnHolder(productId, entry, String(data.name ?? ""), String(data.actor ?? ""));
     },
 
     /** Another shopper added a product: update its count, and toast if this shopper holds it too. */
@@ -241,8 +241,14 @@ function pulse(key: string): void {
  * A held product just sold out, or fewer remain than this shopper holds: say so
  * at once, sticky, with a way to the cart, and have WooCommerce re-read the cart
  * so its own notice and limits appear. Enough stock again clears the notice.
+ *
+ * Not when this shopper's own checkout caused it: buying the last unit sets
+ * stock to zero while their cart still holds it, so without the actor check the
+ * buyer is told the item they just bought has sold out. Returning before
+ * refreshCart() also keeps a cart re-read out of their in-flight checkout.
  */
-function warnHolder(productId: number, entry: StockEntry, name: string): void {
+function warnHolder(productId: number, entry: StockEntry, name: string, actor: string): void {
+  if (viewer.basketId && actor === viewer.basketId) return;
   const held = viewer.held(productId);
   if (held === 0) return;
   const key = `stock:${productId}`;

@@ -98,10 +98,17 @@ function available_quantity( WC_Product $product ): ?int {
 /**
  * Payload for `woo.stock.*` events.
  *
+ * `actor` is the basket id of the shopper whose request changed the stock, so
+ * the storefront can tell a buyer's own sale from someone else's: at checkout
+ * the reduction runs inside the buyer's request, and without it the buyer is
+ * warned that the item they just bought has sold out. Empty when no shopper is
+ * behind the change (an import, a gateway webhook, or a caller that passes none).
+ *
  * @param WC_Product $product The product or variation whose stock changed.
+ * @param string     $actor   Basket id of the shopper behind the change, or empty.
  * @return array<string, mixed>
  */
-function stock_payload( WC_Product $product ): array {
+function stock_payload( WC_Product $product, string $actor = '' ): array {
 	$is_variation = $product->is_type( 'variation' );
 	$availability = $product->get_availability();
 
@@ -117,5 +124,6 @@ function stock_payload( WC_Product $product ): array {
 		// WooCommerce's own availability text and class, so the storefront needs no stock rules.
 		'availability_text'  => wp_strip_all_tags( (string) $availability['availability'] ),
 		'availability_class' => (string) $availability['class'],
+		'actor'              => $actor,
 	);
 }

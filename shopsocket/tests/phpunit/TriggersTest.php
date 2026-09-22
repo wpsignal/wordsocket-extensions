@@ -4,6 +4,7 @@
  */
 
 use WPSignal\WPS;
+use function WPSignal\Extensions\ShopSocket\basket_id;
 use function WPSignal\Extensions\ShopSocket\count_in_carts;
 use const WPSignal\Extensions\ShopSocket\ACTIVITY_CHANNEL;
 use const WPSignal\Extensions\ShopSocket\CARTS_PRESENCE_CHANNEL;
@@ -59,6 +60,28 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertSame( array( 'site:site123:woo:carts:' ), array_values( array_filter( $staff_publish, static fn( $p ) => ! str_ends_with( $p, ':yjs:' ) ) ) );
 	}
 
+	/*
+	 * The regression: buying the last unit sets stock to zero inside the buyer's
+	 * own request while their cart still holds the product. Without the actor the
+	 * storefront cannot tell that sale from someone else's, and tells the buyer
+	 * the item they just bought has sold out.
+	 */
+	public function test_a_stock_change_names_the_shopper_whose_request_caused_it(): void {
+		$product = $this->make_product( 1 );
+		// The bootstrap carries a WooCommerce session, so this request has a shopper to name.
+		$buyer = basket_id();
+		$this->assertNotSame( '', $buyer, 'guard: an empty id would make the match below pass vacuously' );
+
+		wc_update_product_stock( $product, 0 );
+
+		$events = $this->events_on( STOCK_CHANNEL, 'woo.stock.changed' );
+		$this->assertNotEmpty( $events );
+		foreach ( $events as $event ) {
+			$this->assertSame( $buyer, $event['data']['actor'], 'both the quantity and the status event carry the buyer' );
+		}
+		$this->assertSame( 0, end( $events )['data']['available'] );
+	}
+
 	public function test_a_stock_change_publishes_publicly_and_a_product_save_does_not_publish_post_updated(): void {
 		$product = $this->make_product( 5 );
 
@@ -78,7 +101,7 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertSame( '4 in stock', $data['availability_text'] );
 		$this->assertSame( 'in-stock', $data['availability_class'] );
 		$this->assertSame(
-			array( 'product_id', 'variation_id', 'name', 'permalink', 'stock_quantity', 'available', 'stock_status', 'purchasable', 'availability_text', 'availability_class' ),
+			array( 'product_id', 'variation_id', 'name', 'permalink', 'stock_quantity', 'available', 'stock_status', 'purchasable', 'availability_text', 'availability_class', 'actor' ),
 			array_keys( $data )
 		);
 

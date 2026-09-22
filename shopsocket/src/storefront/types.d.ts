@@ -57,6 +57,8 @@ export interface StockEventData {
   availability_class?: string;
   stock_status?: string;
   purchasable?: boolean;
+  /** Basket id of the shopper whose request changed the stock, or empty. */
+  actor?: string;
 }
 
 /** How a toast behaves beyond its text: errors are sticky and outrank the rest. */

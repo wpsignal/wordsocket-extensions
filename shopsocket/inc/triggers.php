@@ -196,7 +196,7 @@ add_action(
 				->on( $hook, 10, 1 )
 				->channel( STOCK_CHANNEL )
 				->when( static fn( $product ) => $product instanceof WC_Product && should_publish_stock() && stock_state_changed( $product ) )
-				->data( static fn( WC_Product $product ) => stock_payload( $product ) )
+				->data( static fn( WC_Product $product ) => stock_payload( $product, basket_id() ) )
 				->register();
 		}
 
@@ -206,7 +206,7 @@ add_action(
 				->on( $hook, 10, 3 )
 				->channel( STOCK_CHANNEL )
 				->when( static fn( $id, $status, $product = null ) => $product instanceof WC_Product && should_publish_stock() && stock_state_changed( $product ) )
-				->data( static fn( $id, $status, WC_Product $product ) => stock_payload( $product ) )
+				->data( static fn( $id, $status, WC_Product $product ) => stock_payload( $product, basket_id() ) )
 				->register();
 		}
 
