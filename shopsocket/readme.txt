@@ -3,7 +3,7 @@ Contributors: wpsignal
 Tags: woocommerce, realtime, live orders, abandoned cart, inventory
 Requires at least: 6.7
 Tested up to: 7.1
-Stable tag: 0.3.1
+Stable tag: 0.3.2
 Requires PHP: 8.2
 Requires Plugins: wordsocket, woocommerce
 License: GPL-2.0-or-later
@@ -116,6 +116,9 @@ Users with the `manage_woocommerce` capability. Order and basket events travel o
 
 == Changelog ==
 
+= 0.3.2 =
+* Fixed: the extension registered its name and description before WordPress loads translations, which logged a notice with debugging enabled
+
 = 0.3.1 =
 * Fixed: a shopper who buys the last unit is no longer told it has sold out (stock events now carry the buyer's anonymous basket id)
 * Fixed: the board's logo no longer flashes at full screen width before its styles load
@@ -140,6 +143,9 @@ Users with the `manage_woocommerce` capability. Order and basket events travel o
 * A card on WordSocket's Extensions tab
 
 == Upgrade Notice ==
+
+= 0.3.2 =
+Fixes a premature translation notice logged with debugging enabled.
 
 = 0.3.1 =
 Fixes a sold-out notice shown to the shopper who bought the last unit.

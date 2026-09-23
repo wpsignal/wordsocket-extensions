@@ -1,3 +1,5 @@
+**0.3.2** - The catalogue entry registers on `init`, so its translated strings no longer load the text domain before WordPress is ready.
+
 **0.3.1** - A shopper who buys the last unit is no longer told it has sold out, and the board's logo no longer flashes before its styles load.
 
 **0.3.0** - The plugin's row sits under WordSocket on the Plugins screen (needs WordSocket 0.24).

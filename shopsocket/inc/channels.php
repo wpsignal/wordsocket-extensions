@@ -16,13 +16,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-// Catalogue entry, the two reserved namespaces, and no generic post events for products.
+/*
+ * The catalogue entry carries translated strings, so it waits for `init`.
+ */
 add_action(
-	'wpsignal_loaded',
+	'init',
 	static function (): void {
-		$wps = WPS::instance();
-
-		$wps->extensions()->register(
+		WPS::instance()->extensions()->register(
 			SLUG,
 			array(
 				'title'       => __( 'ShopSocket', 'shopsocket' ),
@@ -33,6 +33,14 @@ add_action(
 				'requires'    => array( 'woocommerce/woocommerce.php' => 'WooCommerce' ),
 			)
 		);
+	}
+);
+
+// The reserved namespaces, and no generic post events for products.
+add_action(
+	'wpsignal_loaded',
+	static function (): void {
+		$wps = WPS::instance();
 
 		/*
 		 * Orders carry totals and customer names: staff only, and PHP is the

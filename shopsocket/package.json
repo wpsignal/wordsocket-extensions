@@ -1,6 +1,6 @@
 {
 	"name": "shopsocket",
-	"version": "0.3.1",
+	"version": "0.3.2",
 	"private": true,
 	"description": "ShopSocket for WooCommerce: a live orders board and live stock on product pages.",
 	"license": "GPL-2.0-or-later",
