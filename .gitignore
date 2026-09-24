@@ -12,6 +12,7 @@
 !shopsocket/**/*
 
 # Explicit exclusions
+.DS_Store
 node_modules
 build
 dist
