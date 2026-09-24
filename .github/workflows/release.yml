@@ -157,11 +157,12 @@ jobs:
           PASSWORD: ${{ secrets.WPORG_SVN_PASSWORD }}
         run: |
           if [[ -z "$USERNAME" || -z "$PASSWORD" ]]; then
-            echo "::warning::WPORG_SVN_USERNAME / WPORG_SVN_PASSWORD not set; skipping the WordPress.org publish"
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ok=true" >> "$GITHUB_OUTPUT"
+            # A tag is a real release: publishing nothing must be a failure, not a
+            # green job. ShopSocket 0.3.2 "released" with an empty SVN this way.
+            echo "::error::WPORG_SVN_USERNAME / WPORG_SVN_PASSWORD are not set in the wordpress-org environment; nothing was published"
+            exit 1
           fi
+          echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@v4
         if: steps.creds.outputs.ok == 'true'
