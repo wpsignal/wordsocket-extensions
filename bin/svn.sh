@@ -25,7 +25,8 @@ for arg in "$@"; do
   [[ "$arg" == "--readme-only" ]] && README_ONLY=true
 done
 
-SVN_DIR="${SVN_DIR:-$REPO_ROOT/../${PLUGIN_SLUG}-svn}"
+# Inside this repo: .gitignore is a whitelist, so the checkout is ignored without a rule. CI sets SVN_DIR itself.
+SVN_DIR="${SVN_DIR:-$REPO_ROOT/${PLUGIN_SLUG}-svn}"
 SVN_URL="https://plugins.svn.wordpress.org/${PLUGIN_SLUG}"
 ZIP="$PLUGIN_DIR/dist/${PLUGIN_SLUG}.zip"
 SVN_ASSETS_SRC="$PLUGIN_DIR/dist/svn-assets"
