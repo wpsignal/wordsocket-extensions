@@ -1,5 +1,5 @@
 === ShopSocket ===
-Contributors: wpsignal
+Contributors: wpsignal, jaredrethman
 Tags: woocommerce, realtime, live orders, abandoned cart, inventory
 Requires at least: 6.7
 Tested up to: 7.1
