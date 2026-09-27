@@ -3,7 +3,7 @@ Contributors: wpsignal, jaredrethman
 Tags: woocommerce, realtime, live orders, abandoned cart, inventory
 Requires at least: 6.7
 Tested up to: 7.1
-Stable tag: 0.3.2
+Stable tag: 0.4.0
 Requires PHP: 8.2
 Requires Plugins: wordsocket, woocommerce
 License: GPL-2.0-or-later
