@@ -1,15 +1,15 @@
 /**
- * The dashboard figures. Basket rows come from WordPress (polled, pushed on
- * change); whether a basket is live comes from relay presence on the carts
+ * The dashboard figures. Cart rows come from WordPress (polled, pushed on
+ * change); whether a cart is live comes from relay presence on the carts
  * channel, so the split follows arrivals and departures as they happen. The
- * two are crossed here by basket id. "Online now" is the relay's own count.
+ * two are crossed here by cart id. "Online now" is the relay's own count.
  */
 import { useEffect, useMemo, useState } from "@wordpress/element";
 import apiFetch from "@wordpress/api-fetch";
 
 const POLL_MS = 30_000;
 const AFTER_EVENT_MS = 1_500;
-const BASKETS_EVENT = "woo.baskets";
+const CARTS_EVENT = "woo.carts";
 const CONNECTIONS_EVENT = "wps.connections";
 const PRESENCE_EVENT = "wps.presence";
 /*
@@ -21,14 +21,14 @@ const LEAVE_GRACE_MS = 6_000;
 
 type Config = Pick<ShopSocketBoardConfig, "dashboardUrl" | "nonce" | "snapshot" | "channels">;
 
-/** Cross the basket rows with the set of present basket ids into two segments, counting live baskets per product. */
-function splitBaskets(
-  rows: WooBasketRow[],
+/** Cross the cart rows with the set of present cart ids into two segments, counting live carts per product. */
+function splitCarts(
+  rows: WooCartRow[],
   present: Set<string>,
-): Pick<WooDashboardSnapshot, "baskets" | "liveProducts"> {
+): Pick<WooDashboardSnapshot, "carts" | "liveProducts"> {
   const live = { shoppers: 0, products: new Set<number>(), revenue: 0, currency: "" };
   const abandoned = { shoppers: 0, products: new Set<number>(), revenue: 0, currency: "" };
-  const liveCounts = new Map<number, { baskets: number; units: number }>();
+  const liveCounts = new Map<number, { carts: number; units: number }>();
   for (const row of rows) {
     const isLive = present.has(row.id);
     const seg = isLive ? live : abandoned;
@@ -38,29 +38,29 @@ function splitBaskets(
     row.products.forEach((id) => {
       seg.products.add(id);
       if (isLive) {
-        const count = liveCounts.get(id) ?? { baskets: 0, units: 0 };
-        count.baskets += 1;
+        const count = liveCounts.get(id) ?? { carts: 0, units: 0 };
+        count.carts += 1;
         count.units += Math.max(1, Number(row.quantities?.[id]) || 1);
         liveCounts.set(id, count);
       }
     });
   }
   // Close a segment: distinct products, revenue rounded to cents.
-  const finish = (s: typeof live): WooBasketSegment => ({
+  const finish = (s: typeof live): WooCartSegment => ({
     shoppers: s.shoppers,
     products: s.products.size,
     revenue: Math.round(s.revenue * 100) / 100,
     currency: s.currency,
   });
   return {
-    baskets: { live: finish(live), abandoned: finish(abandoned) },
+    carts: { live: finish(live), abandoned: finish(abandoned) },
     liveProducts: [...liveCounts].map(([id, count]) => ({ id, ...count })),
   };
 }
 
 /** The board's tile figures, and whether the last fetch of them failed. */
 export function useDashboardSnapshot(config: Config) {
-  const [rows, setRows] = useState<WooBasketRow[]>(config.snapshot.baskets);
+  const [rows, setRows] = useState<WooCartRow[]>(config.snapshot.carts);
   const [online, setOnline] = useState<WooDashboardData["online"]>(config.snapshot.online);
   const [present, setPresent] = useState<Set<string>>(() => new Set());
   const [usersOnline, setUsersOnline] = useState(0);
@@ -71,7 +71,29 @@ export function useDashboardSnapshot(config: Config) {
     let inflight = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    // Fetch the basket rows and connection count, one request at a time.
+    /*
+     * Connections dip for a moment whenever a shopper navigates: the old
+     * page's socket closes before the new page's opens. Hold a lower count
+     * for the presence grace before showing it, so a navigation reads as a
+     * steady tab rather than a departure and a return; a higher count lands
+     * at once.
+     */
+    let shownConnections = config.snapshot.online?.active_connections ?? 0;
+    let holdTimer: ReturnType<typeof setTimeout> | undefined;
+    const showOnline = (o: NonNullable<WooDashboardData["online"]>) => {
+      clearTimeout(holdTimer);
+      if (o.active_connections < shownConnections) {
+        holdTimer = setTimeout(() => {
+          shownConnections = o.active_connections;
+          setOnline(o);
+        }, LEAVE_GRACE_MS);
+        return;
+      }
+      shownConnections = o.active_connections;
+      setOnline(o);
+    };
+
+    // Fetch the cart rows and connection count, one request at a time.
     const refresh = async () => {
       if (inflight) return;
       inflight = true;
@@ -81,8 +103,9 @@ export function useDashboardSnapshot(config: Config) {
           headers: { "X-WP-Nonce": config.nonce },
         });
         if (alive) {
-          setRows(fresh.baskets);
-          setOnline(fresh.online);
+          setRows(fresh.carts);
+          if (fresh.online) showOnline(fresh.online);
+          else setOnline(fresh.online);
           setStale(false);
         }
       } catch {
@@ -105,8 +128,8 @@ export function useDashboardSnapshot(config: Config) {
     const wps = window.WPS;
     const offs: Array<() => void> = [];
     /*
-     * connection id -> { v: visitor id, b: basket id | null }. A shopper's tabs
-     * share v, so distinct v is "users online"; distinct b is the live-basket split.
+     * connection id -> { v: visitor id, b: cart id | null }. A shopper's tabs
+     * share v, so distinct v is "users online"; distinct b is the live-cart split.
      */
     type Member = { v?: string; b?: string | null };
     const members = new Map<string, Member>();
@@ -119,22 +142,22 @@ export function useDashboardSnapshot(config: Config) {
         pendingLeaves.delete(id);
       }
     };
-    // Derive the live basket ids and the distinct visitor count from the members.
+    // Derive the live cart ids and the distinct visitor count from the members.
     const applyPresent = () => {
       if (!alive) return;
-      const baskets = new Set<string>();
+      const carts = new Set<string>();
       const users = new Set<string>();
       members.forEach((m) => {
-        if (m.b) baskets.add(m.b);
+        if (m.b) carts.add(m.b);
         if (m.v) users.add(m.v);
       });
-      setPresent(baskets);
+      setPresent(carts);
       setUsersOnline(users.size);
     };
 
     if (wps) {
       /*
-       * Staff tokens auto-subscribe to the presence, baskets, and connections
+       * Staff tokens auto-subscribe to the presence, carts, and connections
        * channels (`wpsignal_token_channels`, inc/channels.php): only listen.
        */
       offs.push(
@@ -159,7 +182,7 @@ export function useDashboardSnapshot(config: Config) {
             /*
              * Hold the member: if the same shopper is back on the next page
              * within the grace, the sets in applyPresent() dedupe the overlap
-             * by visitor and basket id, so nothing flickers and nothing doubles.
+             * by visitor and cart id, so nothing flickers and nothing doubles.
              */
             const id = p.id;
             cancelLeave(id);
@@ -179,11 +202,11 @@ export function useDashboardSnapshot(config: Config) {
         }),
       );
       offs.push(
-        wps.on(BASKETS_EVENT, (data, channel) => {
+        wps.on(CARTS_EVENT, (data, channel) => {
           if (!wps.onChannel(channel, config.channels.orders)) return;
-          const payload = data as { baskets?: WooBasketRow[] };
-          if (Array.isArray(payload.baskets)) {
-            setRows(payload.baskets);
+          const payload = data as { carts?: WooCartRow[] };
+          if (Array.isArray(payload.carts)) {
+            setRows(payload.carts);
             setStale(false);
           }
         }),
@@ -193,7 +216,7 @@ export function useDashboardSnapshot(config: Config) {
           if (!wps.onChannel(channel, config.channels.connections)) return;
           const o = data as unknown as NonNullable<WooDashboardData["online"]>;
           if (typeof o.active_connections === "number") {
-            setOnline({ ...o });
+            showOnline({ ...o });
             setStale(false);
           }
         }),
@@ -211,6 +234,7 @@ export function useDashboardSnapshot(config: Config) {
     return () => {
       alive = false;
       clearTimeout(timer);
+      clearTimeout(holdTimer);
       pendingLeaves.forEach((pending) => clearTimeout(pending));
       pendingLeaves.clear();
       offs.forEach((off) => off());
@@ -219,7 +243,7 @@ export function useDashboardSnapshot(config: Config) {
   }, [config.dashboardUrl, config.nonce, config.channels]);
 
   const snapshot = useMemo<WooDashboardSnapshot>(
-    () => ({ ...splitBaskets(rows, present), usersOnline, online }),
+    () => ({ ...splitCarts(rows, present), usersOnline, online }),
     [rows, present, usersOnline, online],
   );
 
