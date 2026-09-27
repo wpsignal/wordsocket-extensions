@@ -1,3 +1,5 @@
+**0.4.0** - Renamed "basket" to "cart" throughout (code, events, and text). Breaking for anyone listening directly to the relay: the `woo.baskets` event is now `woo.carts`, the `GET /shopsocket/v1/basket-id` route is now `/cart-id`, and the `shopsocket_baskets` / `shopsocket_baskets_pub` transients are now `shopsocket_carts` / `shopsocket_carts_pub`. Storefront modules and the storefront stylesheet now ship with content-hash asset manifests (`build/storefront/*.asset.php`), so a rebuild reaches browsers that cached the previous build; the stylesheet is built into `build/storefront/` too, where before it was enqueued from `src/`, which the release zip excludes. The board holds a lower Open Tabs figure for the presence grace before showing it, so a shopper navigating between pages no longer reads as a tab closing and reopening.
+
 **0.3.2** - The catalogue entry registers on `init`, so its translated strings no longer load the text domain before WordPress is ready.
 
 **0.3.1** - A shopper who buys the last unit is no longer told it has sold out, and the board's logo no longer flashes before its styles load.

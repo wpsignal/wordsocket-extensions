@@ -14,14 +14,14 @@ interface ShopSocketBoardConfig {
 	orders: WooOrderEvent[];
 	/** Statuses the board shows, in display order. */
 	statuses: Array< { slug: string; label: string } >;
-	/** Figures rendered on first paint (basket rows + online). */
+	/** Figures rendered on first paint (cart rows + online). */
 	snapshot: WooDashboardData;
 	currencySymbol: string;
 }
 
-/** One basket row from the server (inc/carts.php `all_baskets()`). */
-interface WooBasketRow {
-	/** `basket_id()`: 16 hex of SHA-256 over the user id or the guest session id. */
+/** One cart row from the server (inc/carts.php `cart_rows()`). */
+interface WooCartRow {
+	/** `cart_id()`: 16 hex of SHA-256 over the user id or the guest session id. */
 	id: string;
 	/** Parent product IDs in the cart. */
 	products: number[];
@@ -35,13 +35,13 @@ interface WooBasketRow {
 
 /** The raw dashboard payload from the server (rows + online). */
 interface WooDashboardData {
-	baskets: WooBasketRow[];
+	carts: WooCartRow[];
 	/** Null when WordSocket is older than 0.22 or the server could not be reached. */
 	online: { active_connections: number; max_connections: number } | null;
 }
 
-/** One basket segment, computed on the board by crossing rows with presence. */
-interface WooBasketSegment {
+/** One cart segment, computed on the board by crossing rows with presence. */
+interface WooCartSegment {
 	shoppers: number;
 	products: number;
 	revenue: number;
@@ -50,17 +50,17 @@ interface WooBasketSegment {
 
 /** What the board renders: rows split into live and abandoned. */
 interface WooDashboardSnapshot {
-	baskets: {
-		/** Baskets whose shopper has an open tab (a live connection) right now. */
-		live: WooBasketSegment;
-		/** Baskets still held by a shopper who has left the site. */
-		abandoned: WooBasketSegment;
+	carts: {
+		/** Carts whose shopper has an open tab (a live connection) right now. */
+		live: WooCartSegment;
+		/** Carts still held by a shopper who has left the site. */
+		abandoned: WooCartSegment;
 	};
 	/** Distinct storefront visitors connected right now (deduped by visitor id across tabs). */
 	usersOnline: number;
 	online: { active_connections: number; max_connections: number } | null;
-	/** Products in live baskets: how many of those baskets hold each, and the units across them, unordered. */
-	liveProducts: Array< { id: number; baskets: number; units: number } >;
+	/** Products in live carts: how many of those carts hold each, and the units across them, unordered. */
+	liveProducts: Array< { id: number; carts: number; units: number } >;
 }
 
 /** A product the board names (inc/dashboard.php `products_for_board()`). */

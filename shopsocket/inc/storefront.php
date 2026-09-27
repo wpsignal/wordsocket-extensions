@@ -21,10 +21,28 @@ const STOREFRONT_MODULE = 'shopsocket/storefront';
 const STORE_NS          = 'shopsocket/storefront';
 
 /**
+ * The build's manifest for a storefront file, written by `bin/storefront-assets.mjs`
+ * next to each emitted module (and the copied stylesheet) the way wp-scripts
+ * writes `board.asset.php`: `version` is a content hash, so a rebuild reaches
+ * browsers that cached the previous build. Falls back to the plugin version
+ * when the manifest is missing, which only happens on an unbuilt checkout.
+ *
+ * @param string $name File name under `build/storefront/`.
+ * @return array{dependencies: array<string>, version: string}
+ */
+function storefront_asset( string $name ): array {
+	$manifest = DIR . 'build/storefront/' . preg_replace( '/\.js$/', '', str_replace( '.css', '-css', $name ) ) . '.asset.php';
+	return file_exists( $manifest ) ? require $manifest : array(
+		'dependencies' => array(),
+		'version'      => VERSION,
+	);
+}
+
+/**
  * Whether this request gets the live storefront: every front-end page while
  * WooCommerce is active. A shopper's presence rides on the page they are on,
  * so the board only counts them live while the module is loaded; limiting it
- * to shop pages made a basket look abandoned the moment its shopper opened
+ * to shop pages made a cart look abandoned the moment its shopper opened
  * My Account or a blog post.
  *
  * @return bool
@@ -178,7 +196,7 @@ function in_carts_html( int $product_id ): string {
 }
 
 /**
- * Basket counts already seeded by counters rendered earlier in the request, as
+ * Cart counts already seeded by counters rendered earlier in the request, as
  * an object (so it stays `{}` in JSON when empty). Block themes render the
  * template before scripts are enqueued, so the main state must keep these
  * rather than reset them: a Live Stock block on an ordinary page has no other
@@ -283,7 +301,7 @@ function in_carts_enabled(): bool {
  */
 function toasts_enabled(): bool {
 	/**
-	 * Filters whether shoppers see "Someone just added ... to their basket" toasts.
+	 * Filters whether shoppers see "Someone just added ... to their cart" toasts.
 	 *
 	 * @param bool $enabled Default true.
 	 */
@@ -300,19 +318,19 @@ add_action(
 
 		/*
 		 * Three modules, imported by id so the import map gives each a versioned
-		 * URL: the viewer (basket id, held products, presence), the WooCommerce
+		 * URL: the viewer (cart id, held products, presence), the WooCommerce
 		 * hooks, and the store itself.
 		 */
-		wp_register_script_module( STOREFRONT_MODULE . '/viewer', URL . 'build/storefront/viewer.js', array(), VERSION );
-		wp_register_script_module( STOREFRONT_MODULE . '/woocommerce', URL . 'build/storefront/woocommerce.js', array( '@wordpress/interactivity' ), VERSION );
+		wp_register_script_module( STOREFRONT_MODULE . '/viewer', URL . 'build/storefront/viewer.js', array(), storefront_asset( 'viewer.js' )['version'] );
+		wp_register_script_module( STOREFRONT_MODULE . '/woocommerce', URL . 'build/storefront/woocommerce.js', array( '@wordpress/interactivity' ), storefront_asset( 'woocommerce.js' )['version'] );
 		wp_register_script_module(
 			STOREFRONT_MODULE,
 			URL . 'build/storefront/storefront.js',
 			array( '@wordpress/interactivity', STOREFRONT_MODULE . '/viewer', STOREFRONT_MODULE . '/woocommerce' ),
-			VERSION
+			storefront_asset( 'storefront.js' )['version']
 		);
 		wp_enqueue_script_module( STOREFRONT_MODULE );
-		wp_enqueue_style( SLUG . '-storefront', URL . 'src/storefront/storefront.css', array(), VERSION );
+		wp_enqueue_style( SLUG . '-storefront', URL . 'build/storefront/storefront.css', array(), storefront_asset( 'storefront.css' )['version'] );
 
 		wp_interactivity_state(
 			STORE_NS,
@@ -325,16 +343,16 @@ add_action(
 					'stock'    => STOCK_CHANNEL,
 					'activity' => ACTIVITY_CHANNEL,
 				),
-				'basketIdUrl'       => rest_url( REST_NS . '/basket-id' ),
+				'cartIdUrl'         => rest_url( REST_NS . '/cart-id' ),
 				'nonce'             => wp_create_nonce( 'wp_rest' ),
 				'toasts'            => toasts_enabled(),
 				'inCarts'           => in_carts_enabled(),
 				'selectedVariation' => 0,
 				'carts'             => seeded_carts(),
 				'i18n'              => in_carts_strings() + array(
-					'addedThis'  => __( 'Someone just added this to their basket', 'shopsocket' ),
+					'addedThis'  => __( 'Someone just added this to their cart', 'shopsocket' ),
 					/* translators: %s: product name */
-					'addedOther' => __( 'Someone just added %s to their basket', 'shopsocket' ),
+					'addedOther' => __( 'Someone just added %s to their cart', 'shopsocket' ),
 					/* translators: %s: product name */
 					'soldOut'    => __( '%s just sold out and can no longer be purchased. Please remove it from your cart.', 'shopsocket' ),
 					/* translators: 1: product name, 2: units left */
@@ -385,7 +403,7 @@ function has_wc_session_cookie(): bool {
 }
 
 /*
- * The storefront's own basket id, which it enters presence under. The session
+ * The storefront's own cart id, which it enters presence under. The session
  * cookie is HttpOnly, so the browser cannot derive the id itself.
  */
 add_action(
@@ -393,7 +411,7 @@ add_action(
 	static function (): void {
 		register_rest_route(
 			REST_NS,
-			'/basket-id',
+			'/cart-id',
 			array(
 				'methods'             => 'GET',
 				'args'                => array(
@@ -413,10 +431,10 @@ add_action(
 					 * row lost to cache eviction or a cleared transient returns the
 					 * moment its shopper is on the site again.
 					 */
-					record_cart( basket_id() );
+					record_cart( cart_id() );
 					$state    = current_cart_state();
 					$response = array(
-						'id'         => basket_id(),
+						'id'         => cart_id(),
 						'products'   => $state ? $state['products'] : array(),
 						'quantities' => $state ? (object) $state['quantities'] : new \stdClass(),
 					);

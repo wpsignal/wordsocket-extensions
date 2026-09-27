@@ -1,6 +1,6 @@
 <?php
 /**
- * The ShopSocket screen under the WooCommerce menu (online figures, baskets,
+ * The ShopSocket screen under the WooCommerce menu (online figures, carts,
  * live orders) and the card on WordSocket's Extensions tab.
  *
  * WordSocket already enqueues its client on every admin page, so the screen
@@ -184,7 +184,7 @@ function render_dashboard(): void {
 
 	echo '<div class="wrap">';
 	render_header();
-	echo '<p class="shopsocket-intro">' . esc_html__( 'Your store as it happens: who is on the storefront, what is in their baskets, and every order the moment it is placed. Keep it open on a second screen; nothing here needs a refresh.', 'shopsocket' ) . '</p>';
+	//echo '<p class="shopsocket-intro">' . esc_html__( 'Your store as it happens: who is on the storefront, what is in their carts, and every order the moment it is placed. Keep it open on a second screen; nothing here needs a refresh.', 'shopsocket' ) . '</p>';
 	echo '<div id="shopsocket-board">';
 	render_skeleton();
 	echo '</div>';

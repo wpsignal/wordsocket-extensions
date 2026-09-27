@@ -20,26 +20,26 @@ ShopSocket puts what is happening in your store on screen the moment it happens,
 A screen under WooCommerce that staff keep open all day.
 
 * Live orders: every new order lands on the board the instant it is placed, with a chime, and status changes update the row in place
-* Baskets, live and abandoned: how many shoppers hold a basket right now, how many have left with one still held, and the revenue in each
-* Products in live baskets: what shoppers on the site are holding at this moment, with the number of baskets and units for each, linking to the product's edit screen
+* Carts, live and abandoned: how many shoppers hold a cart right now, how many have left with one still held, and the revenue in each
+* Products in live carts: what shoppers on the site are holding at this moment, with the number of carts and units for each, linking to the product's edit screen
 * Users online and open connections, straight from the relay
 * Low-stock and out-of-stock alerts as they happen
 * Full-screen mode for a wall display
 
-Live and abandoned are not guesses from timestamps. A basket is live exactly while its shopper has an open connection to the site, and flips to abandoned the instant their last tab closes.
+Live and abandoned are not guesses from timestamps. A cart is live exactly while its shopper has an open connection to the site, and flips to abandoned the instant their last tab closes.
 
 **For shoppers: the storefront**
 
 * Stock text on product pages updates in place when the product sells out or comes back, and the add-to-cart button follows
-* "N shoppers have this in their cart right now" under the price, kept current as baskets change
-* "Someone just added this to their basket" toasts, shown only for products the shopper also holds
+* "N shoppers have this in their cart right now" under the price, kept current as carts change
+* "Someone just added this to their cart" toasts, shown only for products the shopper also holds
 * A shopper holding a product that sells out hears at once, wherever they are, and the cart shows WooCommerce's own notice without a reload
 * The Live Stock block: availability, units left, and the in-cart counter as one block for the Single Product template or any page
 * A card on WordSocket's Extensions tab with the connection state and a link to the board
 
 **How it works**
 
-WordSocket carries the events over one WebSocket per browser, with an SSE fallback. ShopSocket publishes order, stock, and basket events from WooCommerce's own hooks, and reads presence from the relay to tell live baskets from abandoned ones. The storefront never polls: it fetches once per page load and then only reacts to events. The board does the same, plus a quiet refresh every 30 seconds as a safety net in case an event is ever missed.
+WordSocket carries the events over one WebSocket per browser, with an SSE fallback. ShopSocket publishes order, stock, and cart events from WooCommerce's own hooks, and reads presence from the relay to tell live carts from abandoned ones. The storefront never polls: it fetches once per page load and then only reacts to events. The board does the same, plus a quiet refresh every 30 seconds as a safety net in case an event is ever missed.
 
 ShopSocket requires WordSocket and a WPSignal account. WPSignal is an independent service and is not affiliated with or endorsed by the WordPress project or by WooCommerce.
 
@@ -50,16 +50,16 @@ ShopSocket requires WordSocket and a WPSignal account. WPSignal is an independen
 What is inside those encrypted events:
 
 * Order events, on a staff-only channel: the order number, status, total, item count, payment method, and the customer's first name and last initial. No email, address, or line items.
-* Stock and basket-activity events, public to your storefront: product names, permalinks, thumbnails, and counts, plus the anonymous basket id of the shopper behind the change, so a shopper's own adds and purchases are never announced back to them.
+* Stock and cart-activity events, public to your storefront: product names, permalinks, thumbnails, and counts, plus the anonymous cart id of the shopper behind the change, so a shopper's own adds and purchases are never announced back to them.
 
-What the service does see, only because it needs it to route messages: channel names, how many browsers are connected, and each shopper's presence, which is a random per-browser id and a keyed hash identifying their basket. None of it is personal, and none of it is reversible.
+What the service does see, only because it needs it to route messages: channel names, how many browsers are connected, and each shopper's presence, which is a random per-browser id and a keyed hash identifying their cart. None of it is personal, and none of it is reversible.
 
 = Third-Party Service =
 
 ShopSocket relies on the **WPSignal service** at api.wpsignal.io, reached through the WordSocket plugin. ShopSocket opens no connection of its own: everything below travels over the connection WordSocket already holds for your site.
 
-* **Event publishing**: when an order is placed or changes status, stock changes, or a product is added to a basket, WordSocket sends an HMAC-signed HTTP request to the service with the event described under "What leaves your site".
-* **Realtime connections**: browsers on your storefront and the staff board connect to the service over WebSocket (or SSE) to receive those events. Shoppers' browsers also announce their presence on the site, which is how the board tells a live basket from an abandoned one.
+* **Event publishing**: when an order is placed or changes status, stock changes, or a product is added to a cart, WordSocket sends an HMAC-signed HTTP request to the service with the event described under "What leaves your site".
+* **Realtime connections**: browsers on your storefront and the staff board connect to the service over WebSocket (or SSE) to receive those events. Shoppers' browsers also announce their presence on the site, which is how the board tells a live cart from an abandoned one.
 * **Connection count**: the board asks the service how many browsers are connected to your site right now.
 
 Events are relayed in realtime and are **not stored** on the service. Event contents are AES-256-GCM encrypted before they leave WordPress (on HTTPS sites, and on plain HTTP ones with WordSocket 0.25 or later), with a key derived from your site's own WordPress salts, so the service relays ciphertext it cannot read. A WPSignal account is required; the free plan is enough to start.
@@ -100,27 +100,33 @@ Yes. ShopSocket declares HPOS compatibility and reads orders through WooCommerce
 
 = Can I turn parts of it off? =
 
-Filters: `shopsocket_storefront` controls which pages load the live storefront (every front-end page by default, so a shopper stays live wherever they browse), `shopsocket_in_carts_enabled` the basket counter, `shopsocket_activity_enabled` the added-to-basket toasts, `shopsocket_activity_throttle` how often one product may announce an add, and `shopsocket_publish_stock` whether stock changes are published (they are silent during imports).
+Filters: `shopsocket_storefront` controls which pages load the live storefront (every front-end page by default, so a shopper stays live wherever they browse), `shopsocket_in_carts_enabled` the cart counter, `shopsocket_activity_enabled` the added-to-cart toasts, `shopsocket_activity_throttle` how often one product may announce an add, and `shopsocket_publish_stock` whether stock changes are published (they are silent during imports).
 
 = Who can see the board? =
 
-Users with the `manage_woocommerce` capability. Order and basket events travel on a channel only their connection tokens can read.
+Users with the `manage_woocommerce` capability. Order and cart events travel on a channel only their connection tokens can read.
 
 == Screenshots ==
 
 1. The Realtime board under Analytics, before the first shopper arrives.
-2. The board with a busy store: users online, live and abandoned baskets with their revenue, the products in live baskets, and orders as they are placed.
+2. The board with a busy store: users online, live and abandoned carts with their revenue, the products in live carts, and orders as they are placed.
 3. A product page: live stock, how many shoppers hold the product right now, and a toast when someone else adds it.
 4. The cart at the moment a held product sells out elsewhere: WooCommerce's own notice appears without a reload, with ShopSocket's alert beside it.
 5. The Live Stock block on an ordinary page: availability, units left, and the in-cart count, all live.
 
 == Changelog ==
 
+= 0.4.0 =
+* "Basket" is now "cart" everywhere: on the board, in this readme, and in the code. Breaking if you listen to the relay directly: the `woo.baskets` event is now `woo.carts`, `GET /shopsocket/v1/basket-id` is now `/cart-id`, and the `shopsocket_baskets` transients are now `shopsocket_carts`
+* Fixed: the storefront stylesheet was left out of the release package, so the in-cart counter's dot and update flash never showed on installed sites
+* Storefront scripts are versioned by their contents, so an update reaches browsers that cached the previous build
+* The board holds a lower Open Tabs figure for a few seconds before showing it, so a shopper moving between pages no longer reads as a tab closing and reopening
+
 = 0.3.2 =
 * Fixed: the extension registered its name and description before WordPress loads translations, which logged a notice with debugging enabled
 
 = 0.3.1 =
-* Fixed: a shopper who buys the last unit is no longer told it has sold out (stock events now carry the buyer's anonymous basket id)
+* Fixed: a shopper who buys the last unit is no longer told it has sold out (stock events now carry the buyer's anonymous cart id)
 * Fixed: the board's logo no longer flashes at full screen width before its styles load
 * The readme spells out what leaves your site and what the relay can read
 
@@ -135,14 +141,17 @@ Users with the `manage_woocommerce` capability. Order and basket events travel o
 
 = 0.2.0 =
 * First public release
-* The Realtime board under WooCommerce Analytics: users online, live and abandoned baskets from relay presence, products in live baskets with units, and live orders that update in place
+* The Realtime board under WooCommerce Analytics: users online, live and abandoned carts from relay presence, products in live carts with units, and live orders that update in place
 * Live stock on product pages, the shop, and the cart: availability text, add-to-cart buttons, quantity limits, and "N shoppers have this in their cart"
 * Sell-out notices: a shopper holding a product that sells out hears at once, and the cart shows WooCommerce's own notice without a reload
-* "Someone just added this to their basket" toasts, shown only for products the shopper also holds
+* "Someone just added this to their cart" toasts, shown only for products the shopper also holds
 * The Live Stock block for the Single Product template or any page
 * A card on WordSocket's Extensions tab
 
 == Upgrade Notice ==
+
+= 0.4.0 =
+Breaking for direct relay listeners: `woo.baskets` is now `woo.carts` and `basket-id` is now `cart-id`. Everything else is a fix.
 
 = 0.3.2 =
 Fixes a premature translation notice logged with debugging enabled.

@@ -1,6 +1,6 @@
 /**
  * Names and edit links for the products the board lists. Only the board knows
- * which baskets are live, so it picks the ids and asks the server for the words,
+ * which carts are live, so it picks the ids and asks the server for the words,
  * once per page per id; a product that no longer exists is remembered as null
  * so it is never asked for again.
  */

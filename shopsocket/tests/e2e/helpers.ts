@@ -38,18 +38,18 @@ export function visitorContext(browser: Browser, baseURL?: string): Promise<Brow
 export const num = (loc: Locator) => async () => Number((await loc.textContent())?.replace(/[^\d.]/g, "") || 0);
 
 /**
- * Forget the basket rows holding `productId`, or every row when no product is
+ * Forget the cart rows holding `productId`, or every row when no product is
  * given. The rehearsal site is shared with manual testing, so tests clear only
  * what they created.
  */
-export function clearBaskets(productId?: number): void {
+export function clearCarts(productId?: number): void {
   if (productId === undefined) {
-    wp("eval", "delete_transient('shopsocket_baskets'); delete_transient('shopsocket_baskets_pub');");
+    wp("eval", "delete_transient('shopsocket_carts'); delete_transient('shopsocket_carts_pub');");
     return;
   }
   wp(
     "eval",
-    `$rows = get_transient('shopsocket_baskets'); if (is_array($rows)) { foreach ($rows as $id => $row) { if (in_array(${productId}, (array) ($row['products'] ?? []), true)) { unset($rows[$id]); } } set_transient('shopsocket_baskets', $rows, 2 * DAY_IN_SECONDS); delete_transient('shopsocket_baskets_pub'); }`,
+    `$rows = get_transient('shopsocket_carts'); if (is_array($rows)) { foreach ($rows as $id => $row) { if (in_array(${productId}, (array) ($row['products'] ?? []), true)) { unset($rows[$id]); } } set_transient('shopsocket_carts', $rows, 2 * DAY_IN_SECONDS); delete_transient('shopsocket_carts_pub'); }`,
   );
 }
 

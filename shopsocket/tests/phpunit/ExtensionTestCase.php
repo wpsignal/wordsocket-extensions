@@ -31,7 +31,7 @@ abstract class ExtensionTestCase extends TestCase {
 	/** @var int[] Orders to delete in tearDown. */
 	protected array $orders = array();
 
-	/** Fake credentials, an empty basket store, and an HTTP interceptor that records every publish. */
+	/** Fake credentials, an empty cart store, and an HTTP interceptor that records every publish. */
 	protected function setUp(): void {
 		parent::setUp();
 		foreach ( self::OPTIONS as $name ) {
@@ -42,7 +42,7 @@ abstract class ExtensionTestCase extends TestCase {
 		update_option( 'wpsignal_jwt_secret', 'phpunitjwt' );
 		unset( $_SERVER['HTTPS'] );
 		$this->published   = array();
-		$this->clear_baskets();
+		$this->clear_carts();
 		$this->http_filter = function ( $pre, $args, $url ) {
 			if ( ! str_ends_with( (string) $url, '/publish' ) ) {
 				return $pre;
@@ -89,7 +89,7 @@ abstract class ExtensionTestCase extends TestCase {
 	/** Drop the interceptor and this test's products and orders, then restore the options. */
 	protected function tearDown(): void {
 		remove_filter( 'pre_http_request', $this->http_filter, 10 );
-		$this->clear_baskets();
+		$this->clear_carts();
 		foreach ( $this->orders as $id ) {
 			$order = wc_get_order( $id );
 			if ( $order ) {
@@ -122,24 +122,24 @@ abstract class ExtensionTestCase extends TestCase {
 		);
 	}
 
-	/** Remove all basket state so each test starts from an empty store. */
-	protected function clear_baskets(): void {
-		delete_transient( 'shopsocket_baskets' );
-		delete_transient( 'shopsocket_baskets_pub' );
+	/** Remove all cart state so each test starts from an empty store. */
+	protected function clear_carts(): void {
+		delete_transient( 'shopsocket_carts' );
+		delete_transient( 'shopsocket_carts_pub' );
 	}
 
-	/** Seed one basket row directly, bypassing the WooCommerce cart; one unit of each product unless `$quantities` says otherwise. */
-	protected function seed_basket( string $id, array $products, float $value, array $quantities = array() ): void {
-		$baskets = get_transient( 'shopsocket_baskets' );
-		$baskets = is_array( $baskets ) ? $baskets : array();
-		$baskets[ $id ] = array(
+	/** Seed one cart row directly, bypassing the WooCommerce cart; one unit of each product unless `$quantities` says otherwise. */
+	protected function seed_cart( string $id, array $products, float $value, array $quantities = array() ): void {
+		$carts = get_transient( 'shopsocket_carts' );
+		$carts = is_array( $carts ) ? $carts : array();
+		$carts[ $id ] = array(
 			'products'   => array_map( 'intval', $products ),
 			'quantities' => $quantities,
 			'value'      => $value,
 			'currency'   => get_woocommerce_currency(),
 			'last_seen'  => time(),
 		);
-		set_transient( 'shopsocket_baskets', $baskets, DAY_IN_SECONDS );
+		set_transient( 'shopsocket_carts', $carts, DAY_IN_SECONDS );
 	}
 
 	/** A managed-stock simple product, deleted in tearDown. */

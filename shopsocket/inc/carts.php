@@ -1,6 +1,6 @@
 <?php
 /**
- * Basket rows: what each shopper has in their cart, keyed by `basket_id()`.
+ * Cart rows: what each shopper has in their cart, keyed by `cart_id()`.
  *
  * Only contents live here. Live or abandoned is decided by the dashboard,
  * which crosses these rows with the relay's presence membership. A row is
@@ -18,32 +18,32 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const BASKETS_TRANSIENT = 'shopsocket_baskets';
-const BASKETS_PUB_HASH  = 'shopsocket_baskets_pub';
+const CARTS_TRANSIENT = 'shopsocket_carts';
+const CARTS_PUB_HASH  = 'shopsocket_carts_pub';
 
 /**
  * Seconds a row survives without a cart change: the WooCommerce session lifetime.
  *
  * @return int
  */
-function basket_lifetime(): int {
+function cart_lifetime(): int {
 	// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WooCommerce's own filter, read for its value.
 	return max( 60, (int) apply_filters( 'wc_session_expiration', 2 * DAY_IN_SECONDS ) );
 }
 
 /**
- * Basket rows by id, dropping empty carts and rows past the session lifetime.
+ * Cart rows by id, dropping empty carts and rows past the session lifetime.
  *
  * @return array<string, array<string, mixed>>
  */
-function read_baskets(): array {
-	$baskets = get_transient( BASKETS_TRANSIENT );
-	if ( ! is_array( $baskets ) ) {
+function read_carts(): array {
+	$carts = get_transient( CARTS_TRANSIENT );
+	if ( ! is_array( $carts ) ) {
 		return array();
 	}
-	$cutoff = time() - basket_lifetime();
+	$cutoff = time() - cart_lifetime();
 	$live   = array();
-	foreach ( $baskets as $id => $row ) {
+	foreach ( $carts as $id => $row ) {
 		if ( is_array( $row ) && ! empty( $row['products'] ) && (int) ( $row['last_seen'] ?? 0 ) >= $cutoff ) {
 			$live[ $id ] = $row;
 		}
@@ -52,24 +52,24 @@ function read_baskets(): array {
 }
 
 /**
- * Persist the basket map (or drop it when empty).
+ * Persist the cart map (or drop it when empty).
  *
- * @param array<string, array<string, mixed>> $baskets Rows by basket id.
+ * @param array<string, array<string, mixed>> $carts Rows by cart id.
  * @return void
  */
-function write_baskets( array $baskets ): void {
-	if ( empty( $baskets ) ) {
-		delete_transient( BASKETS_TRANSIENT );
+function write_carts( array $carts ): void {
+	if ( empty( $carts ) ) {
+		delete_transient( CARTS_TRANSIENT );
 		return;
 	}
-	set_transient( BASKETS_TRANSIENT, $baskets, basket_lifetime() );
+	set_transient( CARTS_TRANSIENT, $carts, cart_lifetime() );
 }
 
 /**
  * The requester's own cart as a row, or null when empty or not loaded.
  *
  * Never loads the cart: a first-time visitor must not get a session (and a
- * random basket id) just for asking. The `basket-id` endpoint loads it only
+ * random cart id) just for asking. The `cart-id` endpoint loads it only
  * for a request that already carries one.
  *
  * @return array{products: int[], quantities: array<int, int>, value: float}|null
@@ -111,51 +111,51 @@ function current_cart_state(): ?array {
 /**
  * Upsert the requester's row from their cart, or drop it when the cart is empty.
  *
- * @param string $id Basket id (see `basket_id()`).
+ * @param string $id Cart id (see `cart_id()`).
  * @return void
  */
 function record_cart( string $id ): void {
 	if ( '' === $id ) {
 		return;
 	}
-	$baskets = read_baskets();
-	$state   = current_cart_state();
+	$carts = read_carts();
+	$state = current_cart_state();
 
 	if ( null === $state ) {
-		if ( isset( $baskets[ $id ] ) ) {
-			unset( $baskets[ $id ] );
-			write_baskets( $baskets );
-			publish_baskets_changed();
+		if ( isset( $carts[ $id ] ) ) {
+			unset( $carts[ $id ] );
+			write_carts( $carts );
+			publish_carts_changed();
 		}
 		return;
 	}
 
-	$baskets[ $id ] = array(
+	$carts[ $id ] = array(
 		'products'   => $state['products'],
 		'quantities' => $state['quantities'],
 		'value'      => $state['value'],
 		'currency'   => get_woocommerce_currency(),
 		'last_seen'  => time(),
 	);
-	write_baskets( $baskets );
-	publish_baskets_changed();
+	write_carts( $carts );
+	publish_carts_changed();
 }
 
 /**
- * Forget the requester's basket entirely (checkout or an emptied cart).
+ * Forget the requester's cart entirely (checkout or an emptied cart).
  *
- * @param string $id Basket id.
+ * @param string $id Cart id.
  * @return void
  */
 function forget_cart( string $id ): void {
 	if ( '' === $id ) {
 		return;
 	}
-	$baskets = read_baskets();
-	if ( isset( $baskets[ $id ] ) ) {
-		unset( $baskets[ $id ] );
-		write_baskets( $baskets );
-		publish_baskets_changed();
+	$carts = read_carts();
+	if ( isset( $carts[ $id ] ) ) {
+		unset( $carts[ $id ] );
+		write_carts( $carts );
+		publish_carts_changed();
 	}
 }
 
@@ -164,9 +164,9 @@ function forget_cart( string $id ): void {
  *
  * @return array<int, array{id: string, products: int[], quantities: array<int, int>, value: float, currency: string}>
  */
-function all_baskets(): array {
+function cart_rows(): array {
 	$rows = array();
-	foreach ( read_baskets() as $id => $row ) {
+	foreach ( read_carts() as $id => $row ) {
 		$products = array_map( 'intval', (array) ( $row['products'] ?? array() ) );
 		$stored   = (array) ( $row['quantities'] ?? array() );
 		// A row written before quantities were kept counts one unit per product.
@@ -193,7 +193,7 @@ function all_baskets(): array {
  */
 function count_in_carts( int $product_id ): int {
 	$count = 0;
-	foreach ( read_baskets() as $row ) {
+	foreach ( read_carts() as $row ) {
 		if ( in_array( $product_id, array_map( 'intval', (array) ( $row['products'] ?? array() ) ), true ) ) {
 			++$count;
 		}
@@ -206,14 +206,14 @@ function count_in_carts( int $product_id ): int {
  *
  * @return void
  */
-function publish_baskets_changed(): void {
-	$rows = all_baskets();
+function publish_carts_changed(): void {
+	$rows = cart_rows();
 	$hash = md5( (string) wp_json_encode( $rows ) );
-	if ( get_transient( BASKETS_PUB_HASH ) === $hash ) {
+	if ( get_transient( CARTS_PUB_HASH ) === $hash ) {
 		return;
 	}
-	set_transient( BASKETS_PUB_HASH, $hash, basket_lifetime() );
-	WPS::publish( ORDERS_CHANNEL, 'woo.baskets', array( 'baskets' => $rows ) );
+	set_transient( CARTS_PUB_HASH, $hash, cart_lifetime() );
+	WPS::publish( ORDERS_CHANNEL, 'woo.carts', array( 'carts' => $rows ) );
 }
 
 /**
@@ -226,11 +226,11 @@ function cart_item_parent_id( array $item ): int {
 	return (int) ( $item['product_id'] ?? 0 );
 }
 
-// A cart change in the shopper's own request: recapture their basket row.
+// A cart change in the shopper's own request: recapture their cart row.
 add_action(
 	'woocommerce_add_to_cart',
 	static function (): void {
-		record_cart( basket_id() );
+		record_cart( cart_id() );
 	},
 	5
 );
@@ -240,7 +240,7 @@ add_action(
 	'woocommerce_cart_item_removed',
 	static function ( $cart_item_key, WC_Cart $cart ): void {
 		$item = $cart->removed_cart_contents[ $cart_item_key ] ?? null;
-		record_cart( basket_id() );
+		record_cart( cart_id() );
 		if ( is_array( $item ) ) {
 			publish_cart_removed( cart_item_parent_id( $item ), (int) ( $item['variation_id'] ?? 0 ) );
 		}
@@ -253,13 +253,13 @@ add_action(
 add_action(
 	'woocommerce_cart_item_set_quantity',
 	static function (): void {
-		record_cart( basket_id() );
+		record_cart( cart_id() );
 	},
 	20
 );
 
 /*
- * An emptied cart (checkout or clear): forget the basket first, so this shopper
+ * An emptied cart (checkout or clear): forget the cart first, so this shopper
  * is not counted, then tell each product page the new count.
  */
 add_action(
@@ -275,7 +275,7 @@ add_action(
 				$parents[ $parent ] = (int) ( $item['variation_id'] ?? 0 );
 			}
 		}
-		forget_cart( basket_id() );
+		forget_cart( cart_id() );
 		foreach ( $parents as $parent => $variation_id ) {
 			publish_cart_removed( $parent, $variation_id );
 		}

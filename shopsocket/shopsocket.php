@@ -44,12 +44,12 @@ const STAFF_CAP = 'manage_woocommerce';
 const ORDERS_NS = 'woo:orders';
 /** Public channel carrying stock changes to product pages. */
 const STOCK_CHANNEL = 'woo:stock';
-/** Public channel carrying anonymous shopper activity (added to basket). */
+/** Public channel carrying anonymous shopper activity (added to cart). */
 const ACTIVITY_CHANNEL = 'woo:activity';
 /** The relay's own channel: `wps.connections` with the site's live connection count. */
 const CONNECTIONS_CHANNEL = 'wps:connections';
 
-/** Namespace shoppers enter presence on; membership is their live basket. */
+/** Namespace shoppers enter presence on; membership is their live cart. */
 const CARTS_NS = 'woo:carts';
 /** The presence channel: staff subscribe, shoppers enter (and never subscribe). */
 const CARTS_PRESENCE_CHANNEL = 'woo:carts:live';

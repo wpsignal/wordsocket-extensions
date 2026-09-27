@@ -55,7 +55,7 @@ test.describe("Storefront", () => {
       // Another shopper adds the same product: the viewer holds it, so a toast, and two in carts.
       const shopper = shopperSession(product.id, 6);
       await expect(toast).toBeVisible({ timeout: 15_000 });
-      await expect(toast).toContainText("Someone just added this to their basket");
+      await expect(toast).toContainText("Someone just added this to their cart");
       await expect(toast.locator(".shopsocket-toast__image"), "no thumbnail for a product without an image").toBeHidden();
       await expect(counter).toContainText("2 shoppers have this in their cart right now");
 
@@ -126,7 +126,7 @@ test.describe("Storefront", () => {
         .poll(
           () =>
             page.evaluate(async (id) => {
-              const res = await fetch("/wp-json/shopsocket/v1/basket-id", { credentials: "same-origin" });
+              const res = await fetch("/wp-json/shopsocket/v1/cart-id", { credentials: "same-origin" });
               const viewer = (await res.json()) as { products?: number[] };
               return (viewer.products ?? []).includes(id);
             }, product.id),
@@ -136,7 +136,7 @@ test.describe("Storefront", () => {
 
       const shopper = shopperSession(product.id, 4);
       await expect(toast).toBeVisible({ timeout: 15_000 });
-      await expect(toast).toContainText("Someone just added E2E Archive Widget to their basket");
+      await expect(toast).toContainText("Someone just added E2E Archive Widget to their cart");
       await expect(toast.locator("a")).toHaveAttribute("href", product.permalink);
       await shopper;
     } finally {
@@ -172,7 +172,7 @@ test.describe("Storefront", () => {
     }
   });
 
-  test("the Live Stock block follows stock and baskets on any page it is placed on", async ({ browser, baseURL, requestUtils }) => {
+  test("the Live Stock block follows stock and carts on any page it is placed on", async ({ browser, baseURL, requestUtils }) => {
     const product = await createProduct(requestUtils, "E2E Block Widget", 8);
     const pageId = (await requestUtils.rest({
       method: "POST",
@@ -299,7 +299,7 @@ test.describe("Storefront", () => {
     const product = await createProduct(requestUtils, "E2E Own Widget", 8);
     /*
      * A brand-new visitor has no session cookie until the first add, so the
-     * server cannot yet tag the event with this shopper's basket id.
+     * server cannot yet tag the event with this shopper's cart id.
      */
     const visitor = await visitorContext(browser, baseURL);
     const watching = await visitor.newPage();

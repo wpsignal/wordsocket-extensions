@@ -1,28 +1,28 @@
 /**
- * This shopper, as the server and the relay know them: their basket id, the
- * products they hold, and their presence on the carts channel. The basket id
+ * This shopper, as the server and the relay know them: their cart id, the
+ * products they hold, and their presence on the carts channel. The cart id
  * comes from the server (the WooCommerce session cookie is HttpOnly), and
- * presence under it is what shows the basket as live on the board while this
+ * presence under it is what shows the cart as live on the board while this
  * connection is open; the relay drops it the moment the socket closes.
  */
 
 export interface ViewerConfig {
-  basketIdUrl?: string;
+  cartIdUrl?: string;
   nonce?: string;
   productId?: number;
   presenceChannel?: string;
 }
 
 export interface Viewer {
-  /** The shopper's basket id once known, so their own events can be told apart. */
-  readonly basketId: string | null;
+  /** The shopper's cart id once known, so their own events can be told apart. */
+  readonly cartId: string | null;
   /** Whether this shopper holds the product. */
   holds(productId: number): boolean;
   /** How many units of the product this shopper holds, 0 when none. */
   held(productId: number): number;
 }
 
-/** This shopper's own state, from `GET /shopsocket/v1/basket-id`. */
+/** This shopper's own state, from `GET /shopsocket/v1/cart-id`. */
 interface ViewerState {
   id?: string;
   products?: number[];
@@ -36,26 +36,26 @@ interface ViewerState {
  * live count for the page's product whenever a sync returns one.
  */
 export function startViewer(config: ViewerConfig, onCount: (productId: number, count: number) => void): Viewer {
-  let basketId: string | null = null;
+  let cartId: string | null = null;
   // Units held per parent product; replaced on every sync, since the server's answer is the truth.
   const quantities = new Map<number, number>();
   let inFlight = false;
   let dirty = false;
 
   /**
-   * Pull this shopper's basket id, held products, and this page's live count
+   * Pull this shopper's cart id, held products, and this page's live count
    * from the server. Never on a timer; a call that lands mid-flight queues
    * exactly one more.
    */
   async function sync(): Promise<void> {
-    if (!config.basketIdUrl) return;
+    if (!config.cartIdUrl) return;
     if (inFlight) {
       dirty = true;
       return;
     }
     inFlight = true;
     try {
-      const url = new URL(config.basketIdUrl, window.location.origin);
+      const url = new URL(config.cartIdUrl, window.location.origin);
       if (config.productId) {
         url.searchParams.set("product", String(config.productId));
       }
@@ -69,7 +69,7 @@ export function startViewer(config: ViewerConfig, onCount: (productId: number, c
       (viewer?.products ?? []).forEach((id) => {
         quantities.set(Number(id), Math.max(1, Number(viewer?.quantities?.[String(id)]) || 1));
       });
-      if (viewer?.id) basketId = viewer.id;
+      if (viewer?.id) cartId = viewer.id;
       if (config.productId && typeof viewer?.count === "number") {
         onCount(Number(config.productId), viewer.count);
       }
@@ -77,7 +77,7 @@ export function startViewer(config: ViewerConfig, onCount: (productId: number, c
       if (wps && config.presenceChannel) {
         /*
          * `v` (WordSocket's per-browser visitor id) counts the visitor as online,
-         * `b` ties the basket to this connection; the board dedupes `v` across tabs.
+         * `b` ties the cart to this connection; the board dedupes `v` across tabs.
          */
         wps.setPresence(config.presenceChannel, { v: wps.visitorId(), b: viewer?.id ?? null });
       }
@@ -135,7 +135,7 @@ export function startViewer(config: ViewerConfig, onCount: (productId: number, c
 
   /*
    * A recovered connection is a recovery step: the server rebuilds this shopper's
-   * basket row from the sync and the client re-enters presence, so the board
+   * cart row from the sync and the client re-enters presence, so the board
    * sees them live again without waiting for a cart change.
    */
   let hasConnected = false;
@@ -146,8 +146,8 @@ export function startViewer(config: ViewerConfig, onCount: (productId: number, c
   });
 
   return {
-    get basketId() {
-      return basketId;
+    get cartId() {
+      return cartId;
     },
     holds: (productId) => quantities.has(productId),
     held: (productId) => quantities.get(productId) ?? 0,

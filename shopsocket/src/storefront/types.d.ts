@@ -57,7 +57,7 @@ export interface StockEventData {
   availability_class?: string;
   stock_status?: string;
   purchasable?: boolean;
-  /** Basket id of the shopper whose request changed the stock, or empty. */
+  /** Cart id of the shopper whose request changed the stock, or empty. */
   actor?: string;
 }
 
@@ -81,7 +81,7 @@ export interface StorefrontState {
   selectedVariation?: number;
   presenceChannel?: string;
   channels?: { stock?: string; activity?: string };
-  basketIdUrl?: string;
+  cartIdUrl?: string;
   nonce?: string;
   stock: Record<string, StockEntry>;
   pulses: Record<string, boolean>;

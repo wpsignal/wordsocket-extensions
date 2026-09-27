@@ -87,7 +87,7 @@ function stock_state_changed( WC_Product $product ): bool {
 function should_publish_cart_add( $cart_item_key, $product_id, $quantity, $variation_id = 0 ): bool {
 	unset( $cart_item_key, $quantity );
 	/**
-	 * Filters whether "added to basket" activity is published at all.
+	 * Filters whether "added to cart" activity is published at all.
 	 *
 	 * @param bool $enabled Default true.
 	 */
@@ -125,7 +125,7 @@ function should_publish_cart_add( $cart_item_key, $product_id, $quantity, $varia
  *
  * @return string
  */
-function basket_id(): string {
+function cart_id(): string {
 	/*
 	 * For a logged-in shopper only the user id matches across the add request,
 	 * the Store API, and REST; guests key on their session id instead.
@@ -196,7 +196,7 @@ add_action(
 				->on( $hook, 10, 1 )
 				->channel( STOCK_CHANNEL )
 				->when( static fn( $product ) => $product instanceof WC_Product && should_publish_stock() && stock_state_changed( $product ) )
-				->data( static fn( WC_Product $product ) => stock_payload( $product, basket_id() ) )
+				->data( static fn( WC_Product $product ) => stock_payload( $product, cart_id() ) )
 				->register();
 		}
 
@@ -206,11 +206,11 @@ add_action(
 				->on( $hook, 10, 3 )
 				->channel( STOCK_CHANNEL )
 				->when( static fn( $id, $status, $product = null ) => $product instanceof WC_Product && should_publish_stock() && stock_state_changed( $product ) )
-				->data( static fn( $id, $status, WC_Product $product ) => stock_payload( $product, basket_id() ) )
+				->data( static fn( $id, $status, WC_Product $product ) => stock_payload( $product, cart_id() ) )
 				->register();
 		}
 
-		// Someone added a product to their basket: public, throttled per product.
+		// Someone added a product to their cart: public, throttled per product.
 		WPS::trigger( 'woo.cart.added' )
 			->on( 'woocommerce_add_to_cart', 10, 4 )
 			->channel( ACTIVITY_CHANNEL )
@@ -220,7 +220,7 @@ add_action(
 					$product   = wc_get_product( $variation_id ? (int) $variation_id : (int) $product_id );
 					$image_url = wp_get_attachment_image_url( $product->get_image_id(), 'woocommerce_gallery_thumbnail' );
 					$image_url = is_string( $image_url ) ? $image_url : '';
-					return cart_added_payload( $product, (int) $quantity, basket_id(), $image_url );
+					return cart_added_payload( $product, (int) $quantity, cart_id(), $image_url );
 				}
 			)
 			->register();

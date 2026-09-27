@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-23T16:58:02+00:00\n"
+"POT-Creation-Date: 2026-09-26T19:32:33+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 3.0.0-alpha-01b1b10\n"
 "X-Domain: shopsocket\n"
@@ -62,7 +62,7 @@ msgid "Update WordSocket"
 msgstr ""
 
 #: inc/admin-board.php:187
-msgid "Your store as it happens: who is on the storefront, what is in their baskets, and every order the moment it is placed. Keep it open on a second screen; nothing here needs a refresh."
+msgid "Your store as it happens: who is on the storefront, what is in their carts, and every order the moment it is placed. Keep it open on a second screen; nothing here needs a refresh."
 msgstr ""
 
 #: inc/admin-board.php:237
@@ -117,13 +117,13 @@ msgid "%d shoppers have this in their cart right now"
 msgstr ""
 
 #: inc/storefront.php:335
-msgid "Someone just added this to their basket"
+msgid "Someone just added this to their cart"
 msgstr ""
 
 #. translators: %s: product name
 #: inc/storefront.php:337
 #, php-format
-msgid "Someone just added %s to their basket"
+msgid "Someone just added %s to their cart"
 msgstr ""
 
 #. translators: %s: product name
@@ -268,7 +268,7 @@ msgid "Connections between your storefront and wpsignal.io"
 msgstr ""
 
 #: build/board.js:187
-msgid "Baskets"
+msgid "Carts"
 msgstr ""
 
 #: build/board.js:187
@@ -284,7 +284,7 @@ msgid "Abandoned"
 msgstr ""
 
 #: build/board.js:187
-msgid "left, basket still held"
+msgid "left, cart still held"
 msgstr ""
 
 #: build/board.js:187
@@ -300,11 +300,11 @@ msgid "Revenue"
 msgstr ""
 
 #: build/board.js:187
-msgid "Products in live baskets"
+msgid "Products in live carts"
 msgstr ""
 
 #: build/board.js:187
-msgid "No shopper with a basket is on the site right now."
+msgid "No shopper with a cart is on the site right now."
 msgstr ""
 
 #: build/board.js:187
@@ -312,7 +312,7 @@ msgid "Product"
 msgstr ""
 
 #: build/board.js:187
-msgid "Live baskets"
+msgid "Live carts"
 msgstr ""
 
 #: build/board.js:187

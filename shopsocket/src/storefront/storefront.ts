@@ -8,7 +8,7 @@
  *   woo.cart.added     state.carts[productId], and a toast for other shoppers
  *   woo.cart.removed   state.carts[productId]
  *
- * The viewer (basket id, held products, presence) lives in `viewer.ts`; the
+ * The viewer (cart id, held products, presence) lives in `viewer.ts`; the
  * hooks into WooCommerce's markup and stores in `woocommerce.ts`. Both are
  * registered script modules, imported here by id.
  */
@@ -51,7 +51,7 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
       return state.toast.kind === "error" ? "alert" : "status";
     },
 
-    /** How many baskets hold this element's product. */
+    /** How many carts hold this element's product. */
     get inCartsCount(): number {
       const { productId } = getContext<Ctx>();
       return state.carts?.[productId] ?? 0;
@@ -61,7 +61,7 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
       const count = state.inCartsCount;
       return (count === 1 ? state.i18n?.one ?? "%d" : state.i18n?.many ?? "%d").replace("%d", String(count));
     },
-    /** Whether this element's basket count just changed. */
+    /** Whether this element's cart count just changed. */
     get inCartsPulse(): boolean {
       const { productId } = getContext<Ctx>();
       return Boolean(state.pulses?.[`cart:${productId}`]);
@@ -187,7 +187,7 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
         setInCarts(productId, data.in_carts);
       }
       if (!state.toasts) return;
-      if (viewer.basketId && data.actor === viewer.basketId) return; // the shopper's own session (any tab)
+      if (viewer.cartId && data.actor === viewer.cartId) return; // the shopper's own session (any tab)
       if (!viewer.holds(productId)) return; // only items this shopper also holds
       const onOwnPage = productId === Number(state.productId);
       /*
@@ -215,7 +215,7 @@ const actions = wooStore.actions;
 
 let toastTimer: ReturnType<typeof setTimeout>;
 
-/** Store a product's basket count and flash it when non-zero. */
+/** Store a product's cart count and flash it when non-zero. */
 function setInCarts(productId: number, count: number): void {
   if (!state.carts) state.carts = {};
   state.carts[productId] = count;
@@ -248,7 +248,7 @@ function pulse(key: string): void {
  * refreshCart() also keeps a cart re-read out of their in-flight checkout.
  */
 function warnHolder(productId: number, entry: StockEntry, name: string, actor: string): void {
-  if (viewer.basketId && actor === viewer.basketId) return;
+  if (viewer.cartId && actor === viewer.cartId) return;
   const held = viewer.held(productId);
   if (held === 0) return;
   const key = `stock:${productId}`;
@@ -305,7 +305,7 @@ watchVariationForm((variationId) => {
 
 const viewer = startViewer(
   {
-    basketIdUrl: state.basketIdUrl,
+    cartIdUrl: state.cartIdUrl,
     nonce: state.nonce,
     productId: state.productId,
     presenceChannel: state.presenceChannel,

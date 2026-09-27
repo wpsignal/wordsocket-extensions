@@ -1,9 +1,9 @@
 <?php
 /**
- * Dashboard: basket rows for the board and "online now" from the stats request.
+ * Dashboard: cart rows for the board and "online now" from the stats request.
  */
 
-use function WPSignal\Extensions\ShopSocket\all_baskets;
+use function WPSignal\Extensions\ShopSocket\cart_rows;
 use function WPSignal\Extensions\ShopSocket\dashboard_snapshot;
 use function WPSignal\Extensions\ShopSocket\enqueue_settings_panel;
 use function WPSignal\Extensions\ShopSocket\parse_product_ids;
@@ -74,13 +74,13 @@ final class DashboardTest extends ExtensionTestCase {
 		}
 	}
 
-	public function test_all_baskets_returns_rows_of_contents_by_basket_id(): void {
-		$this->assertSame( array(), all_baskets() );
+	public function test_cart_rows_returns_rows_of_contents_by_cart_id(): void {
+		$this->assertSame( array(), cart_rows() );
 
-		$this->seed_basket( 'aaa', array( 9001, 9002 ), 40.0, array( 9001 => 3 ) );
-		$this->seed_basket( 'bbb', array( 9001 ), 15.0 );
+		$this->seed_cart( 'aaa', array( 9001, 9002 ), 40.0, array( 9001 => 3 ) );
+		$this->seed_cart( 'bbb', array( 9001 ), 15.0 );
 
-		$rows = all_baskets();
+		$rows = cart_rows();
 		$this->assertCount( 2, $rows );
 		$by_id = array_column( $rows, null, 'id' );
 		$this->assertSame( array( 9001, 9002 ), $by_id['aaa']['products'] );
@@ -92,7 +92,7 @@ final class DashboardTest extends ExtensionTestCase {
 	}
 
 	public function test_the_dashboard_route_is_staff_only_and_returns_rows_plus_online(): void {
-		$this->seed_basket( 'aaa', array( 9001 ), 20.0 );
+		$this->seed_cart( 'aaa', array( 9001 ), 20.0 );
 
 		$stats = static function ( $pre, $args, $url ) {
 			if ( ! str_ends_with( (string) $url, '/site/stats' ) ) {
@@ -116,11 +116,11 @@ final class DashboardTest extends ExtensionTestCase {
 			$response = rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/dashboard' ) );
 			$this->assertSame( 200, $response->get_status() );
 			$data = $response->get_data();
-			$this->assertCount( 1, $data['baskets'] );
-			$this->assertSame( 'aaa', $data['baskets'][0]['id'] );
-			$this->assertSame( 20.0, $data['baskets'][0]['value'] );
+			$this->assertCount( 1, $data['carts'] );
+			$this->assertSame( 'aaa', $data['carts'][0]['id'] );
+			$this->assertSame( 20.0, $data['carts'][0]['value'] );
 			$this->assertSame( array( 'active_connections' => 12, 'max_connections' => 500 ), $data['online'] );
-			$this->assertSame( array( 'baskets', 'online' ), array_keys( $data ) );
+			$this->assertSame( array( 'carts', 'online' ), array_keys( $data ) );
 		} finally {
 			remove_filter( 'pre_http_request', $stats, 5 );
 			wp_set_current_user( 0 );

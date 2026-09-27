@@ -50,7 +50,7 @@ add_action(
 
 		/*
 		 * Every shopper enters presence on the carts namespace, only staff may
-		 * read it: presence carries a keyed basket id and the relay ties each
+		 * read it: presence carries a keyed cart id and the relay ties each
 		 * membership to its own connection, so a token can only announce itself.
 		 */
 		$wps->channels()->reserve( CARTS_NS, STAFF_CAP, '__return_true' );

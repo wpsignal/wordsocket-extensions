@@ -1,9 +1,9 @@
 <?php
 /**
- * Storefront: stock and counter markup, the basket-id endpoint, the import guard.
+ * Storefront: stock and counter markup, the cart-id endpoint, the import guard.
  */
 
-use function WPSignal\Extensions\ShopSocket\all_baskets;
+use function WPSignal\Extensions\ShopSocket\cart_rows;
 use function WPSignal\Extensions\ShopSocket\in_carts_html;
 use function WPSignal\Extensions\ShopSocket\render_live_stock_block;
 use const WPSignal\Extensions\ShopSocket\LIVE_STOCK_BLOCK;
@@ -95,15 +95,15 @@ final class StorefrontTest extends ExtensionTestCase {
 		$this->assertSame( array( 'productId' => $id ), $this->context_of( $html ) );
 
 		// Two shoppers hold it in their cart.
-		$this->seed_basket( 'a', array( $id ), 5.0 );
-		$this->seed_basket( 'b', array( $id ), 5.0 );
+		$this->seed_cart( 'a', array( $id ), 5.0 );
+		$this->seed_cart( 'b', array( $id ), 5.0 );
 		$html = in_carts_html( $id );
 		$this->assertStringNotContainsString( ' hidden>', $html );
 		$this->assertStringContainsString( '2 shoppers have this in their cart right now', $html );
 		$this->assertSame( 2, wp_interactivity_state( STORE_NS )['carts'][ $id ], 'the store starts with the rendered count' );
 	}
 
-	public function test_basket_id_never_creates_a_session_for_a_visitor_without_one(): void {
+	public function test_cart_id_never_creates_a_session_for_a_visitor_without_one(): void {
 		/*
 		 * A first-time visitor: no session cookie, not logged in. The endpoint must
 		 * not load the cart, or every such request would mint a session and a new id.
@@ -117,7 +117,7 @@ final class StorefrontTest extends ExtensionTestCase {
 		WC()->cart    = null;
 		try {
 			wp_set_current_user( 0 );
-			$response = rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/basket-id' ) );
+			$response = rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/cart-id' ) );
 			$this->assertSame( 200, $response->get_status() );
 			$data = $response->get_data();
 			$this->assertSame( '', $data['id'] );
@@ -133,20 +133,20 @@ final class StorefrontTest extends ExtensionTestCase {
 		}
 	}
 
-	public function test_basket_id_rebuilds_the_shoppers_row_from_their_cart(): void {
+	public function test_cart_id_rebuilds_the_shoppers_row_from_their_cart(): void {
 		$product = $this->make_product( 5 );
 		WC()->cart->empty_cart();
 		WC()->cart->add_to_cart( $product->get_id(), 2 );
-		$this->clear_baskets();
-		$this->assertSame( array(), all_baskets(), 'the row store was lost' );
+		$this->clear_carts();
+		$this->assertSame( array(), cart_rows(), 'the row store was lost' );
 
 		try {
 			$_COOKIE['wp_woocommerce_session_phpunit'] = 'present';
 			wp_set_current_user( 0 );
-			$response = rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/basket-id' ) );
+			$response = rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/cart-id' ) );
 			$this->assertSame( 200, $response->get_status() );
-			$rows = all_baskets();
-			$this->assertCount( 1, $rows, 'asking for the basket id wrote the row back' );
+			$rows = cart_rows();
+			$this->assertCount( 1, $rows, 'asking for the cart id wrote the row back' );
 			$this->assertSame( array( $product->get_id() ), $rows[0]['products'] );
 			$this->assertSame( array( $product->get_id() => 2 ), $rows[0]['quantities'] );
 			$this->assertSame( $rows[0]['id'], $response->get_data()['id'] );
@@ -159,7 +159,7 @@ final class StorefrontTest extends ExtensionTestCase {
 
 	public function test_the_live_stock_block_renders_the_availability_units_left_and_counter(): void {
 		$product = $this->make_product( 5 );
-		$this->seed_basket( 'a', array( $product->get_id() ), 5.0 );
+		$this->seed_cart( 'a', array( $product->get_id() ), 5.0 );
 
 		$block = new WP_Block( array( 'blockName' => LIVE_STOCK_BLOCK, 'attrs' => array( 'productId' => $product->get_id() ) ), array() );
 		$html  = render_live_stock_block( array( 'productId' => $product->get_id() ), '', $block );
@@ -180,8 +180,8 @@ final class StorefrontTest extends ExtensionTestCase {
 
 	public function test_counts_seeded_by_a_rendered_counter_survive_the_main_state_seeding(): void {
 		$product = $this->make_product( 5 );
-		$this->seed_basket( 'a', array( $product->get_id() ), 5.0 );
-		$this->seed_basket( 'b', array( $product->get_id() ), 5.0 );
+		$this->seed_cart( 'a', array( $product->get_id() ), 5.0 );
+		$this->seed_cart( 'b', array( $product->get_id() ), 5.0 );
 
 		// Block themes render the counter first, then the scripts hook seeds the rest of the state.
 		in_carts_html( $product->get_id() );

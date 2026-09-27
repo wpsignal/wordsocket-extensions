@@ -39,12 +39,12 @@ function online_now(): ?array {
 /**
  * The rows and the online count; the board splits live from abandoned itself.
  *
- * @return array{baskets: array<int, array<string, mixed>>, online: array{active_connections: int, max_connections: int}|null}
+ * @return array{carts: array<int, array<string, mixed>>, online: array{active_connections: int, max_connections: int}|null}
  */
 function dashboard_snapshot(): array {
 	return array(
-		'baskets' => all_baskets(),
-		'online'  => online_now(),
+		'carts'  => cart_rows(),
+		'online' => online_now(),
 	);
 }
 
@@ -68,7 +68,7 @@ function parse_product_ids( string $ids ): array {
 
 /**
  * Name and edit link for each product that still exists, for the board's
- * live-products list. The board alone knows which baskets are live, so it
+ * live-products list. The board alone knows which carts are live, so it
  * picks the ids and asks here for the words.
  *
  * @param int[] $ids Parent product ids.

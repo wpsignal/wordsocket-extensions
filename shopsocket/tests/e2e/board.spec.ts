@@ -1,6 +1,6 @@
 import "./env";
 import { expect, test } from "@wordpress/e2e-test-utils-playwright";
-import { addToCart, clearBaskets, createOrder, createProduct, deleteOrder, deleteProduct, num, visitorContext, waitForLive } from "./helpers";
+import { addToCart, clearCarts, createOrder, createProduct, deleteOrder, deleteProduct, num, visitorContext, waitForLive } from "./helpers";
 
 const PAGE = "page=shopsocket";
 
@@ -23,7 +23,7 @@ test.describe("ShopSocket dashboard", () => {
 
     const onlineTile = page.locator(".shopsocket-tile.is-connections .shopsocket-tile__value");
     await expect(onlineTile).toHaveText(/^\d+$/);
-    const rows = page.locator(".shopsocket-baskets tbody tr");
+    const rows = page.locator(".shopsocket-carts tbody tr");
     await expect(rows).toHaveCount(3);
     const liveShoppers = rows.nth(0).locator("td.is-live");
     const abandonedShoppers = rows.nth(0).locator("td.is-abandoned");
@@ -34,11 +34,11 @@ test.describe("ShopSocket dashboard", () => {
     const abandoned0 = await num(abandonedShoppers)();
     const revenue0 = await num(liveRevenue)();
 
-    const product = await createProduct(requestUtils, "E2E Basket Widget", 20);
+    const product = await createProduct(requestUtils, "E2E Cart Widget", 20);
 
     /*
      * One visitor context (keeps the session cookie so a reopened tab is the
-     * same basket), a page that adds the product and enters presence.
+     * same cart), a page that adds the product and enters presence.
      */
     const visitor = await visitorContext(browser, baseURL);
     try {
@@ -47,7 +47,7 @@ test.describe("ShopSocket dashboard", () => {
       await waitForLive(shop);
       await addToCart(shop);
 
-      // The basket is live, with its revenue, and nothing new is abandoned.
+      // The cart is live, with its revenue, and nothing new is abandoned.
       await expect.poll(num(liveShoppers), { timeout: 15_000 }).toBeGreaterThanOrEqual(live0 + 1);
       await expect.poll(num(liveRevenue), { timeout: 10_000 }).toBeGreaterThan(revenue0);
       await expect.poll(num(abandonedShoppers), { timeout: 5_000 }).toBe(abandoned0);
@@ -57,12 +57,12 @@ test.describe("ShopSocket dashboard", () => {
        * The product itself is listed under live products, linking to its edit
        * screen. Asserted by name: this test created it, nobody else holds it.
        */
-      const liveLink = page.locator(".shopsocket-live-products a", { hasText: "E2E Basket Widget" });
+      const liveLink = page.locator(".shopsocket-live-products a", { hasText: "E2E Cart Widget" });
       await expect(liveLink).toHaveAttribute("href", new RegExp(`post\\.php\\?post=${product.id}&action=edit$`), { timeout: 15_000 });
       const liveCells = liveLink.locator("xpath=ancestor::tr[1]").locator(".shopsocket-live-products__count");
       await expect(liveCells).toHaveText(["1", "1"]);
 
-      // A second unit of the same product: still one basket, two units.
+      // A second unit of the same product: still one cart, two units.
       await shop.locator(".single_add_to_cart_button").first().click();
       await expect(liveCells).toHaveText(["1", "2"], { timeout: 15_000 });
 
@@ -87,7 +87,7 @@ test.describe("ShopSocket dashboard", () => {
 
       /*
        * Closing the tab drops the connection: the relay reports the leave, the
-       * board waits out the grace in case it is a navigation, then the basket
+       * board waits out the grace in case it is a navigation, then the cart
        * moves to abandoned. No beacon and no server-side timeout.
        */
       await shop.close();
@@ -96,7 +96,7 @@ test.describe("ShopSocket dashboard", () => {
       await expect(liveLink).toHaveCount(0, { timeout: 20_000 });
 
       /*
-       * Reopening the tab (same session, same basket) reconnects and it goes live
+       * Reopening the tab (same session, same cart) reconnects and it goes live
        * again, without touching the cart.
        */
       const reopened = await visitor.newPage();
@@ -110,7 +110,7 @@ test.describe("ShopSocket dashboard", () => {
        * The row store is a cache: lose this shopper's row, and the next page
        * load writes it back from their real cart, so the product is live again.
        */
-      clearBaskets(product.id);
+      clearCarts(product.id);
       // The board re-reads its rows when the tab comes back into view; no need to wait for its poll.
       await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
       await expect(liveLink).toHaveCount(0, { timeout: 10_000 });
@@ -119,16 +119,16 @@ test.describe("ShopSocket dashboard", () => {
       await expect(liveLink).toBeVisible({ timeout: 15_000 });
     } finally {
       await visitor.close();
-      clearBaskets(product.id);
+      clearCarts(product.id);
       await deleteProduct(requestUtils, product.id);
     }
   });
 
-  test("a logged-in shopper's own basket shows live, not abandoned", async ({ admin, page, requestUtils }) => {
-    const product = await createProduct(requestUtils, "E2E LoggedIn Basket", 20);
+  test("a logged-in shopper's own cart shows live, not abandoned", async ({ admin, page, requestUtils }) => {
+    const product = await createProduct(requestUtils, "E2E LoggedIn Cart", 20);
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
-    const rows = page.locator(".shopsocket-baskets tbody tr");
+    const rows = page.locator(".shopsocket-carts tbody tr");
     const liveShoppers = rows.nth(0).locator("td.is-live");
     const abandonedShoppers = rows.nth(0).locator("td.is-abandoned");
     const live0 = await num(liveShoppers)();
@@ -141,12 +141,12 @@ test.describe("ShopSocket dashboard", () => {
       await waitForLive(shop);
       await addToCart(shop);
 
-      // The logged-in shopper's own basket is live, and nothing new is abandoned.
+      // The logged-in shopper's own cart is live, and nothing new is abandoned.
       await expect.poll(num(liveShoppers), { timeout: 15_000 }).toBeGreaterThanOrEqual(live0 + 1);
       await expect.poll(num(abandonedShoppers), { timeout: 5_000 }).toBe(abandoned0);
     } finally {
       await shop.close();
-      clearBaskets(product.id);
+      clearCarts(product.id);
       await deleteProduct(requestUtils, product.id);
     }
   });

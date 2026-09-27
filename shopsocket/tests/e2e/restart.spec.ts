@@ -3,7 +3,7 @@ import { expect, test } from "@wordpress/e2e-test-utils-playwright";
 import { execSync, spawn, type ChildProcess } from "node:child_process";
 import { request } from "@playwright/test";
 import { WP_ROOT, WPS_API_URL, WPS_E2E_EMAIL, WPS_E2E_PASSWORD } from "./env";
-import { addToCart, clearBaskets, createProduct, deleteProduct, num, visitorContext, waitForLive } from "./helpers";
+import { addToCart, clearCarts, createProduct, deleteProduct, num, visitorContext, waitForLive } from "./helpers";
 
 const PAGE = "page=shopsocket";
 
@@ -26,14 +26,14 @@ async function startRelay(): Promise<ChildProcess> {
 }
 
 /**
- * The relay dies and comes back while a shopper holds a basket and the board
+ * The relay dies and comes back while a shopper holds a cart and the board
  * is open. Both clients fall back to SSE while it is down and return to
- * WebSocket as soon as the stream opens, so the shopper's basket is live
+ * WebSocket as soon as the stream opens, so the shopper's cart is live
  * again within seconds and with no page reload. Opt in: it restarts the shared
  * rehearsal relay and takes about two minutes.
  */
 test.describe("Relay restart", () => {
-  test("a live basket comes back after the relay restarts", async ({ admin, page, browser, baseURL, requestUtils }) => {
+  test("a live cart comes back after the relay restarts", async ({ admin, page, browser, baseURL, requestUtils }) => {
     test.skip(!process.env.SHOPSOCKET_RESTART, "set SHOPSOCKET_RESTART=1 to run this slow relay-restart test");
     test.setTimeout(5 * 60_000);
 
@@ -67,15 +67,15 @@ test.describe("Relay restart", () => {
       await expect.poll(connectedOf(page), { timeout: 90_000 }).toBe(true);
 
       /*
-       * The board is back before the shopper: a reloaded board shows the basket
+       * The board is back before the shopper: a reloaded board shows the cart
        * abandoned. The shopper then adds another unit in the still-open tab,
-       * whatever state their client is in; that must bring the basket back
+       * whatever state their client is in; that must bring the cart back
        * live (presence is re-sent on the next connection if not at once).
        */
       await page.reload();
       await waitForLive(page);
-      const abandonedShoppers = page.locator(".shopsocket-baskets tbody tr").nth(0).locator("td.is-abandoned");
-      const liveShoppers = page.locator(".shopsocket-baskets tbody tr").nth(0).locator("td.is-live");
+      const abandonedShoppers = page.locator(".shopsocket-carts tbody tr").nth(0).locator("td.is-abandoned");
+      const liveShoppers = page.locator(".shopsocket-carts tbody tr").nth(0).locator("td.is-live");
       const shopperTransportBefore = await transportOf(shop)();
       await addToCart(shop);
       await expect(liveLink, `live again after adding (shopper was on ${shopperTransportBefore})`).toBeVisible({ timeout: 60_000 });
@@ -88,7 +88,7 @@ test.describe("Relay restart", () => {
       await expect.poll(num(abandonedShoppers), { timeout: 30_000 }).toBe(0);
     } finally {
       await visitor.close();
-      clearBaskets(product.id);
+      clearCarts(product.id);
       await deleteProduct(requestUtils, product.id);
       if (relay?.pid) {
         /*

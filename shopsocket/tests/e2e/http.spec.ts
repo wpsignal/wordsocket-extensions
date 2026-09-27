@@ -54,14 +54,14 @@ test.describe("Plain HTTP site", () => {
   test("a shopper on HTTP is live on the board, under the same visitor id across pages", async ({ admin, page, browser, baseURL, requestUtils }) => {
     await admin.visitAdminPage("admin.php", "page=shopsocket");
     await waitForLive(page);
-    const product = await createProduct(requestUtils, "E2E Http Basket", 9);
+    const product = await createProduct(requestUtils, "E2E Http Cart", 9);
     const visitor = await visitorContext(browser, baseURL);
     const shop = await visitor.newPage();
     try {
       await shop.goto(product.permalink);
       await waitForLive(shop);
       await addToCart(shop);
-      const liveLink = page.locator(".shopsocket-live-products a", { hasText: "E2E Http Basket" });
+      const liveLink = page.locator(".shopsocket-live-products a", { hasText: "E2E Http Cart" });
       await expect(liveLink).toBeVisible({ timeout: 15_000 });
 
       // The fallback id is stored, so the next page is the same visitor, not a new one.

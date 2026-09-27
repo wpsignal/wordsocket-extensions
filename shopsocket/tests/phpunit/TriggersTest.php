@@ -4,7 +4,7 @@
  */
 
 use WPSignal\WPS;
-use function WPSignal\Extensions\ShopSocket\basket_id;
+use function WPSignal\Extensions\ShopSocket\cart_id;
 use function WPSignal\Extensions\ShopSocket\count_in_carts;
 use const WPSignal\Extensions\ShopSocket\ACTIVITY_CHANNEL;
 use const WPSignal\Extensions\ShopSocket\CARTS_PRESENCE_CHANNEL;
@@ -69,7 +69,7 @@ final class TriggersTest extends ExtensionTestCase {
 	public function test_a_stock_change_names_the_shopper_whose_request_caused_it(): void {
 		$product = $this->make_product( 1 );
 		// The bootstrap carries a WooCommerce session, so this request has a shopper to name.
-		$buyer = basket_id();
+		$buyer = cart_id();
 		$this->assertNotSame( '', $buyer, 'guard: an empty id would make the match below pass vacuously' );
 
 		wc_update_product_stock( $product, 0 );
@@ -220,7 +220,7 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertSame( 3, end( $stock )['data']['stock_quantity'] );
 	}
 
-	public function test_adding_to_the_basket_publishes_anonymous_activity_once_per_throttle_window(): void {
+	public function test_adding_to_the_cart_publishes_anonymous_activity_once_per_throttle_window(): void {
 		$product = $this->make_product( 10 );
 		delete_transient( 'shopsocket_act_' . $product->get_id() );
 		WC()->cart->empty_cart();
@@ -262,12 +262,12 @@ final class TriggersTest extends ExtensionTestCase {
 		$id      = $product->get_id();
 		delete_transient( 'shopsocket_act_' . $id );
 		WC()->cart->empty_cart();
-		$this->clear_baskets();
+		$this->clear_carts();
 		$this->published = array();
 
 		// Two other shoppers already hold it.
-		$this->seed_basket( 'shopper-a', array( $id ), 10.0 );
-		$this->seed_basket( 'shopper-b', array( $id ), 10.0 );
+		$this->seed_cart( 'shopper-a', array( $id ), 10.0 );
+		$this->seed_cart( 'shopper-b', array( $id ), 10.0 );
 		$this->assertSame( 2, count_in_carts( $id ) );
 
 		// This session adds it: the event carries the count including us.
