@@ -184,7 +184,6 @@ function render_dashboard(): void {
 
 	echo '<div class="wrap">';
 	render_header();
-	//echo '<p class="shopsocket-intro">' . esc_html__( 'Your store as it happens: who is on the storefront, what is in their carts, and every order the moment it is placed. Keep it open on a second screen; nothing here needs a refresh.', 'shopsocket' ) . '</p>';
 	echo '<div id="shopsocket-board">';
 	render_skeleton();
 	echo '</div>';
