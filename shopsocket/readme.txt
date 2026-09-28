@@ -1,6 +1,6 @@
 === ShopSocket ===
 Contributors: wpsignal, jaredrethman
-Tags: woocommerce, realtime, live orders, abandoned cart, inventory
+Tags: ecommerce, realtime, analytics, online customers, wordsocket
 Requires at least: 6.7
 Tested up to: 7.1
 Stable tag: 0.4.0
