@@ -6,7 +6,7 @@ Plugins published on WordPress.org that extend [WordSocket](https://github.com/w
 
 | Plugin | What it does |
 |--------|--------------|
-| `shopsocket` (ShopSocket, in progress) | A live orders board for your team and live stock on product pages. |
+| `shopsocket` ([ShopSocket](https://wordpress.org/plugins/shopsocket/)): [![WordPress.org version](https://img.shields.io/wordpress/plugin/v/shopsocket?label=wordpress.org&color=21759b)](https://wordpress.org/plugins/shopsocket/) [![Build](https://img.shields.io/github/actions/workflow/status/wpsignal/wordsocket-extensions/release.yml)](https://github.com/wpsignal/wordsocket-extensions/actions/workflows/release.yml)| A live orders board for your team and live stock on product pages. [Try the live demo store](https://shopsocket.wpsignal.io/). |
 
 ## License
 

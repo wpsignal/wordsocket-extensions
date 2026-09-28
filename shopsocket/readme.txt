@@ -15,6 +15,8 @@ A live orders board for your team and live stock on product pages, pushed over t
 
 ShopSocket puts what is happening in your store on screen the moment it happens, for staff and shoppers alike.
 
+**Try it first:** [shopsocket.wpsignal.io](https://shopsocket.wpsignal.io/) is a live demo store running ShopSocket. Open a product in two browsers, add it to the cart in one, and watch the other update.
+
 **For your team: the ShopSocket board**
 
 A screen under WooCommerce that staff keep open all day.
@@ -85,6 +87,10 @@ That runs [@wordpress/scripts](https://www.npmjs.com/package/@wordpress/scripts)
 3. Open Analytics > Realtime for the board (WooCommerce > ShopSocket when WooCommerce Analytics is switched off). Product pages start updating on their own.
 
 == Frequently Asked Questions ==
+
+= Is there a demo? =
+
+Yes: [shopsocket.wpsignal.io](https://shopsocket.wpsignal.io/) is a live store running ShopSocket. Open a product in two browsers, or a normal and a private window, and add it to the cart in one. The other shows the new count, and a shopper already holding the product gets a "someone just added this" toast. The demo shows the storefront side; the staff board lives in wp-admin.
 
 = Does it work with block themes? =
 
