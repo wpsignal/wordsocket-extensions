@@ -9,11 +9,11 @@ Requires Plugins: wordsocket, woocommerce
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-A live orders board for your team and live stock on product pages, pushed over the WordSocket realtime connection. No page reloads.
+Shopify's Live View, for WooCommerce: a live orders board, live and abandoned carts, and live stock on product pages. No page reloads.
 
 == Description ==
 
-ShopSocket puts what is happening in your store on screen the moment it happens, for staff and shoppers alike.
+ShopSocket puts what is happening in your store on screen the moment it happens, for staff and shoppers alike. Think of Shopify's Live View, for WooCommerce: who is on your store right now, what is in their carts, and every order the moment it lands.
 
 **Try it first:** [shopsocket.wpsignal.io](https://shopsocket.wpsignal.io/) is a live demo store running ShopSocket. Open a product in two browsers, add it to the cart in one, and watch the other update.
 
@@ -43,7 +43,7 @@ Live and abandoned are not guesses from timestamps. A cart is live exactly while
 
 WordSocket carries the events over one WebSocket per browser, with an SSE fallback. ShopSocket publishes order, stock, and cart events from WooCommerce's own hooks, and reads presence from the relay to tell live carts from abandoned ones. The storefront never polls: it fetches once per page load and then only reacts to events. The board does the same, plus a quiet refresh every 30 seconds as a safety net in case an event is ever missed.
 
-ShopSocket requires WordSocket and a WPSignal account. WPSignal is an independent service and is not affiliated with or endorsed by the WordPress project or by WooCommerce.
+ShopSocket requires WordSocket and a WPSignal account. WPSignal is an independent service and is not affiliated with or endorsed by the WordPress project, WooCommerce, or Shopify. Shopify is a trademark of Shopify Inc., named here only for comparison.
 
 **What leaves your site, and who can read it**
 
