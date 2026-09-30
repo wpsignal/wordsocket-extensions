@@ -164,7 +164,7 @@ function in_excluded_category( int $product_id, array $excluded ): bool {
 
 /**
  * Whether a shopper-facing feature applies to a product:
- * 
+ *
  * - The product's own choice always wins: Off is off and On is on, whatever the site switch and the categories say.
  * - If the site switch is off, the feature is off for all products.
  * - If categories are excluded, the feature is off for products in those categories.
