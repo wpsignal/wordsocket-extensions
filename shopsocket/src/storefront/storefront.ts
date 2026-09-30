@@ -63,10 +63,7 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
       return state.inCartsCount > 0 || Boolean(state.mine?.[productId]);
     },
     /**
-     * The count as a sentence. When this shopper holds the product the count
-     * includes them, so it reads as "You and N other shoppers" instead; the
-     * server renders the impersonal form, which a page cache may serve to
-     * anyone, and this getter personalises it once the viewer has synced.
+     * Outputs the number of shoppers holding the product, including this shopper if they hold it.
      */
     get inCartsText(): string {
       const { productId } = getContext<Ctx>();
@@ -225,11 +222,8 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
     },
 
     /**
-     * A product left a cart: update its count. When the cart was this
-     * shopper's own (their tab, or another tab of the same session), drop it
-     * from what they hold, so the counter stops saying "You". Without an
-     * actor (an older payload) re-check the cart when the page believes it
-     * holds the product, rather than trust that belief.
+     * A product left a cart, update its count. If the cart was this shopper's own (their tab, or another tab of the same session), 
+     * drop it from what they hold, so the counter stops saying "You".
      */
     cartRemoved(data) {
       const productId = Number(data.product_id);

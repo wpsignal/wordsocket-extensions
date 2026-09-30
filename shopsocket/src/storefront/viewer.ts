@@ -115,12 +115,6 @@ export function startViewer(
     }
     const data = window.wp?.data;
     if (!data?.subscribe || !data.select) return;
-    /*
-     * The block cart store updates optimistically, before the server has
-     * processed the change, so a sync on the item change alone reads the old
-     * cart. Sync once the store's pending operations have finished instead,
-     * and on the item change only when nothing is pending.
-     */
     let last: string | null = null;
     let wasPending = false;
     data.subscribe(() => {

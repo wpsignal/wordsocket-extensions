@@ -163,14 +163,11 @@ function in_excluded_category( int $product_id, array $excluded ): bool {
 }
 
 /**
- * Whether a shopper-facing feature applies to a product, or to the site when
- * no product is given. A product's own choice always wins: Off is off and On
- * is on, whatever the site switch and the categories say. A product on
- * Default follows the site switch, then the feature's excluded-category
- * list. So the site switch is the default for every product, not a master
- * switch (decided 2026-09-30: a product set to On must work while the site
- * switch is off). The feature's filter runs last on the result, with the
- * product ID as its second argument (0 for the site-wide question).
+ * Whether a shopper-facing feature applies to a product:
+ * 
+ * - The product's own choice always wins: Off is off and On is on, whatever the site switch and the categories say.
+ * - If the site switch is off, the feature is off for all products.
+ * - If categories are excluded, the feature is off for products in those categories.
  *
  * @param string $feature    FEATURE_IN_CARTS or FEATURE_ACTIVITY.
  * @param int    $product_id Product or variation ID, 0 for the site as a whole.

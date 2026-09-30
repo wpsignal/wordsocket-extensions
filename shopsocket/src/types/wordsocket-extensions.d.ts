@@ -48,7 +48,6 @@ interface WordSocketExtensionsApi {
 interface ShopSocketSettingsConfig {
 	boardUrl: string;
 	docsUrl: string;
-	/** The ShopSocket tab's saved settings, so it renders without a fetch. */
 	storefront: ShopSocketStorefrontSettings;
 }
 
