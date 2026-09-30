@@ -90,7 +90,7 @@ final class StorefrontTest extends ExtensionTestCase {
 		$id      = $product->get_id();
 
 		$html = in_carts_html( $id );
-		$this->assertStringContainsString( 'data-wp-bind--hidden="!state.inCartsCount"', $html );
+		$this->assertStringContainsString( 'data-wp-bind--hidden="!state.inCartsVisible"', $html );
 		$this->assertStringContainsString( ' hidden>', $html );
 		$this->assertSame( array( 'productId' => $id ), $this->context_of( $html ) );
 

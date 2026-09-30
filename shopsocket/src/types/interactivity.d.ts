@@ -17,6 +17,9 @@ declare module "@wordpress/interactivity" {
 /** Minimal shape of WooCommerce's block cart data store (`wc/store/cart`). */
 interface WooCartStoreSelectors {
 	getCartData?(): { items?: Array< { id: number; quantity: number } > };
+	/** True while an add, remove or quantity change is still with the server. */
+	hasPendingItemsOperations?(): boolean;
+	isCustomerDataUpdating?(): boolean;
 }
 
 /** Minimal shape of `window.wp.data` used by the storefront. */

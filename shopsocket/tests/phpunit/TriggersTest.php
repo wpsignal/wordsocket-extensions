@@ -235,25 +235,42 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertSame( 2, $data['quantity'] );
 		$this->assertStringContainsString( 'phpunit-widget', $data['permalink'] );
 		$this->assertSame( '', $data['image'], 'no thumbnail on the fixture product' );
-		$this->assertSame( array( 'product_id', 'variation_id', 'name', 'permalink', 'image', 'quantity', 'actor', 'in_carts' ), array_keys( $data ), 'nothing about who' );
+		$this->assertSame( array( 'product_id', 'variation_id', 'name', 'permalink', 'image', 'quantity', 'actor', 'in_carts', 'activity' ), array_keys( $data ), 'nothing about who' );
 
 		// Second add inside the window is throttled.
 		WC()->cart->add_to_cart( $product->get_id(), 1 );
 		$this->assertCount( 1, $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' ) );
 
-		// Window elapsed: publishes again. Disabled by filter: silent.
+		// Window elapsed: publishes again.
 		delete_transient( 'shopsocket_act_' . $product->get_id() );
 		WC()->cart->add_to_cart( $product->get_id(), 1 );
 		$this->assertCount( 2, $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' ) );
+		$this->assertTrue( $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' )[1]['data']['activity'] );
 
+		/*
+		 * Toasts disabled by filter: the event still goes out, since the counter
+		 * needs the new count, but flagged so no toast shows (0.5). Both features
+		 * disabled: silent.
+		 */
 		delete_transient( 'shopsocket_act_' . $product->get_id() );
 		add_filter( 'shopsocket_activity_enabled', '__return_false' );
 		try {
 			WC()->cart->add_to_cart( $product->get_id(), 1 );
+			$events = $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' );
+			$this->assertCount( 3, $events );
+			$this->assertFalse( $events[2]['data']['activity'] );
+
+			delete_transient( 'shopsocket_act_' . $product->get_id() );
+			add_filter( 'shopsocket_in_carts_enabled', '__return_false' );
+			try {
+				WC()->cart->add_to_cart( $product->get_id(), 1 );
+			} finally {
+				remove_filter( 'shopsocket_in_carts_enabled', '__return_false' );
+			}
+			$this->assertCount( 3, $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' ) );
 		} finally {
 			remove_filter( 'shopsocket_activity_enabled', '__return_false' );
 		}
-		$this->assertCount( 2, $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' ) );
 		WC()->cart->empty_cart();
 	}
 
@@ -277,10 +294,18 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertSame( 3, $added[0]['data']['in_carts'] );
 		$this->assertNotSame( '', $added[0]['data']['actor'], 'the adding session is identified anonymously' );
 
-		// Removing our line publishes the new count, without an actor.
+		// Removing our line publishes the new count, with the same anonymous actor, so our own pages know it left our cart.
 		WC()->cart->remove_cart_item( $key );
 		$removed = $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.removed' );
 		$this->assertCount( 1, $removed );
-		$this->assertSame( array( 'product_id' => $id, 'variation_id' => 0, 'in_carts' => 2 ), $removed[0]['data'] );
+		$this->assertSame(
+			array(
+				'product_id'   => $id,
+				'variation_id' => 0,
+				'in_carts'     => 2,
+				'actor'        => $added[0]['data']['actor'],
+			),
+			$removed[0]['data']
+		);
 	}
 }
