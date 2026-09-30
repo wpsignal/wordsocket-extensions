@@ -45,10 +45,10 @@ test.describe("Storefront", () => {
       await expect(counter).toBeHidden();
       await expect(page.locator(".shopsocket-stock").first()).toContainText("8 in stock");
 
-      // Their own add is never echoed back, yet the counter shows them at once, and no toast.
+      // Their own add is never echoed back, yet the counter shows them at once, in the first person, and no toast.
       await addToCart(page);
       await expect(counter).toBeVisible();
-      await expect(counter).toContainText("1 shopper has this in their cart right now");
+      await expect(counter).toContainText("You have this in your cart right now");
       await page.waitForTimeout(1500);
       await expect(toast).toBeHidden();
 
@@ -57,11 +57,11 @@ test.describe("Storefront", () => {
       await expect(toast).toBeVisible({ timeout: 15_000 });
       await expect(toast).toContainText("Someone just added this to their cart");
       await expect(toast.locator(".shopsocket-toast__image"), "no thumbnail for a product without an image").toBeHidden();
-      await expect(counter).toContainText("2 shoppers have this in their cart right now");
+      await expect(counter).toContainText("You and 1 other shopper have this in your carts right now");
 
       // When they empty it, the count drops back to just the viewer.
       await shopper;
-      await expect(counter).toContainText("1 shopper has this in their cart right now", { timeout: 15_000 });
+      await expect(counter).toContainText("You have this in your cart right now", { timeout: 15_000 });
 
       // The product sells out elsewhere, then comes back.
       wp("eval", `wc_update_product_stock( ${product.id}, 0 );`);
@@ -311,11 +311,41 @@ test.describe("Storefront", () => {
 
       await addToCart(shopping);
 
+      // The watching tab shares the session, so the event carries its own cart id: first person, no toast.
       const counter = watching.locator(".shopsocket-in-carts");
       await expect(counter).toBeVisible({ timeout: 15_000 });
-      await expect(counter).toContainText("1 shopper has this in their cart right now");
+      await expect(counter).toContainText("You have this in your cart right now");
       await watching.waitForTimeout(3000);
       await expect(watching.locator(".shopsocket-toast")).toBeHidden();
+    } finally {
+      await visitor.close();
+      await deleteProduct(requestUtils, product.id);
+    }
+  });
+
+  test("removing the item in another tab turns \"You and 1 other shopper\" back into \"1 shopper\"", async ({ browser, baseURL, requestUtils }) => {
+    const product = await createProduct(requestUtils, "E2E Removal Widget", 8);
+    const visitor = await visitorContext(browser, baseURL);
+    const productPage = await visitor.newPage();
+    try {
+      // Another shopper already holds it; the viewer adds it too.
+      const shopper = shopperSession(product.id, 25);
+      await productPage.goto(product.permalink);
+      await waitForLive(productPage);
+      const counter = productPage.locator(".shopsocket-in-carts");
+      await expect(counter).toContainText("1 shopper has this in their cart right now", { timeout: 15_000 });
+      await addToCart(productPage);
+      await expect(counter).toContainText("You and 1 other shopper have this in your carts right now", { timeout: 15_000 });
+
+      // The same shopper removes it from the block cart in a second tab: the
+      // removal event carries their cart id, so the product page stops saying "You".
+      const cartPage = await visitor.newPage();
+      await cartPage.goto("/cart/");
+      await cartPage.getByRole("button", { name: /Remove .* from cart/ }).first().click();
+      await expect(counter).toContainText("1 shopper has this in their cart right now", { timeout: 15_000 });
+      await expect(counter).not.toContainText("You");
+      await cartPage.close();
+      await shopper;
     } finally {
       await visitor.close();
       await deleteProduct(requestUtils, product.id);

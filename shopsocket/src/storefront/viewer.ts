@@ -16,6 +16,8 @@ export interface ViewerConfig {
 export interface Viewer {
   /** The shopper's cart id once known, so their own events can be told apart. */
   readonly cartId: string | null;
+  /** Re-read this shopper's cart from the server. */
+  sync(): void;
   /** Whether this shopper holds the product. */
   holds(productId: number): boolean;
   /** How many units of the product this shopper holds, 0 when none. */
@@ -35,7 +37,11 @@ interface ViewerState {
  * their own cart and on every recovered connection. `onCount` receives the
  * live count for the page's product whenever a sync returns one.
  */
-export function startViewer(config: ViewerConfig, onCount: (productId: number, count: number) => void): Viewer {
+export function startViewer(
+  config: ViewerConfig,
+  onCount: (productId: number, count: number) => void,
+  onHeld?: (productIds: number[]) => void,
+): Viewer {
   let cartId: string | null = null;
   // Units held per parent product; replaced on every sync, since the server's answer is the truth.
   const quantities = new Map<number, number>();
@@ -70,6 +76,7 @@ export function startViewer(config: ViewerConfig, onCount: (productId: number, c
         quantities.set(Number(id), Math.max(1, Number(viewer?.quantities?.[String(id)]) || 1));
       });
       if (viewer?.id) cartId = viewer.id;
+      onHeld?.(Array.from(quantities.keys()));
       if (config.productId && typeof viewer?.count === "number") {
         onCount(Number(config.productId), viewer.count);
       }
@@ -109,19 +116,26 @@ export function startViewer(config: ViewerConfig, onCount: (productId: number, c
     const data = window.wp?.data;
     if (!data?.subscribe || !data.select) return;
     let last: string | null = null;
+    let wasPending = false;
     data.subscribe(() => {
       const cart = data.select("wc/store/cart");
       const items = cart?.getCartData?.()?.items;
       if (!Array.isArray(items)) return;
+      const pending = Boolean(cart?.hasPendingItemsOperations?.() || cart?.isCustomerDataUpdating?.());
       const key = items.map((i) => `${i.id}:${i.quantity}`).join(",");
       if (last === null) {
         last = key;
+        wasPending = pending;
         return;
       }
-      if (key !== last) {
-        last = key;
+      const changed = key !== last;
+      last = key;
+      if (wasPending && !pending) {
+        sync();
+      } else if (changed && !pending) {
         sync();
       }
+      wasPending = pending;
     }, "wc/store/cart");
   }
 
@@ -148,6 +162,9 @@ export function startViewer(config: ViewerConfig, onCount: (productId: number, c
   return {
     get cartId() {
       return cartId;
+    },
+    sync: () => {
+      void sync();
     },
     holds: (productId) => quantities.has(productId),
     held: (productId) => quantities.get(productId) ?? 0,

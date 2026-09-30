@@ -12,6 +12,9 @@ abstract class ExtensionTestCase extends TestCase {
 		'wpsignal_site_key',
 		'wpsignal_site_secret',
 		'wpsignal_jwt_secret',
+		// The storefront settings: the site this suite runs on is also a demo
+		// store, and a switch left off there must not change what a test sees.
+		'shopsocket_storefront',
 	);
 
 	private const MISSING = '__missing__';
@@ -40,6 +43,7 @@ abstract class ExtensionTestCase extends TestCase {
 		update_option( 'wpsignal_site_key', 'phpunitkey' );
 		update_option( 'wpsignal_site_secret', 'phpunitsecret' );
 		update_option( 'wpsignal_jwt_secret', 'phpunitjwt' );
+		delete_option( 'shopsocket_storefront' );
 		unset( $_SERVER['HTTPS'] );
 		$this->published   = array();
 		$this->clear_carts();

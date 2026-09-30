@@ -76,6 +76,7 @@ function cart_added_payload( WC_Product $product, int $quantity, string $actor, 
 		'quantity'     => $quantity,
 		'actor'        => $actor,
 		'in_carts'     => count_in_carts( $parent_id ),
+		'activity'     => toasts_enabled( $parent_id ),
 	);
 }
 

@@ -26,6 +26,10 @@ export interface Ctx {
 export interface I18n {
   one?: string;
   many?: string;
+  /** The counter when this shopper holds the product too: alone, with one other, with %d others. */
+  youOnly?: string;
+  youAndOne?: string;
+  youAndMany?: string;
   addedThis?: string;
   addedOther?: string;
   soldOut?: string;
@@ -39,6 +43,8 @@ export interface I18n {
 export interface CartEventData {
   product_id?: number | string;
   in_carts?: number;
+  /** Whether a toast is allowed for this product (settings, categories, the product's choice). Absent means yes. */
+  activity?: boolean;
   actor?: string;
   name?: string;
   permalink?: string;
@@ -78,6 +84,8 @@ export interface StorefrontState {
   inCarts?: boolean;
   i18n?: I18n;
   carts?: Record<number, number>;
+  /** Products this shopper holds, from the viewer's last sync, so the counter can say "You and ...". */
+  mine: Record<number, boolean>;
   selectedVariation?: number;
   presenceChannel?: string;
   channels?: { stock?: string; activity?: string };
@@ -89,6 +97,7 @@ export interface StorefrontState {
   readonly toastIsError: boolean;
   readonly toastRole: "status" | "alert";
   readonly inCartsCount: number;
+  readonly inCartsVisible: boolean;
   readonly inCartsText: string;
   readonly inCartsPulse: boolean;
   readonly stockEntry: StockEntry | undefined;

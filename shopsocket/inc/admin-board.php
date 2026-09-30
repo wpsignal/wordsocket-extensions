@@ -271,7 +271,7 @@ function enqueue_settings_panel(): void {
 		'dependencies' => array( 'wp-plugins', 'wp-element', 'wp-i18n' ),
 		'version'      => VERSION,
 	);
-	$deps       = array_values( array_unique( array_merge( $asset['dependencies'], array( 'wpsignal-settings' ) ) ) );
+	$deps       = array_values( array_unique( array( ...$asset['dependencies'], 'wpsignal-settings', 'wp-components' ) ) );
 
 	wp_enqueue_script( SLUG . '-settings', URL . 'build/settings.js', $deps, $asset['version'], true );
 	wp_set_script_translations( SLUG . '-settings', 'shopsocket', DIR . 'languages' );
@@ -282,8 +282,9 @@ function enqueue_settings_panel(): void {
 		SLUG . '-settings',
 		'window.shopSocketSettings = ' . wp_json_encode(
 			array(
-				'boardUrl' => admin_url( 'admin.php?page=' . SLUG ),
-				'docsUrl'  => 'https://wpsignal.io/extensions/shopsocket',
+				'boardUrl'   => admin_url( 'admin.php?page=' . SLUG ),
+				'docsUrl'    => 'https://wpsignal.io/extensions/shopsocket',
+				'storefront' => settings(),
 			),
 			JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
 		) . ';',

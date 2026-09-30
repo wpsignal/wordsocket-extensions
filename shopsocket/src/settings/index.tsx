@@ -1,13 +1,18 @@
 /**
- * ShopSocket's card in WordSocket's Extensions tab: whether the site is live
- * and where the board is. There is nothing to save yet.
+ * ShopSocket on WordSocket's settings page: the card in the Extensions tab
+ * (whether the site is live and where the board is) and, on WordSocket 0.28
+ * and later, a ShopSocket tab holding the storefront settings.
  */
 import { registerPlugin } from "@wordpress/plugins";
 import { __ } from "@wordpress/i18n";
 import "./settings.css";
 import ShopSocketLogo from "./ShopSocketLogo";
+import { SettingsTab } from "./SettingsTab";
 
 const SLUG = "shopsocket";
+
+// The tab, registered at module evaluation: WordSocket's app mounts right after this script runs.
+window.wordsocket?.registerTab?.({ name: SLUG, title: __("ShopSocket", "shopsocket"), render: SettingsTab });
 
 function Panel() {
   const api = window.wordsocket;
@@ -39,6 +44,11 @@ function Panel() {
           <a className="button button-primary" href={config.boardUrl}>
             {__("View ShopSocket", "shopsocket")}
           </a>
+        </p>
+        <p className="shopsocket-settings__hint">
+          {api.registerTab
+            ? __("Storefront settings are on the ShopSocket tab.", "shopsocket")
+            : __("Update WordSocket to 0.28 or later for the ShopSocket settings tab.", "shopsocket")}
         </p>
       </ExtensionPanel>
       <ConnectionStatusFill>

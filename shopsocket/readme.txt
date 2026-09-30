@@ -33,7 +33,7 @@ Live and abandoned are not guesses from timestamps. A cart is live exactly while
 **For shoppers: the storefront**
 
 * Stock text on product pages updates in place when the product sells out or comes back, and the add-to-cart button follows
-* "N shoppers have this in their cart right now" under the price, kept current as carts change
+* "N shoppers have this in their cart right now" under the price, kept current as carts change; a shopper who holds it reads "You and N other shoppers have this in your carts right now"
 * "Someone just added this to their cart" toasts, shown only for products the shopper also holds
 * A shopper holding a product that sells out hears at once, wherever they are, and the cart shows WooCommerce's own notice without a reload
 * The Live Stock block: availability, units left, and the in-cart counter as one block for the Single Product template or any page
@@ -106,7 +106,9 @@ Yes. ShopSocket declares HPOS compatibility and reads orders through WooCommerce
 
 = Can I turn parts of it off? =
 
-Filters: `shopsocket_storefront` controls which pages load the live storefront (every front-end page by default, so a shopper stays live wherever they browse), `shopsocket_in_carts_enabled` the cart counter, `shopsocket_activity_enabled` the added-to-cart toasts, `shopsocket_activity_throttle` how often one product may announce an add, and `shopsocket_publish_stock` whether stock changes are published (they are silent during imports).
+Yes, from the ShopSocket tab on WordSocket's settings page (WordSocket 0.28 or later): switch the in-cart count and the added-to-cart notification off site-wide, and exclude product categories from each of them separately. Each product also has its own choice under Product data > ShopSocket: Default, On, or Off. On and Off apply to that product whatever the site setting and the categories say, so a whole category, or the whole site, can be quiet except for one product. Everything is on by default.
+
+For code: `shopsocket_storefront` controls which pages load the live storefront (every front-end page by default, so a shopper stays live wherever they browse), `shopsocket_in_carts_enabled` and `shopsocket_activity_enabled` run last on the resolved value for a product (with the product ID as the second argument), `shopsocket_activity_throttle` sets how often one product may announce an add, and `shopsocket_publish_stock` whether stock changes are published (they are silent during imports).
 
 = Who can see the board? =
 
@@ -121,6 +123,12 @@ Users with the `manage_woocommerce` capability. Order and cart events travel on 
 5. The Live Stock block on an ordinary page: availability, units left, and the in-cart count, all live.
 
 == Changelog ==
+
+= 0.5.0 =
+* New: a ShopSocket tab on WordSocket's settings page (WordSocket 0.28 or later) with site-wide switches for the in-cart count and the added-to-cart notification, each with its own list of product categories to exclude
+* New: a per-product choice for each feature under Product data > ShopSocket: Default, On, or Off. On and Off win over the site setting and the categories
+* New: the in-cart count speaks to a shopper who holds the product: "You have this in your cart right now", "You and 1 other shopper have this in your carts right now". The `woo.cart.removed` event now carries the remover's anonymous cart id
+* Changed: switching the toasts off no longer stops the cart-added event, which the in-cart count needs; the event now carries an `activity` flag and the storefront shows no toast when it is false. A product with both features off publishes nothing
 
 = 0.4.0 =
 * "Basket" is now "cart" everywhere: on the board, in this readme, and in the code. Breaking if you listen to the relay directly: the `woo.baskets` event is now `woo.carts`, `GET /shopsocket/v1/basket-id` is now `/cart-id`, and the `shopsocket_baskets` transients are now `shopsocket_carts`
@@ -155,6 +163,9 @@ Users with the `manage_woocommerce` capability. Order and cart events travel on 
 * A card on WordSocket's Extensions tab
 
 == Upgrade Notice ==
+
+= 0.5.0 =
+Adds the storefront settings. Update WordSocket to 0.28 first to see the new ShopSocket tab.
 
 = 0.4.0 =
 Breaking for direct relay listeners: `woo.baskets` is now `woo.carts` and `basket-id` is now `cart-id`. Everything else is a fix.

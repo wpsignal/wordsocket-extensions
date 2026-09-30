@@ -40,6 +40,7 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
   state: {
     stock: {},
     pulses: {},
+    mine: {},
     toast: { message: "", href: "", visible: false, image: "", kind: "info", sticky: false, key: "" },
 
     /** Whether the toast on screen is an error, styled and announced as one. */
@@ -56,10 +57,25 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
       const { productId } = getContext<Ctx>();
       return state.carts?.[productId] ?? 0;
     },
-    /** That count in the singular or plural template. */
+    /** Shown once anyone holds the product, this shopper included. */
+    get inCartsVisible(): boolean {
+      const { productId } = getContext<Ctx>();
+      return state.inCartsCount > 0 || Boolean(state.mine?.[productId]);
+    },
+    /**
+     * Outputs the number of shoppers holding the product, including this shopper if they hold it.
+     */
     get inCartsText(): string {
+      const { productId } = getContext<Ctx>();
       const count = state.inCartsCount;
-      return (count === 1 ? state.i18n?.one ?? "%d" : state.i18n?.many ?? "%d").replace("%d", String(count));
+      const i18n = state.i18n ?? {};
+      if (state.mine?.[productId]) {
+        const others = Math.max(0, count - 1);
+        if (others === 0) return i18n.youOnly ?? "";
+        if (others === 1) return i18n.youAndOne ?? "";
+        return (i18n.youAndMany ?? "%d").replace("%d", String(others));
+      }
+      return (count === 1 ? i18n.one ?? "%d" : i18n.many ?? "%d").replace("%d", String(count));
     },
     /** Whether this element's cart count just changed. */
     get inCartsPulse(): boolean {
@@ -186,8 +202,12 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
       if (state.inCarts && typeof data.in_carts === "number") {
         setInCarts(productId, data.in_carts);
       }
-      if (!state.toasts) return;
-      if (viewer.cartId && data.actor === viewer.cartId) return; // the shopper's own session (any tab)
+      if (viewer.cartId && data.actor === viewer.cartId) {
+        // The shopper's own session, from another tab: they hold it now, and no toast.
+        state.mine[productId] = true;
+        return;
+      }
+      if (!state.toasts || data.activity === false) return; // switched off site-wide, or for this product
       if (!viewer.holds(productId)) return; // only items this shopper also holds
       const onOwnPage = productId === Number(state.productId);
       /*
@@ -201,12 +221,22 @@ const wooStore = store<{ state: StorefrontState; actions: StorefrontActions }>("
       );
     },
 
-    /** Another shopper removed a product: update its count. */
+    /**
+     * A product left a cart, update its count. If the cart was this shopper's own (their tab, or another tab of the same session), 
+     * drop it from what they hold, so the counter stops saying "You".
+     */
     cartRemoved(data) {
       const productId = Number(data.product_id);
-      if (state.inCarts && productId && typeof data.in_carts === "number") {
+      if (!productId) return;
+      if (state.inCarts && typeof data.in_carts === "number") {
         setInCarts(productId, data.in_carts);
       }
+      if (!state.mine?.[productId]) return;
+      if (typeof data.actor === "string" && viewer.cartId) {
+        if (data.actor === viewer.cartId) state.mine[productId] = false;
+        return;
+      }
+      viewer.sync();
     },
   },
 });
@@ -312,5 +342,8 @@ const viewer = startViewer(
   },
   (productId, count) => {
     if (state.inCarts) setInCarts(productId, count);
+  },
+  (held) => {
+    state.mine = Object.fromEntries(held.map((id) => [id, true]));
   },
 );

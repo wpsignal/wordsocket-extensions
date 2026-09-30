@@ -283,14 +283,16 @@ add_action(
 );
 
 /**
- * Tell product pages the new per-product count after a removal.
+ * Tell product pages the new per-product count after a removal. `actor` is
+ * the remover's anonymous cart id, so their own pages know the item left
+ * their cart (the count alone cannot say whose cart changed).
  *
  * @param int $product_id   Parent product ID.
  * @param int $variation_id Variation that was in the cart, 0 for simple products.
  * @return void
  */
 function publish_cart_removed( int $product_id, int $variation_id ): void {
-	if ( ! $product_id ) {
+	if ( ! $product_id || ! in_carts_enabled( $product_id ) ) {
 		return;
 	}
 	WPS::publish(
@@ -300,6 +302,7 @@ function publish_cart_removed( int $product_id, int $variation_id ): void {
 			'product_id'   => $product_id,
 			'variation_id' => $variation_id,
 			'in_carts'     => count_in_carts( $product_id ),
+			'actor'        => cart_id(),
 		)
 	);
 }

@@ -89,7 +89,7 @@ function render_live_stock_block( array $attributes, string $content, \WP_Block 
 		esc_html( $context['text'] ),
 		null === $available || $available <= 0 ? ' hidden' : '',
 		esc_html( null === $available ? '' : sprintf( left_string(), $available ) ),
-		in_carts_enabled() ? in_carts_html( $product->get_id() ) : ''
+		in_carts_enabled( $product->get_id() ) ? in_carts_html( $product->get_id() ) : ''
 	);
 }
 
