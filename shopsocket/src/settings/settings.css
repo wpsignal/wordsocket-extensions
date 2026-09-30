@@ -17,3 +17,20 @@
     background: #00a32a;
   }
 }
+
+/* The ShopSocket tab (WordSocket 0.28+). */
+.shopsocket-tab__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 24px;
+}
+
+.shopsocket-tab .components-notice {
+  margin: 0 0 16px;
+}
+
+.shopsocket-tab__note {
+  max-width: 640px;
+  margin: 0 0 16px;
+}

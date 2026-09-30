@@ -86,17 +86,19 @@ function stock_state_changed( WC_Product $product ): bool {
  */
 function should_publish_cart_add( $cart_item_key, $product_id, $quantity, $variation_id = 0 ): bool {
 	unset( $cart_item_key, $quantity );
-	/**
-	 * Filters whether "added to cart" activity is published at all.
-	 *
-	 * @param bool $enabled Default true.
-	 */
-	if ( ! apply_filters( 'shopsocket_activity_enabled', true ) ) {
-		return false;
-	}
 	$id      = $variation_id ? (int) $variation_id : (int) $product_id;
 	$product = wc_get_product( $id );
 	if ( ! $product instanceof WC_Product || ! $product->is_purchasable() ) {
+		return false;
+	}
+
+	/*
+	 * The event carries the toast and the counter's new value, so it goes out
+	 * while either feature applies to the product (settings, categories, the
+	 * product's own choice). The payload's `activity` flag tells the storefront
+	 * whether a toast is allowed.
+	 */
+	if ( ! toasts_enabled( (int) $product_id ) && ! in_carts_enabled( (int) $product_id ) ) {
 		return false;
 	}
 	/**

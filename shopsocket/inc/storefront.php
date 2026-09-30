@@ -187,7 +187,7 @@ function in_carts_html( int $product_id ): string {
 	$strings = in_carts_strings();
 	wp_interactivity_state( STORE_NS, array( 'carts' => array( $product_id => $count ) ) );
 	return sprintf(
-		'<p class="shopsocket-in-carts" data-wp-interactive="%1$s" %2$s data-wp-bind--hidden="!state.inCartsCount" data-wp-class--shopsocket-in-carts--updated="state.inCartsPulse"%3$s><span class="shopsocket-in-carts__dot" aria-hidden="true"></span> <span class="shopsocket-in-carts__text" data-wp-text="state.inCartsText">%4$s</span></p>',
+		'<p class="shopsocket-in-carts" data-wp-interactive="%1$s" %2$s data-wp-bind--hidden="!state.inCartsVisible" data-wp-class--shopsocket-in-carts--updated="state.inCartsPulse"%3$s><span class="shopsocket-in-carts__dot" aria-hidden="true"></span> <span class="shopsocket-in-carts__text" data-wp-text="state.inCartsText">%4$s</span></p>',
 		esc_attr( STORE_NS ),
 		wp_interactivity_data_wp_context( array( 'productId' => $product_id ), STORE_NS ),
 		$count > 0 ? '' : ' hidden',
@@ -218,9 +218,14 @@ function seeded_carts(): object {
 function in_carts_strings(): array {
 	return array(
 		/* translators: %d: number of shoppers */
-		'one'  => __( '%d shopper has this in their cart right now', 'shopsocket' ),
+		'one'        => __( '%d shopper has this in their cart right now', 'shopsocket' ),
 		/* translators: %d: number of shoppers */
-		'many' => __( '%d shoppers have this in their cart right now', 'shopsocket' ),
+		'many'       => __( '%d shoppers have this in their cart right now', 'shopsocket' ),
+		// When the viewer holds the product too, the storefront personalises the sentence.
+		'youOnly'    => __( 'You have this in your cart right now', 'shopsocket' ),
+		'youAndOne'  => __( 'You and 1 other shopper have this in your carts right now', 'shopsocket' ),
+		/* translators: %d: number of other shoppers */
+		'youAndMany' => __( 'You and %d other shoppers have this in your carts right now', 'shopsocket' ),
 	);
 }
 
@@ -232,7 +237,7 @@ function in_carts_strings(): array {
  */
 function in_carts_once( int $product_id ): string {
 	static $rendered = false;
-	if ( $rendered || ! in_carts_enabled() || ! is_product() || get_queried_object_id() !== $product_id || template_has_live_stock_block() ) {
+	if ( $rendered || ! is_product() || get_queried_object_id() !== $product_id || ! in_carts_enabled( $product_id ) || template_has_live_stock_block() ) {
 		return '';
 	}
 	$rendered = true;
@@ -281,31 +286,27 @@ function storefront_page(): string {
 }
 
 /**
- * Whether the in-cart counter is shown.
+ * Whether the in-cart counter is shown, for a product or for the site as a
+ * whole. Settings, categories and the product's own choice are combined in
+ * `feature_enabled()` (inc/settings.php); the `shopsocket_in_carts_enabled`
+ * filter still runs last.
  *
+ * @param int $product_id Product or variation ID, 0 for the site-wide switch.
  * @return bool
  */
-function in_carts_enabled(): bool {
-	/**
-	 * Filters whether "N shoppers have this in their cart" is shown on product pages.
-	 *
-	 * @param bool $enabled Default true.
-	 */
-	return (bool) apply_filters( 'shopsocket_in_carts_enabled', true );
+function in_carts_enabled( int $product_id = 0 ): bool {
+	return feature_enabled( FEATURE_IN_CARTS, $product_id );
 }
 
 /**
- * Whether "someone just added" toasts are shown.
+ * Whether "someone just added" toasts are shown, for a product or for the
+ * site as a whole. The `shopsocket_activity_enabled` filter still runs last.
  *
+ * @param int $product_id Product or variation ID, 0 for the site-wide switch.
  * @return bool
  */
-function toasts_enabled(): bool {
-	/**
-	 * Filters whether shoppers see "Someone just added ... to their cart" toasts.
-	 *
-	 * @param bool $enabled Default true.
-	 */
-	return (bool) apply_filters( 'shopsocket_activity_enabled', true );
+function toasts_enabled( int $product_id = 0 ): bool {
+	return feature_enabled( FEATURE_ACTIVITY, $product_id );
 }
 
 // The module, its stylesheet, and the store's initial state.
@@ -345,8 +346,14 @@ add_action(
 				),
 				'cartIdUrl'         => rest_url( REST_NS . '/cart-id' ),
 				'nonce'             => wp_create_nonce( 'wp_rest' ),
-				'toasts'            => toasts_enabled(),
-				'inCarts'           => in_carts_enabled(),
+
+				/*
+				 * Always on for the script: the per-product decisions reach the
+				 * browser through the rendered counter and the event's `activity`
+				 * flag, and a product set to On works while the site switch is off.
+				 */
+				'toasts'            => true,
+				'inCarts'           => true,
 				'selectedVariation' => 0,
 				'carts'             => seeded_carts(),
 				'i18n'              => in_carts_strings() + array(
@@ -370,7 +377,7 @@ add_action(
 add_action(
 	'wp_footer',
 	static function (): void {
-		if ( ! is_live_storefront_page() || ! toasts_enabled() ) {
+		if ( ! is_live_storefront_page() ) {
 			return;
 		}
 		printf(
