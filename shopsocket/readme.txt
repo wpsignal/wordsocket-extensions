@@ -9,7 +9,7 @@ Requires Plugins: wordsocket, woocommerce
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-See your WooCommerce store live: orders as they land, who is shopping, carts and stock. Needs WordSocket and a free WPSignal account.
+See your WooCommerce store live: orders as they land, who is shopping, carts and stock. Needs WordSocket and a WPSignal account.
 
 == Description ==
 
@@ -17,7 +17,7 @@ ShopSocket shows your WooCommerce store as it happens. Think Shopify's Live View
 
 https://www.youtube.com/watch?v=BKwID6t_kpQ
 
-**Requires** the free [WordSocket](https://wordpress.org/plugins/wordsocket/) plugin and a free [WPSignal](https://wpsignal.io/) account. Install WordSocket, click Connect ([video](https://www.youtube.com/watch?v=yS1roK49HEQ)), then install ShopSocket.
+**Requires** the [WordSocket](https://wordpress.org/plugins/wordsocket/) plugin and a [WPSignal](https://wpsignal.io/) account. Install WordSocket, click Connect ([video](https://www.youtube.com/watch?v=yS1roK49HEQ)), then install ShopSocket.
 
 **Try it:** [shopsocket.wpsignal.io](https://shopsocket.wpsignal.io/) is a live demo store.
 
@@ -86,7 +86,7 @@ ShopSocket is developed in the open at [github.com/wpsignal/wordsocket-extension
 == Installation ==
 
 1. Install and activate WooCommerce and [WordSocket](https://wordpress.org/plugins/wordsocket/).
-2. In WordSocket's settings, click Connect to WPSignal and create a free account ([video](https://www.youtube.com/watch?v=yS1roK49HEQ)).
+2. In WordSocket's settings, click Connect to WPSignal and create an account ([video](https://www.youtube.com/watch?v=yS1roK49HEQ)).
 3. Install and activate ShopSocket.
 4. Open WooCommerce > Analytics > Realtime.
 
@@ -94,7 +94,7 @@ ShopSocket is developed in the open at [github.com/wpsignal/wordsocket-extension
 
 = What do I need? =
 
-WooCommerce, the free [WordSocket](https://wordpress.org/plugins/wordsocket/) plugin, and a free [WPSignal](https://wpsignal.io/) account.
+WooCommerce, the free [WordSocket](https://wordpress.org/plugins/wordsocket/) plugin, and a [WPSignal](https://wpsignal.io/) account (the free plan is enough to start).
 
 = Does it cost anything? =
 
