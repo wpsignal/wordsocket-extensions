@@ -1,6 +1,6 @@
 === ShopSocket ===
 Contributors: wpsignal, jaredrethman
-Tags: woocommerce, realtime, analytics, ecommerce, wordsocket
+Tags: woocommerce, abandoned cart, sales notification, wordsocket, realtime
 Requires at least: 6.7
 Tested up to: 7.1
 Stable tag: 0.5.0
@@ -15,9 +15,9 @@ See your WooCommerce store live: orders as they land, who is shopping, carts and
 
 ShopSocket shows your WooCommerce store as it happens. Think Shopify's Live View, for WooCommerce.
 
-**Requires** the free [WordSocket](https://wordpress.org/plugins/wordsocket/) plugin and a free [WPSignal](https://wpsignal.io/) account. Install WordSocket, click Connect, then install ShopSocket.
+https://www.youtube.com/watch?v=BKwID6t_kpQ
 
-https://www.youtube.com/watch?v=yS1roK49HEQ
+**Requires** the free [WordSocket](https://wordpress.org/plugins/wordsocket/) plugin and a free [WPSignal](https://wpsignal.io/) account. Install WordSocket, click Connect ([video](https://www.youtube.com/watch?v=yS1roK49HEQ)), then install ShopSocket.
 
 **Try it:** [shopsocket.wpsignal.io](https://shopsocket.wpsignal.io/) is a live demo store.
 
