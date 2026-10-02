@@ -54,10 +54,10 @@ export function Dashboard() {
     if (soundRef.current) playChime();
   }, []);
 
-  const rows = useLiveOrders(config.orders, onNewOrder, config.channels);
+  const { rows, reconcile } = useLiveOrders(config.orders, onNewOrder, config.channels);
   const alerts = useStockAlerts(config.channels);
   const connection = useConnectionState();
-  const { snapshot, stale } = useDashboardSnapshot(config);
+  const { snapshot, stale } = useDashboardSnapshot(config, reconcile);
 
   useEffect(() => {
     try {

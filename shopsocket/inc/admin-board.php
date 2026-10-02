@@ -18,8 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const BOARD_ORDERS = 50;
-const UTM          = '?utm_source=wordpress&utm_medium=plugin&utm_campaign=shopsocket-board';
+const UTM = '?utm_source=wordpress&utm_medium=plugin&utm_campaign=shopsocket-board';
 
 /**
  * Where the board lives: "Realtime" under Analytics, next to the store's other
@@ -75,23 +74,6 @@ function plugin_action_links( array $links ): array {
 	return $links;
 }
 add_filter( 'plugin_action_links_' . SLUG . '/shopsocket.php', __NAMESPACE__ . '\plugin_action_links' );
-
-/**
- * Orders for the board's first paint, newest first.
- *
- * @return array<int, array<string, mixed>>
- */
-function initial_orders(): array {
-	$orders = wc_get_orders(
-		array(
-			'limit'   => BOARD_ORDERS,
-			'orderby' => 'date',
-			'order'   => 'DESC',
-			'type'    => 'shop_order',
-		)
-	);
-	return array_values( array_map( __NAMESPACE__ . '\order_payload', array_filter( $orders, static fn( $o ) => $o instanceof \WC_Order ) ) );
-}
 
 /**
  * Order statuses as `{slug, label}` pairs, without the `wc-` prefix (events carry the bare slug).
@@ -161,7 +143,7 @@ function render_dashboard(): void {
 				'productsUrl'    => rest_url( REST_NS . '/products' ),
 				'adminUrl'       => admin_url(),
 				'nonce'          => wp_create_nonce( 'wp_rest' ),
-				'orders'         => initial_orders(),
+				'orders'         => board_orders(),
 				'statuses'       => order_statuses(),
 				'snapshot'       => dashboard_snapshot(),
 				'currencySymbol' => html_entity_decode( get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8' ),

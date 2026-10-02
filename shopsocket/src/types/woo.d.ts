@@ -38,6 +38,10 @@ interface WooDashboardData {
 	carts: WooCartRow[];
 	/** Null when WordSocket is older than 0.22 or the server could not be reached. */
 	online: { active_connections: number; max_connections: number } | null;
+	/** The server's clock (Unix seconds) when the figures were read; sent back as `since` on the next refresh. */
+	as_of?: number;
+	/** Orders created or changed since the `since` the request named; absent when it named none. */
+	orders?: WooOrderEvent[];
 }
 
 /** One cart segment, computed on the board by crossing rows with presence. */

@@ -4,7 +4,7 @@
  * channel, so the split follows arrivals and departures as they happen. The
  * two are crossed here by cart id. "Online now" is the relay's own count.
  */
-import { useEffect, useMemo, useState } from "@wordpress/element";
+import { useEffect, useMemo, useRef, useState } from "@wordpress/element";
 import apiFetch from "@wordpress/api-fetch";
 
 const POLL_MS = 30_000;
@@ -58,8 +58,18 @@ function splitCarts(
   };
 }
 
-/** The board's tile figures, and whether the last fetch of them failed. */
-export function useDashboardSnapshot(config: Config) {
+/** Called with the orders a refresh found changed: the orders, when the request left, and the `since` it asked for. */
+type OnOrders = (orders: WooOrderEvent[], startedAt: number, since: number) => void;
+
+/** 
+ * The board's tile figures, and whether the last fetch of them failed. 
+ * 
+ * @param config - The board configuration.
+ * @param onOrders - A callback to call with the orders that changed since the last refresh.
+ */
+export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
+  const onOrdersRef = useRef(onOrders);
+  onOrdersRef.current = onOrders;
   const [rows, setRows] = useState<WooCartRow[]>(config.snapshot.carts);
   const [online, setOnline] = useState<WooDashboardData["online"]>(config.snapshot.online);
   const [present, setPresent] = useState<Set<string>>(() => new Set());
@@ -93,13 +103,22 @@ export function useDashboardSnapshot(config: Config) {
       setOnline(o);
     };
 
-    // Fetch the cart rows and connection count, one request at a time.
+    /*
+     * The server's clock at the last successful read
+     */
+    let since = config.snapshot.as_of;
+
+    // Fetch the cart rows, connection count and changed orders, one request at a time.
     const refresh = async () => {
       if (inflight) return;
       inflight = true;
       try {
+        const asked = since;
+        const startedAt = Date.now();
+        const url = new URL(config.dashboardUrl, window.location.href);
+        if (asked !== undefined) url.searchParams.set("since", String(asked));
         const fresh = await apiFetch<WooDashboardData>({
-          url: config.dashboardUrl,
+          url: url.toString(),
           headers: { "X-WP-Nonce": config.nonce },
         });
         if (alive) {
@@ -107,6 +126,8 @@ export function useDashboardSnapshot(config: Config) {
           if (fresh.online) showOnline(fresh.online);
           else setOnline(fresh.online);
           setStale(false);
+          if (fresh.as_of !== undefined) since = fresh.as_of;
+          if (asked !== undefined && fresh.orders?.length) onOrdersRef.current?.(fresh.orders, startedAt, asked);
         }
       } catch {
         if (alive) setStale(true);
@@ -240,7 +261,7 @@ export function useDashboardSnapshot(config: Config) {
       offs.forEach((off) => off());
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [config.dashboardUrl, config.nonce, config.channels]);
+  }, [config.dashboardUrl, config.nonce, config.channels, config.snapshot.as_of]);
 
   const snapshot = useMemo<WooDashboardSnapshot>(
     () => ({ ...splitCarts(rows, present), usersOnline, online }),

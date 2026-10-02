@@ -1,4 +1,4 @@
-import "./env";
+import { wp } from "./env";
 import { expect, test } from "@wordpress/e2e-test-utils-playwright";
 import { addToCart, clearCarts, createOrder, createProduct, deleteOrder, deleteProduct, num, visitorContext, waitForLive } from "./helpers";
 
@@ -213,6 +213,68 @@ test.describe("ShopSocket dashboard", () => {
       await expect(page.getByRole("row").filter({ has: page.locator("[data-order-id]") })).toHaveCount(1);
     } finally {
       await deleteOrder(requestUtils, order.id);
+      await deleteProduct(requestUtils, product.id);
+    }
+  });
+
+  /*
+   * The relay stores no events, so an order placed while the board could not
+   * hear (its connection down, or the publish never leaving WordPress) never
+   * arrives as one. The board's refresh asks the server for what changed since
+   * its last look instead. Here the publish is made to fail and the board's
+   * refreshes are cut off while the order is placed, which is the same silence
+   * from where the board sits; then the refreshes are let through again.
+   */
+  test("an order the board never heard about appears on its next refresh", async ({ admin, page, requestUtils }) => {
+    await admin.visitAdminPage("admin.php", PAGE);
+    await waitForLive(page);
+
+    const product = await createProduct(requestUtils, "E2E Missed Widget", 10);
+    const refreshes = /shopsocket\/v1\/dashboard/;
+    let orderId = 0;
+    try {
+      await page.route(refreshes, (route) => route.abort());
+      orderId = Number(
+        wp(
+          "eval",
+          `add_filter( 'pre_http_request', static fn() => new WP_Error( 'offline', 'relay unreachable' ) );
+          $order = wc_create_order( array( 'customer_id' => 0 ) );
+          $order->add_product( wc_get_product( ${product.id} ), 1 );
+          $order->set_billing_first_name( 'Missed' );
+          $order->set_billing_last_name( 'Order' );
+          $order->calculate_totals();
+          $order->set_status( 'processing' );
+          $order->save();
+          echo $order->get_id();`,
+        ),
+      );
+      expect(orderId).toBeGreaterThan(0);
+
+      const row = page.getByRole("row").filter({ has: page.locator(`[data-order-id="${orderId}"]`) });
+      // No event reached the board and it cannot refresh, so nothing shows.
+      await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+      await page.waitForTimeout(3_000);
+      await expect(row).toHaveCount(0);
+
+      // Back in touch: coming back to the tab refreshes at once, as a reconnect and the 30 second poll do.
+      await page.unroute(refreshes);
+      await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+      await expect(row).toBeVisible({ timeout: 15_000 });
+      await expect(row).toContainText("Missed O.");
+      await expect(row.locator(".shopsocket-status")).toHaveText("Processing");
+      await expect(page.locator("[data-order-id]").first()).toHaveAttribute("data-order-id", String(orderId));
+
+      // A status change the board also never heard is picked up the same way, in place.
+      wp(
+        "eval",
+        `add_filter( 'pre_http_request', static fn() => new WP_Error( 'offline', 'relay unreachable' ) ); wc_get_order( ${orderId} )->update_status( 'completed' );`,
+      );
+      await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+      await expect(row.locator(".shopsocket-status")).toHaveText("Completed", { timeout: 15_000 });
+      await expect(page.locator(`[data-order-id="${orderId}"]`)).toHaveCount(1);
+    } finally {
+      await page.unroute(refreshes).catch(() => {});
+      if (orderId) await deleteOrder(requestUtils, orderId);
       await deleteProduct(requestUtils, product.id);
     }
   });

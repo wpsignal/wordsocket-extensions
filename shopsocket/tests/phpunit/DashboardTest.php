@@ -120,9 +120,63 @@ final class DashboardTest extends ExtensionTestCase {
 			$this->assertSame( 'aaa', $data['carts'][0]['id'] );
 			$this->assertSame( 20.0, $data['carts'][0]['value'] );
 			$this->assertSame( array( 'active_connections' => 12, 'max_connections' => 500 ), $data['online'] );
-			$this->assertSame( array( 'carts', 'online' ), array_keys( $data ) );
+			$this->assertSame( array( 'carts', 'online', 'as_of' ), array_keys( $data ), 'no orders unless the board names a moment' );
+			$this->assertEqualsWithDelta( time(), $data['as_of'], 5, 'the server clock the board sends back as since' );
 		} finally {
 			remove_filter( 'pre_http_request', $stats, 5 );
+			wp_set_current_user( 0 );
+		}
+	}
+
+	/*
+	 * The relay stores nothing, so a board whose connection was down while an
+	 * order was placed never hears the event. Its next refresh names the moment
+	 * of its last one and gets back what was created or changed since.
+	 */
+	public function test_the_dashboard_route_hands_back_orders_changed_since_a_moment(): void {
+		$product = $this->make_product();
+
+		$earlier = $this->make_order( $product );
+		$earlier->set_date_created( time() - 2 * HOUR_IN_SECONDS );
+		$earlier->set_date_modified( time() - 2 * HOUR_IN_SECONDS );
+		$earlier->save();
+
+		$untouched = $this->make_order( $product );
+		$untouched->set_date_created( time() - 3 * HOUR_IN_SECONDS );
+		$untouched->set_date_modified( time() - 3 * HOUR_IN_SECONDS );
+		$untouched->save();
+
+		$since  = time() - HOUR_IN_SECONDS;
+		$missed = $this->make_order( $product, 2 );
+
+		$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
+		wp_set_current_user( (int) $admins[0] );
+		try {
+			$ids = function ( int $since ): array {
+				$request = new WP_REST_Request( 'GET', '/' . REST_NS . '/dashboard' );
+				$request->set_query_params( array( 'since' => $since ) );
+				$response = rest_do_request( $request );
+				$this->assertSame( 200, $response->get_status() );
+				return array_column( $response->get_data()['orders'], 'order_id' );
+			};
+
+			$found = $ids( $since );
+			$this->assertContains( $missed->get_id(), $found, 'an order placed after the moment comes back' );
+			$this->assertNotContains( $earlier->get_id(), $found, 'one from before it does not' );
+			$this->assertNotContains( $untouched->get_id(), $found );
+
+			// A status change made while the board was away counts too, on an order of any age.
+			$earlier->update_status( 'completed' );
+			$found = $ids( $since );
+			$this->assertContains( $earlier->get_id(), $found, 'an old order changed after the moment comes back' );
+			$this->assertNotContains( $untouched->get_id(), $found );
+
+			$request = new WP_REST_Request( 'GET', '/' . REST_NS . '/dashboard' );
+			$request->set_query_params( array( 'since' => $since ) );
+			$row = current( array_filter( rest_do_request( $request )->get_data()['orders'], static fn( $o ) => $o['order_id'] === $earlier->get_id() ) );
+			$this->assertSame( 'completed', $row['status'], 'in the same shape as an order event' );
+			$this->assertSame( 'Ada L.', $row['customer'] );
+		} finally {
 			wp_set_current_user( 0 );
 		}
 	}

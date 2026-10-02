@@ -136,6 +136,9 @@ Anyone who can manage WooCommerce.
 
 == Changelog ==
 
+= 0.5.1 =
+* Fixed: an order placed while the board's own connection was down did not appear until the page was reloaded. The board now catches up on missed orders and status changes when it reconnects, when you return to its tab, and on its regular refresh
+
 = 0.5.0 =
 * New: a ShopSocket tab on WordSocket's settings page (WordSocket 0.28 or later) with site-wide switches for the in-cart count and the added-to-cart notification, each with its own list of product categories to exclude
 * New: a per-product choice for each feature under Product data > ShopSocket: Default, On, or Off. On and Off win over the site setting and the categories
@@ -175,6 +178,9 @@ Anyone who can manage WooCommerce.
 * A card on WordSocket's Extensions tab
 
 == Upgrade Notice ==
+
+= 0.5.1 =
+The board catches up on orders placed while its connection was down.
 
 = 0.5.0 =
 Adds the storefront settings. Update WordSocket to 0.28 first to see the new ShopSocket tab.
