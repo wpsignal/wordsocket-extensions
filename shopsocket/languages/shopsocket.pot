@@ -2,14 +2,14 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: ShopSocket 0.3.2\n"
+"Project-Id-Version: ShopSocket 0.5.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/shopsocket\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-09-26T19:32:33+00:00\n"
+"POT-Creation-Date: 2026-10-02T13:28:06+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 3.0.0-alpha-01b1b10\n"
 "X-Domain: shopsocket\n"
@@ -19,6 +19,7 @@ msgstr ""
 #: inc/admin-board.php:41
 #: inc/admin-board.php:53
 #: inc/channels.php:28
+#: inc/settings.php:212
 #: build/settings.js:1
 msgid "ShopSocket"
 msgstr ""
@@ -61,31 +62,27 @@ msgstr ""
 msgid "Update WordSocket"
 msgstr ""
 
-#: inc/admin-board.php:187
-msgid "Your store as it happens: who is on the storefront, what is in their carts, and every order the moment it is placed. Keep it open on a second screen; nothing here needs a refresh."
-msgstr ""
-
-#: inc/admin-board.php:237
+#: inc/admin-board.php:236
 msgid "(opens in a new tab)"
 msgstr ""
 
-#: inc/admin-board.php:240
+#: inc/admin-board.php:239
 msgid "Dashboard"
 msgstr ""
 
-#: inc/admin-board.php:241
+#: inc/admin-board.php:240
 msgid "Documentation"
 msgstr ""
 
-#: inc/admin-board.php:242
+#: inc/admin-board.php:241
 msgid "Support"
 msgstr ""
 
-#: inc/admin-board.php:247
+#: inc/admin-board.php:246
 msgid "External links"
 msgstr ""
 
-#: inc/admin-board.php:252
+#: inc/admin-board.php:251
 msgid "ShopSocket home (opens in a new tab)"
 msgstr ""
 
@@ -104,49 +101,107 @@ msgstr ""
 msgid "Guest"
 msgstr ""
 
+#: inc/settings.php:111
+msgid "ShopSocket storefront settings."
+msgstr ""
+
+#: inc/settings.php:258
+msgid "Default"
+msgstr ""
+
+#: inc/settings.php:259
+msgid "On"
+msgstr ""
+
+#: inc/settings.php:260
+msgid "Off"
+msgstr ""
+
+#. translators: %s: a link to the ShopSocket tab of the WordSocket settings page, reading "Settings"
+#: inc/settings.php:265
+#, php-format
+msgid "What shoppers see for this product. Default follows the ShopSocket tab on the %s page, including its excluded categories; On and Off apply here whatever that page says."
+msgstr ""
+
+#: inc/settings.php:266
+msgid "Settings"
+msgstr ""
+
+#: inc/settings.php:271
+#: build/settings.js:1
+msgid "In-cart count"
+msgstr ""
+
+#: inc/settings.php:272
+msgid "The \"shoppers have this in their cart\" line on this product."
+msgstr ""
+
+#: inc/settings.php:281
+#: build/settings.js:1
+msgid "Added-to-cart notification"
+msgstr ""
+
+#: inc/settings.php:282
+msgid "The \"someone just added this\" notice other shoppers see for this product."
+msgstr ""
+
 #. translators: %d: number of shoppers
-#: inc/storefront.php:203
+#: inc/storefront.php:221
 #, php-format
 msgid "%d shopper has this in their cart right now"
 msgstr ""
 
 #. translators: %d: number of shoppers
-#: inc/storefront.php:205
+#: inc/storefront.php:223
 #, php-format
 msgid "%d shoppers have this in their cart right now"
 msgstr ""
 
-#: inc/storefront.php:335
+#: inc/storefront.php:225
+msgid "You have this in your cart right now"
+msgstr ""
+
+#: inc/storefront.php:226
+msgid "You and 1 other shopper have this in your carts right now"
+msgstr ""
+
+#. translators: %d: number of other shoppers
+#: inc/storefront.php:228
+#, php-format
+msgid "You and %d other shoppers have this in your carts right now"
+msgstr ""
+
+#: inc/storefront.php:360
 msgid "Someone just added this to their cart"
 msgstr ""
 
 #. translators: %s: product name
-#: inc/storefront.php:337
+#: inc/storefront.php:362
 #, php-format
 msgid "Someone just added %s to their cart"
 msgstr ""
 
 #. translators: %s: product name
-#: inc/storefront.php:339
+#: inc/storefront.php:364
 #, php-format
 msgid "%s just sold out and can no longer be purchased. Please remove it from your cart."
 msgstr ""
 
 #. translators: 1: product name, 2: units left
-#: inc/storefront.php:341
+#: inc/storefront.php:366
 #, php-format
 msgid "Only %2$d of %1$s left, fewer than your cart holds."
 msgstr ""
 
-#: inc/storefront.php:343
+#: inc/storefront.php:368
 msgid "Add to cart"
 msgstr ""
 
-#: inc/storefront.php:344
+#: inc/storefront.php:369
 msgid "Read more"
 msgstr ""
 
-#: inc/storefront.php:367
+#: inc/storefront.php:392
 msgid "Dismiss"
 msgstr ""
 
@@ -246,7 +301,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: build/board.js:186
-msgid "Users online"
+msgid "Storefront Customers"
 msgstr ""
 
 #: build/board.js:186
@@ -260,15 +315,11 @@ msgstr ""
 #. translators: %d: plan connection limit
 #: build/board.js:187
 #, js-format
-msgid "All browser tabs/connections, of %d on your plan"
+msgid "All browser tabs, of %d/%d on your plan"
 msgstr ""
 
 #: build/board.js:187
 msgid "Connections between your storefront and wpsignal.io"
-msgstr ""
-
-#: build/board.js:187
-msgid "Carts"
 msgstr ""
 
 #: build/board.js:187
@@ -288,7 +339,7 @@ msgid "left, cart still held"
 msgstr ""
 
 #: build/board.js:187
-msgid "Shoppers"
+msgid "Customers"
 msgstr ""
 
 #: build/board.js:187
@@ -344,6 +395,66 @@ msgid "Realtime client not loaded"
 msgstr ""
 
 #: build/settings.js:1
+msgid "Type a category name"
+msgstr ""
+
+#: build/settings.js:1
+msgid "What shoppers see on the storefront. The board under WooCommerce is unaffected by these settings."
+msgstr ""
+
+#: build/settings.js:1
+msgid "Storefront settings"
+msgstr ""
+
+#: build/settings.js:1
+msgid "Disable"
+msgstr ""
+
+#: build/settings.js:1
+msgid "Enable"
+msgstr ""
+
+#: build/settings.js:1
+msgid "Click to disable \"N shoppers have this in their cart right now\" feature site-wide."
+msgstr ""
+
+#: build/settings.js:1
+msgid "Click to enable \"N shoppers have this in their cart right now\" feature site-wide."
+msgstr ""
+
+#: build/settings.js:1
+msgid "Disable the count in these categories"
+msgstr ""
+
+#: build/settings.js:1
+msgid "Click to disable \"Someone just added this to their cart\" feature site-wide. Shown to shoppers who hold the same product in their cart."
+msgstr ""
+
+#: build/settings.js:1
+msgid "Click to enable \"Someone just added this to their cart\" feature site-wide. Shown to shoppers who hold the same product in their cart."
+msgstr ""
+
+#: build/settings.js:1
+msgid "Disable the notification in these categories"
+msgstr ""
+
+#: build/settings.js:1
+msgid "A product set to On or Off on its own edit screen (Product data, ShopSocket tab) keeps that choice whatever these settings say."
+msgstr ""
+
+#: build/settings.js:1
+msgid "Settings saved."
+msgstr ""
+
+#: build/settings.js:1
+msgid "Could not save settings."
+msgstr ""
+
+#: build/settings.js:1
+msgid "Save changes"
+msgstr ""
+
+#: build/settings.js:1
 msgid "Live: this browser is receiving events."
 msgstr ""
 
@@ -357,6 +468,14 @@ msgstr ""
 
 #: build/settings.js:1
 msgid "View ShopSocket"
+msgstr ""
+
+#: build/settings.js:1
+msgid "Storefront settings are on the ShopSocket tab."
+msgstr ""
+
+#: build/settings.js:1
+msgid "Update WordSocket to 0.28 or later for the ShopSocket settings tab."
 msgstr ""
 
 #: build/settings.js:1
