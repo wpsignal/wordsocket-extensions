@@ -9,110 +9,122 @@ Requires Plugins: wordsocket, woocommerce
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Shopify's Live View, for WooCommerce: a live orders board, live and abandoned carts, and live stock on product pages. No page reloads.
+See your WooCommerce store live: orders as they land, who is shopping, carts and stock. Needs WordSocket and a free WPSignal account.
 
 == Description ==
 
-ShopSocket puts what is happening in your store on screen the moment it happens, for staff and shoppers alike. Think of Shopify's Live View, for WooCommerce: who is on your store right now, what is in their carts, and every order the moment it lands.
+ShopSocket shows your WooCommerce store as it happens. Think Shopify's Live View, for WooCommerce.
 
-**Try it first:** [shopsocket.wpsignal.io](https://shopsocket.wpsignal.io/) is a live demo store running ShopSocket. Open a product in two browsers, add it to the cart in one, and watch the other update.
+**Requires** the free [WordSocket](https://wordpress.org/plugins/wordsocket/) plugin and a free [WPSignal](https://wpsignal.io/) account. Install WordSocket, click Connect, then install ShopSocket.
 
-**For your team: the ShopSocket board**
+https://www.youtube.com/watch?v=yS1roK49HEQ
 
-A screen under WooCommerce that staff keep open all day.
+**Try it:** [shopsocket.wpsignal.io](https://shopsocket.wpsignal.io/) is a live demo store.
 
-* Live orders: every new order lands on the board the instant it is placed, with a chime, and status changes update the row in place
-* Carts, live and abandoned: how many shoppers hold a cart right now, how many have left with one still held, and the revenue in each
-* Products in live carts: what shoppers on the site are holding at this moment, with the number of carts and units for each, linking to the product's edit screen
-* Users online and open connections, straight from the relay
-* Low-stock and out-of-stock alerts as they happen
+**For you and your team**
+
+* Every order on screen the moment it is placed, with a chime
+* Who is shopping right now, what is in their carts, and what it is worth
+* Which carts were left behind
+* Which products are in carts right now
+* Low-stock and sold-out alerts as they happen
 * Full-screen mode for a wall display
 
-Live and abandoned are not guesses from timestamps. A cart is live exactly while its shopper has an open connection to the site, and flips to abandoned the instant their last tab closes.
+**For your shoppers**
 
-**For shoppers: the storefront**
+* Stock on product pages updates without a reload
+* "X shoppers have this in their cart right now" under the price
+* "Someone just added this to their cart" notices
+* A Live Stock block for any page
 
-* Stock text on product pages updates in place when the product sells out or comes back, and the add-to-cart button follows
-* "N shoppers have this in their cart right now" under the price, kept current as carts change; a shopper who holds it reads "You and N other shoppers have this in your carts right now"
-* "Someone just added this to their cart" toasts, shown only for products the shopper also holds
-* A shopper holding a product that sells out hears at once, wherever they are, and the cart shows WooCommerce's own notice without a reload
-* The Live Stock block: availability, units left, and the in-cart counter as one block for the Single Product template or any page
-* A card on WordSocket's Extensions tab with the connection state and a link to the board
+Each shopper feature can be switched off site-wide, per category, or per product. All are on by default.
 
-**How it works**
+**What it does for your store**
 
-WordSocket carries the events over one WebSocket per browser, with an SSE fallback. ShopSocket publishes order, stock, and cart events from WooCommerce's own hooks, and reads presence from the relay to tell live carts from abandoned ones. The storefront never polls: it fetches once per page load and then only reacts to events. The board does the same, plus a quiet refresh every 30 seconds as a safety net in case an event is ever missed.
+*Never miss an order.* Every new order lands on the ShopSocket board the instant it is placed, with a chime, and its status updates in place as it moves along. Keep the board open on a second screen or a wall display and stop refreshing the Orders page.
 
-ShopSocket requires WordSocket and a WPSignal account. WPSignal is an independent service and is not affiliated with or endorsed by the WordPress project, WooCommerce, or Shopify. Shopify is a trademark of Shopify Inc., named here only for comparison.
+*Know who is shopping right now.* How many people are on your store this minute, how many are holding a cart, what is in those carts, and what it is worth. Live means the shopper is on your site at this moment, not a guess from a timestamp.
 
-**What leaves your site, and who can read it**
+*See which carts were left behind.* A cart turns abandoned the moment its shopper leaves, with the revenue still in it, so you know what walked away and when.
 
-**Every event is encrypted before it leaves WordPress, and WPSignal cannot read it.** WordSocket encrypts the contents of every event with AES-256-GCM before it is sent: always on HTTPS sites, and on plain HTTP sites too with WordSocket 0.25 or later (older versions encrypt only over HTTPS). The key is derived from your site's own WordPress salts in wp-config.php, which never leave your server and which WPSignal never has. The service relays ciphertext it has no way to open: it never sees an order total, a customer name, a product, or a stock level.
+*Spot what is about to sell.* The products sitting in live carts, most held first, with the number of carts and units for each, one click from the product's edit screen.
 
-What is inside those encrypted events:
+*Catch stock problems as they happen.* Low-stock and out-of-stock alerts reach the board at once, and the product page itself updates: the stock text changes and the add-to-cart button follows, with no reload. A shopper holding a product that sells out hears straight away, and their cart shows WooCommerce's own notice.
 
-* Order events, on a staff-only channel: the order number, status, total, item count, payment method, and the customer's first name and last initial. No email, address, or line items.
-* Stock and cart-activity events, public to your storefront: product names, permalinks, thumbnails, and counts, plus the anonymous cart id of the shopper behind the change, so a shopper's own adds and purchases are never announced back to them.
+*Give undecided shoppers a nudge.* "3 shoppers have this in their cart right now" under the price, kept current as carts change, and a quiet "someone just added this to their cart" notice for shoppers holding the same product.
 
-What the service does see, only because it needs it to route messages: channel names, how many browsers are connected, and each shopper's presence, which is a random per-browser id and a keyed hash identifying their cart. None of it is personal, and none of it is reversible.
+*Fits your theme.* The storefront features bind to the classic templates and to the Product Price and Product Stock Indicator blocks. The Live Stock block puts availability, units left, and the in-cart count anywhere you like.
+
+**Where to find it**
+
+The board is under WooCommerce > Analytics > Realtime (WooCommerce > ShopSocket when Analytics is switched off). Settings are on the ShopSocket tab of WordSocket's settings page, and each product has its own choices under Product data > ShopSocket.
+
+**Disclaimer**
+
+WPSignal is an independent service, not affiliated with or endorsed by Shopify. Shopify is a trademark of Shopify Inc., named only for comparison.
 
 = Third-Party Service =
 
-ShopSocket relies on the **WPSignal service** at api.wpsignal.io, reached through the WordSocket plugin. ShopSocket opens no connection of its own: everything below travels over the connection WordSocket already holds for your site.
+ShopSocket uses the **WPSignal service** (api.wpsignal.io), through the WordSocket plugin, to deliver live updates to the browsers on your store. When an order is placed or changes status, stock changes, or a product is added to a cart, WordSocket sends an encrypted event to WPSignal, which relays it to your store's open browsers. Events are not stored.
 
-* **Event publishing**: when an order is placed or changes status, stock changes, or a product is added to a cart, WordSocket sends an HMAC-signed HTTP request to the service with the event described under "What leaves your site".
-* **Realtime connections**: browsers on your storefront and the staff board connect to the service over WebSocket (or SSE) to receive those events. Shoppers' browsers also announce their presence on the site, which is how the board tells a live cart from an abandoned one.
-* **Connection count**: the board asks the service how many browsers are connected to your site right now.
+**What leaves your site, and who can read it.** Every event is encrypted before it leaves WordPress, with a key made from your site's own WordPress salts, which WPSignal never has. WPSignal relays what it cannot open: it never sees an order total, a customer name, a product, or a stock level.
 
-Events are relayed in realtime and are **not stored** on the service. Event contents are AES-256-GCM encrypted before they leave WordPress (on HTTPS sites, and on plain HTTP ones with WordSocket 0.25 or later), with a key derived from your site's own WordPress salts, so the service relays ciphertext it cannot read. A WPSignal account is required; the free plan is enough to start.
+Inside those encrypted events:
+
+* Order events, visible to staff only: the order number, status, total, item count, payment method, and the customer's first name and last initial. No email, address, or line items.
+* Stock and cart events, visible on your storefront: product names, links, thumbnails, and counts, plus an anonymous cart id so a shopper's own adds and purchases are never announced back to them.
+
+What WPSignal does see, because it needs it to deliver messages: channel names, how many browsers are connected, and an anonymous id for each shopper's browser and cart. None of it is personal.
 
 * [Terms of Service](https://wpsignal.io/terms)
 * [Privacy Policy](https://wpsignal.io/privacy)
 
-= Source code and build steps =
+= Source code =
 
-ShopSocket is developed in the open. The full, uncompiled source for everything in `build/`, together with the build tooling, lives at [github.com/wpsignal/wordsocket-extensions](https://github.com/wpsignal/wordsocket-extensions) under `shopsocket/`.
-
-The compiled files in `build/` are generated from `src/` with:
-
-`npm install`
-`npm run build`
-
-That runs [@wordpress/scripts](https://www.npmjs.com/package/@wordpress/scripts) (webpack) for the board, settings and block bundles, and `tsc` for the Interactivity API storefront modules. The bundled styles under `build/style-*.css` are produced by that same build from [@wordpress/components](https://www.npmjs.com/package/@wordpress/components), which is GPL-2.0-or-later.
+ShopSocket is developed in the open at [github.com/wpsignal/wordsocket-extensions](https://github.com/wpsignal/wordsocket-extensions) under `shopsocket/`.
 
 == Installation ==
 
-1. Install and activate WooCommerce and WordSocket 0.23 or newer, and connect WordSocket to your WPSignal account.
-2. Install and activate ShopSocket.
-3. Open Analytics > Realtime for the board (WooCommerce > ShopSocket when WooCommerce Analytics is switched off). Product pages start updating on their own.
+1. Install and activate WooCommerce and [WordSocket](https://wordpress.org/plugins/wordsocket/).
+2. In WordSocket's settings, click Connect to WPSignal and create a free account ([video](https://www.youtube.com/watch?v=yS1roK49HEQ)).
+3. Install and activate ShopSocket.
+4. Open WooCommerce > Analytics > Realtime.
 
 == Frequently Asked Questions ==
 
+= What do I need? =
+
+WooCommerce, the free [WordSocket](https://wordpress.org/plugins/wordsocket/) plugin, and a free [WPSignal](https://wpsignal.io/) account.
+
+= Does it cost anything? =
+
+ShopSocket and WordSocket are free. WPSignal has a free plan; paid plans for busier stores are at [wpsignal.io/pricing](https://wpsignal.io/pricing/).
+
 = Is there a demo? =
 
-Yes: [shopsocket.wpsignal.io](https://shopsocket.wpsignal.io/) is a live store running ShopSocket. Open a product in two browsers, or a normal and a private window, and add it to the cart in one. The other shows the new count, and a shopper already holding the product gets a "someone just added this" toast. The demo shows the storefront side; the staff board lives in wp-admin.
+Yes: [shopsocket.wpsignal.io](https://shopsocket.wpsignal.io/). Open a product in two browsers and add it to the cart in one. The demo shows the storefront; the board is in wp-admin.
 
 = Does it work with block themes? =
 
-Yes. The storefront features bind to the classic templates and to the Product Price and Product Stock Indicator blocks. For markup that is yours to place, add the Live Stock block to the Single Product template, or to any page with a product chosen.
+Yes. For full control, add the Live Stock block to the Single Product template or any page.
 
 = Does it work on a local site over plain HTTP? =
 
-Yes. The connection to the relay is always TLS, even from an `http://` page, and with WordSocket 0.25 or later event contents are encrypted there too, so the relay cannot read them. Older versions of WordSocket send them unencrypted on plain HTTP. Use HTTPS in production regardless: it protects the page itself.
+Yes.
 
 = Does it support High-Performance Order Storage? =
 
-Yes. ShopSocket declares HPOS compatibility and reads orders through WooCommerce's order API.
+Yes.
 
 = Can I turn parts of it off? =
 
-Yes, from the ShopSocket tab on WordSocket's settings page (WordSocket 0.28 or later): switch the in-cart count and the added-to-cart notification off site-wide, and exclude product categories from each of them separately. Each product also has its own choice under Product data > ShopSocket: Default, On, or Off. On and Off apply to that product whatever the site setting and the categories say, so a whole category, or the whole site, can be quiet except for one product. Everything is on by default.
+Yes. Site-wide switches and category exclusions are on the ShopSocket tab of WordSocket's settings page (WordSocket 0.28 or later). Each product has its own Default, On, or Off choice under Product data > ShopSocket.
 
-For code: `shopsocket_storefront` controls which pages load the live storefront (every front-end page by default, so a shopper stays live wherever they browse), `shopsocket_in_carts_enabled` and `shopsocket_activity_enabled` run last on the resolved value for a product (with the product ID as the second argument), `shopsocket_activity_throttle` sets how often one product may announce an add, and `shopsocket_publish_stock` whether stock changes are published (they are silent during imports).
+Developers: `shopsocket_storefront`, `shopsocket_in_carts_enabled`, `shopsocket_activity_enabled`, `shopsocket_activity_throttle`, and `shopsocket_publish_stock` filters.
 
 = Who can see the board? =
 
-Users with the `manage_woocommerce` capability. Order and cart events travel on a channel only their connection tokens can read.
+Anyone who can manage WooCommerce.
 
 == Screenshots ==
 
