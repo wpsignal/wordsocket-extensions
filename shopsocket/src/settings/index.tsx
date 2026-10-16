@@ -12,7 +12,10 @@ import { SettingsTab } from "./SettingsTab";
 const SLUG = "shopsocket";
 
 // The tab, registered at module evaluation: WordSocket's app mounts right after this script runs.
-window.wordsocket?.registerTab?.({ name: SLUG, title: __("ShopSocket", "shopsocket"), render: SettingsTab });
+// It saves through WordSocket's useTask, so it needs 0.29 (registerTab alone came in 0.28).
+if (window.wordsocket?.registerTab && window.wordsocket.useTask) {
+  window.wordsocket.registerTab({ name: SLUG, title: __("ShopSocket", "shopsocket"), render: SettingsTab });
+}
 
 function Panel() {
   const api = window.wordsocket;
@@ -46,9 +49,9 @@ function Panel() {
           </a>
         </p>
         <p className="shopsocket-settings__hint">
-          {api.registerTab
+          {api.registerTab && api.useTask
             ? __("Storefront settings are on the ShopSocket tab.", "shopsocket")
-            : __("Update WordSocket to 0.28 or later for the ShopSocket settings tab.", "shopsocket")}
+            : __("Update WordSocket to 0.29 or later for the ShopSocket settings tab.", "shopsocket")}
         </p>
       </ExtensionPanel>
       <ConnectionStatusFill>

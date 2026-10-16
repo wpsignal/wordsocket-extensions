@@ -6,17 +6,18 @@
  * Controls come from core's `wp.components` global rather than the
  * `@wordpress/components` this repo bundles for the board (the board needs a
  * newer version than core ships, at about 2 MB). WordSocket's settings page
- * loads core's copy, so the tab uses it and stays small.
+ * loads core's copy, so the tab uses it and stays small. A save runs through
+ * WordSocket's `useTask` (0.29), which shows the "Settings saved." toast or
+ * the red error in WordSocket's own snackbar list.
  */
 import { useEffect, useState } from "@wordpress/element";
 import { __ } from "@wordpress/i18n";
 import apiFetch from "@wordpress/api-fetch";
-import { CollapsibleCard, Card } from "@wordpress/ui";
+import { CollapsibleCard, Card, Stack } from "@wordpress/ui";
 import { Flex, FlexItem } from "@wordpress/components";
 
 type Components = typeof import("@wordpress/components");
 type Term = { id: number; name: string };
-type NoticeState = { status: "success" | "error"; text: string } | null;
 
 const DEFAULTS: ShopSocketStorefrontSettings = {
   in_carts_enabled: true,
@@ -35,31 +36,36 @@ function coreComponents(): Components {
 }
 
 export function SettingsTab() {
-  const { ToggleControl, FormTokenField, Button, Notice, Spinner } =
-    coreComponents();
+  const { ToggleControl, FormTokenField, Button, Spinner } = coreComponents();
   const [settings, setSettings] = useState<ShopSocketStorefrontSettings>(
     window.shopSocketSettings?.storefront ?? DEFAULTS,
   );
   const [terms, setTerms] = useState<Term[] | null>(null);
-  const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [notice, setNotice] = useState<NoticeState>(null);
 
   useEffect(() => {
-    // Every category, empty ones included: an exclusion may be set up before the products exist.
-    apiFetch<Term[]>({
-      path: "/wp/v2/product_cat?per_page=100&hide_empty=false&_fields=id,name",
-    })
-      .then((list) =>
-        setTerms(list.map((t) => ({ id: Number(t.id), name: String(t.name) }))),
-      )
-      .catch(() => setTerms([]));
+    /*
+     * Every category, empty ones included (an exclusion may be set up before
+     * the products exist), page by page: the REST API caps a page at 100.
+     */
+    const all: Term[] = [];
+    const load = (page: number): Promise<Term[]> =>
+      apiFetch<Term[]>({
+        path: `/wp/v2/product_cat?per_page=100&page=${page}&hide_empty=false&_fields=id,name`,
+      }).then((list) => {
+        list.forEach((t) =>
+          all.push({ id: Number(t.id), name: String(t.name) }),
+        );
+        return list.length === 100 ? load(page + 1) : all;
+      });
+    load(1)
+      .then(setTerms)
+      .catch(() => setTerms(all));
   }, []);
 
   const update = (patch: Partial<ShopSocketStorefrontSettings>) => {
     setSettings((current) => ({ ...current, ...patch }));
     setDirty(true);
-    setNotice(null);
   };
 
   const names = terms ?? [];
@@ -91,34 +97,30 @@ export function SettingsTab() {
         value={selectedNames(key)}
         suggestions={names.map((t) => t.name)}
         onChange={onCategoriesChange(key)}
-        placeholder={__("Type a category name", "shopsocket")}
+        placeholder={__("Choose or type a category", "shopsocket")}
+        __experimentalExpandOnFocus
+        __experimentalShowHowTo={false}
       />
     );
   };
 
-  const save = () => {
-    setSaving(true);
-    apiFetch<{ shopsocket_storefront: ShopSocketStorefrontSettings }>({
-      path: "/wp/v2/settings",
-      method: "POST",
-      data: { shopsocket_storefront: settings },
-    })
-      .then((res) => {
+  // The tab is registered only when WordSocket offers useTask (see index.tsx).
+  const save = window.wordsocket!.useTask!(
+    () =>
+      apiFetch<{ shopsocket_storefront: ShopSocketStorefrontSettings }>({
+        path: "/wp/v2/settings",
+        method: "POST",
+        data: { shopsocket_storefront: settings },
+      }),
+    {
+      success: __("Settings saved.", "shopsocket"),
+      error: __("Could not save settings.", "shopsocket"),
+      onSuccess: (res) => {
         setSettings(res.shopsocket_storefront ?? settings);
         setDirty(false);
-        setNotice({
-          status: "success",
-          text: __("Settings saved.", "shopsocket"),
-        });
-      })
-      .catch((err: { message?: string }) => {
-        setNotice({
-          status: "error",
-          text: err?.message || __("Could not save settings.", "shopsocket"),
-        });
-      })
-      .finally(() => setSaving(false));
-  };
+      },
+    },
+  );
 
   return (
     <div className="shopsocket-tab">
@@ -132,42 +134,26 @@ export function SettingsTab() {
 
       <h4>{__("Storefront settings", "shopsocket")}</h4>
 
-      {notice && (
-        <Notice
-          status={notice.status}
-          isDismissible
-          onRemove={() => setNotice(null)}
-        >
-          {notice.text}
-        </Notice>
-      )}
-
       <Flex direction="column" gap={4}>
         <FlexItem>
           <CollapsibleCard.Root defaultOpen>
             <CollapsibleCard.Header>
-              <Card.Title>{__("In-cart count", "shopsocket")}</Card.Title>
+              <Stack align="center" justify="space-between">
+                <Card.Title>{__("In-cart count", "shopsocket")}</Card.Title>
+              </Stack>
             </CollapsibleCard.Header>
             <CollapsibleCard.Content>
               <Flex direction="column" gap={4} align="stretch">
                 <FlexItem>
                   <ToggleControl
-                    label={
-                      settings.in_carts_enabled
-                        ? __("Disable", "shopsocket")
-                        : __("Enable", "shopsocket")
-                    }
-                    help={
-                      settings.in_carts_enabled
-                        ? __(
-                            'Click to disable "N shoppers have this in their cart right now" feature site-wide.',
-                            "shopsocket",
-                          )
-                        : __(
-                            'Click to enable "N shoppers have this in their cart right now" feature site-wide.',
-                            "shopsocket",
-                          )
-                    }
+                    label={__(
+                      "Enable",
+                      "shopsocket",
+                    )}
+                    help={__(
+                      'Shoppers see "N shoppers have this in their cart right now" under the price.',
+                      "shopsocket",
+                    )}
                     checked={settings.in_carts_enabled}
                     onChange={(value: boolean) =>
                       update({ in_carts_enabled: value })
@@ -178,7 +164,7 @@ export function SettingsTab() {
                   {exclusions(
                     "in_carts_excluded_categories",
                     settings.in_carts_enabled,
-                    __("Disable the count in these categories", "shopsocket"),
+                    __("Except in these categories", "shopsocket"),
                   )}
                 </FlexItem>
               </Flex>
@@ -196,15 +182,11 @@ export function SettingsTab() {
               <Flex direction="column" gap={4} align="stretch">
                 <FlexItem>
                   <ToggleControl
-                    label={settings.activity_enabled ? __("Disable", "shopsocket") : __("Enable", "shopsocket")}
-                    help={settings.activity_enabled ? __(
-                        'Click to disable "Someone just added this to their cart" feature site-wide. Shown to shoppers who hold the same product in their cart.',
-                        "shopsocket",
-                      ) : __(
-                        'Click to enable "Someone just added this to their cart" feature site-wide. Shown to shoppers who hold the same product in their cart.',
-                        "shopsocket",
-                      )
-                    }
+                    label={__("Show added-to-cart notifications", "shopsocket")}
+                    help={__(
+                      'Shoppers who hold the same product see "Someone just added this to their cart".',
+                      "shopsocket",
+                    )}
                     checked={settings.activity_enabled}
                     onChange={(value: boolean) =>
                       update({ activity_enabled: value })
@@ -215,7 +197,7 @@ export function SettingsTab() {
                   {exclusions(
                     "activity_excluded_categories",
                     settings.activity_enabled,
-                    __("Disable the notification in these categories", "shopsocket"),
+                    __("Except in these categories", "shopsocket"),
                   )}
                 </FlexItem>
               </Flex>
@@ -232,9 +214,9 @@ export function SettingsTab() {
 
           <Button
             variant="primary"
-            onClick={save}
-            isBusy={saving}
-            disabled={saving || !dirty}
+            onClick={() => save.run()}
+            isBusy={save.isPending}
+            disabled={save.isPending || !dirty}
           >
             {__("Save changes", "shopsocket")}
           </Button>

@@ -118,7 +118,7 @@ Yes.
 
 = Can I turn parts of it off? =
 
-Yes. Site-wide switches and category exclusions are on the ShopSocket tab of WordSocket's settings page (WordSocket 0.28 or later). Each product has its own Default, On, or Off choice under Product data > ShopSocket.
+Yes. Site-wide switches and category exclusions are on the ShopSocket tab of WordSocket's settings page (WordSocket 0.29 or later). Each product has its own Default, On, or Off choice under Product data > ShopSocket.
 
 Developers: `shopsocket_storefront`, `shopsocket_in_carts_enabled`, `shopsocket_activity_enabled`, `shopsocket_activity_throttle`, and `shopsocket_publish_stock` filters.
 
@@ -135,6 +135,11 @@ Anyone who can manage WooCommerce.
 5. The Live Stock block on an ordinary page: availability, units left, and the in-cart count, all live.
 
 == Changelog ==
+
+= 0.6.0 =
+* New: the board's Storefront Customers and Open Tabs figures say how many of them are your own staff
+* Changed: the settings switches are labelled by what they show, the category exclusion is "Except in these categories", and its picker lists every category when clicked
+* Changed: the settings tab confirms a save with a toast at the bottom of the screen, and now needs WordSocket 0.29
 
 = 0.5.1 =
 * Fixed: an order placed while the board's own connection was down did not appear until the page was reloaded. The board now catches up on missed orders and status changes when it reconnects, when you return to its tab, and on its regular refresh
@@ -178,6 +183,9 @@ Anyone who can manage WooCommerce.
 * A card on WordSocket's Extensions tab
 
 == Upgrade Notice ==
+
+= 0.6.0 =
+The ShopSocket settings tab now needs WordSocket 0.29; the board and storefront are unaffected.
 
 = 0.5.1 =
 The board catches up on orders placed while its connection was down.

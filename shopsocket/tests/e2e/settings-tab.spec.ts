@@ -49,7 +49,7 @@ test.describe("Storefront settings", () => {
 
     await toggles().nth(0).uncheck();
     await page.getByRole("button", { name: "Save changes" }).click();
-    await expect(page.locator(".components-notice").getByText("Settings saved.")).toBeVisible();
+    await expect(page.locator(".components-snackbar").getByText("Settings saved.")).toBeVisible();
 
     await page.reload();
     await expect(toggles()).toHaveCount(2);
