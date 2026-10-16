@@ -156,6 +156,7 @@ function render_dashboard(): void {
 					'orders'      => ORDERS_CHANNEL,
 					'stock'       => STOCK_CHANNEL,
 					'presence'    => CARTS_PRESENCE_CHANNEL,
+					'staff'       => STAFF_PRESENCE_CHANNEL,
 					'connections' => CONNECTIONS_CHANNEL,
 				),
 			),

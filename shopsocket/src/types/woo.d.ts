@@ -9,7 +9,7 @@ interface ShopSocketBoardConfig {
 	adminUrl: string;
 	nonce: string;
 	/** The channel each event is trusted from (inc/channels.php). */
-	channels: { orders: string; stock: string; presence: string; connections: string };
+	channels: { orders: string; stock: string; presence: string; staff: string; connections: string };
 	/** Orders to render before the first live event. */
 	orders: WooOrderEvent[];
 	/** Statuses the board shows, in display order. */
@@ -62,6 +62,8 @@ interface WooDashboardSnapshot {
 	};
 	/** Distinct storefront visitors connected right now (deduped by visitor id across tabs). */
 	usersOnline: number;
+	/** The staff share of the figures: visitors above who are staff, and open tabs (admin or storefront) that are theirs. */
+	staff: { users: number; tabs: number };
 	online: { active_connections: number; max_connections: number } | null;
 	/** Products in live carts: how many of those carts hold each, and the units across them, unordered. */
 	liveProducts: Array< { id: number; carts: number; units: number } >;

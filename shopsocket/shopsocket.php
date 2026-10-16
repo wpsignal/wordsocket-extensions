@@ -54,6 +54,11 @@ const CARTS_NS = 'woo:carts';
 /** The presence channel: staff subscribe, shoppers enter (and never subscribe). */
 const CARTS_PRESENCE_CHANNEL = 'woo:carts:live';
 
+/** Namespace staff enter presence on, from every admin and storefront page they have open. */
+const STAFF_NS = 'woo:staff';
+/** The staff presence channel: the board reads it to tell staff tabs and visits from shoppers'. */
+const STAFF_PRESENCE_CHANNEL = 'woo:staff:live';
+
 /** The WordSocket release this plugin needs: presence, publish grants, the stats route (0.22), and the `window.WPS` id and channel helpers (0.23). */
 const MIN_WORDSOCKET = '0.23.0';
 

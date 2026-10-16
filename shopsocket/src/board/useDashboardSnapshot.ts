@@ -74,6 +74,7 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
   const [online, setOnline] = useState<WooDashboardData["online"]>(config.snapshot.online);
   const [present, setPresent] = useState<Set<string>>(() => new Set());
   const [usersOnline, setUsersOnline] = useState(0);
+  const [staffShare, setStaffShare] = useState({ users: 0, tabs: 0 });
   const [stale, setStale] = useState(false);
 
   useEffect(() => {
@@ -149,77 +150,106 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
     const wps = window.WPS;
     const offs: Array<() => void> = [];
     /*
-     * connection id -> { v: visitor id, b: cart id | null }. A shopper's tabs
-     * share v, so distinct v is "users online"; distinct b is the live-cart split.
+     * One roster per presence channel: connection id -> state, with leaves
+     * held for the grace so a navigation does not read as a departure. The
+     * shoppers' roster carries { v: visitor id, b: cart id | null }; a
+     * shopper's tabs share v, so distinct v is "users online" and distinct b
+     * is the live-cart split. The staff roster carries { v } from every admin
+     * and storefront page a staff member has open.
      */
     type Member = { v?: string; b?: string | null };
-    const members = new Map<string, Member>();
-    // Leaves waiting out their grace period, by connection id.
-    const pendingLeaves = new Map<string, ReturnType<typeof setTimeout>>();
-    const cancelLeave = (id: string) => {
-      const timer = pendingLeaves.get(id);
-      if (timer !== undefined) {
-        clearTimeout(timer);
-        pendingLeaves.delete(id);
-      }
+    type PresenceFrame = {
+      action?: string;
+      id?: string;
+      state?: Member;
+      members?: Array<{ id: string; state?: Member }>;
     };
-    // Derive the live cart ids and the distinct visitor count from the members.
-    const applyPresent = () => {
+    const roster = (onChange: () => void) => {
+      const members = new Map<string, Member>();
+      // Leaves waiting out their grace period, by connection id.
+      const pendingLeaves = new Map<string, ReturnType<typeof setTimeout>>();
+      const cancelLeave = (id: string) => {
+        const timer = pendingLeaves.get(id);
+        if (timer !== undefined) {
+          clearTimeout(timer);
+          pendingLeaves.delete(id);
+        }
+      };
+      const handle = (p: PresenceFrame) => {
+        if (p.action === "sync") {
+          // The relay's authoritative list: nothing is pending any more.
+          pendingLeaves.forEach((timer) => clearTimeout(timer));
+          pendingLeaves.clear();
+          members.clear();
+          (p.members ?? []).forEach((m) => m.id && members.set(m.id, m.state ?? {}));
+        } else if (p.action === "join" && p.id) {
+          cancelLeave(p.id);
+          members.set(p.id, p.state ?? {});
+        } else if (p.action === "leave" && p.id) {
+          /*
+           * Hold the member: if the same person is back on the next page
+           * within the grace, the sets in applyPresent() dedupe the overlap
+           * by visitor and cart id, so nothing flickers and nothing doubles.
+           */
+          const id = p.id;
+          cancelLeave(id);
+          pendingLeaves.set(
+            id,
+            setTimeout(() => {
+              pendingLeaves.delete(id);
+              members.delete(id);
+              onChange();
+            }, LEAVE_GRACE_MS),
+          );
+          return;
+        } else {
+          return;
+        }
+        onChange();
+      };
+      const dispose = () => {
+        pendingLeaves.forEach((timer) => clearTimeout(timer));
+        pendingLeaves.clear();
+      };
+      return { members, handle, dispose };
+    };
+    const shoppers = roster(() => applyPresent());
+    const staff = roster(() => applyPresent());
+    // Derive the live cart ids, the distinct visitor count, and the staff share of both figures.
+    function applyPresent() {
       if (!alive) return;
       const carts = new Set<string>();
       const users = new Set<string>();
-      members.forEach((m) => {
+      shoppers.members.forEach((m) => {
         if (m.b) carts.add(m.b);
         if (m.v) users.add(m.v);
       });
+      const staffVisitors = new Set<string>();
+      staff.members.forEach((m) => {
+        if (m.v) staffVisitors.add(m.v);
+      });
+      let staffUsers = 0;
+      users.forEach((v) => {
+        if (staffVisitors.has(v)) staffUsers += 1;
+      });
       setPresent(carts);
       setUsersOnline(users.size);
-    };
+      setStaffShare({ users: staffUsers, tabs: staff.members.size });
+    }
 
     if (wps) {
       /*
-       * Staff tokens auto-subscribe to the presence, carts, and connections
-       * channels (`wpsignal_token_channels`, inc/channels.php): only listen.
+       * Staff tokens auto-subscribe to the presence, staff, carts, and
+       * connections channels (`wpsignal_token_channels`, inc/channels.php):
+       * only listen.
        */
       offs.push(
         wps.on(PRESENCE_EVENT, (data, channel) => {
-          if (!wps.onChannel(channel, config.channels.presence)) return;
-          const p = data as {
-            action?: string;
-            id?: string;
-            state?: Member;
-            members?: Array<{ id: string; state?: Member }>;
-          };
-          if (p.action === "sync") {
-            // The relay's authoritative list: nothing is pending any more.
-            pendingLeaves.forEach((timer) => clearTimeout(timer));
-            pendingLeaves.clear();
-            members.clear();
-            (p.members ?? []).forEach((m) => m.id && members.set(m.id, m.state ?? {}));
-          } else if (p.action === "join" && p.id) {
-            cancelLeave(p.id);
-            members.set(p.id, p.state ?? {});
-          } else if (p.action === "leave" && p.id) {
-            /*
-             * Hold the member: if the same shopper is back on the next page
-             * within the grace, the sets in applyPresent() dedupe the overlap
-             * by visitor and cart id, so nothing flickers and nothing doubles.
-             */
-            const id = p.id;
-            cancelLeave(id);
-            pendingLeaves.set(
-              id,
-              setTimeout(() => {
-                pendingLeaves.delete(id);
-                members.delete(id);
-                applyPresent();
-              }, LEAVE_GRACE_MS),
-            );
-            return;
-          } else {
-            return;
+          if (wps.onChannel(channel, config.channels.presence)) {
+            shoppers.handle(data as PresenceFrame);
+          } else if (wps.onChannel(channel, config.channels.staff)) {
+            staff.handle(data as PresenceFrame);
           }
-          applyPresent();
         }),
       );
       offs.push(
@@ -256,16 +286,16 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
       alive = false;
       clearTimeout(timer);
       clearTimeout(holdTimer);
-      pendingLeaves.forEach((pending) => clearTimeout(pending));
-      pendingLeaves.clear();
+      shoppers.dispose();
+      staff.dispose();
       offs.forEach((off) => off());
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [config.dashboardUrl, config.nonce, config.channels, config.snapshot.as_of]);
 
   const snapshot = useMemo<WooDashboardSnapshot>(
-    () => ({ ...splitCarts(rows, present), usersOnline, online }),
-    [rows, present, usersOnline, online],
+    () => ({ ...splitCarts(rows, present), usersOnline, staff: staffShare, online }),
+    [rows, present, usersOnline, staffShare, online],
   );
 
   return { snapshot, stale };

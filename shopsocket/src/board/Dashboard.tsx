@@ -28,7 +28,7 @@ const config: ShopSocketBoardConfig = window.shopSocket ?? {
   statuses: [],
   snapshot: { carts: [], online: null },
   currencySymbol: "",
-  channels: { orders: "", stock: "", presence: "", connections: "" },
+  channels: { orders: "", stock: "", presence: "", staff: "", connections: "" },
 };
 
 const SOUND_KEY = "shopsocket-sound";
@@ -179,7 +179,9 @@ function Tiles({
   snapshot: WooDashboardSnapshot;
   stale: boolean;
 }) {
-  const { carts, usersOnline, online } = snapshot;
+  const { carts, usersOnline, online, staff } = snapshot;
+  /* translators: %d: how many of the figure above are staff (people or tabs) */
+  const staffNote = (count: number) => (count > 0 ? " " + sprintf(__("(%d staff)", "shopsocket"), count) : "");
   return (
     <div
       className={`shopsocket-summary${stale ? " is-stale" : ""}`}
@@ -192,7 +194,7 @@ function Tiles({
             {__("Storefront Customers", "shopsocket")}
           </span>
           <span className="shopsocket-tile__detail">
-            {__("Unique visitors on the storefront right now", "shopsocket")}
+            {__("Unique visitors on the storefront right now", "shopsocket") + staffNote(staff.users)}
           </span>
         </div>
         <div className="shopsocket-tile is-connections">
@@ -212,7 +214,7 @@ function Tiles({
                   ),
                   online.active_connections,
                   online.max_connections,
-                )
+                ) + staffNote(staff.tabs)
               : __(
                   "Connections between your storefront and wpsignal.io",
                   "shopsocket",

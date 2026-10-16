@@ -8,6 +8,7 @@ use function WPSignal\Extensions\ShopSocket\cart_id;
 use function WPSignal\Extensions\ShopSocket\count_in_carts;
 use const WPSignal\Extensions\ShopSocket\ACTIVITY_CHANNEL;
 use const WPSignal\Extensions\ShopSocket\CARTS_PRESENCE_CHANNEL;
+use const WPSignal\Extensions\ShopSocket\STAFF_PRESENCE_CHANNEL;
 use const WPSignal\Extensions\ShopSocket\CONNECTIONS_CHANNEL;
 use const WPSignal\Extensions\ShopSocket\ORDERS_CHANNEL;
 use const WPSignal\Extensions\ShopSocket\STOCK_CHANNEL;
@@ -41,6 +42,7 @@ final class TriggersTest extends ExtensionTestCase {
 		 */
 		$this->assertNotContains( 'site:site123:woo:carts:', $visitor_prefixes );
 		$this->assertNotContains( 'site:site123:' . CARTS_PRESENCE_CHANNEL, $visitor_channels );
+		$this->assertNotContains( 'site:site123:' . STAFF_PRESENCE_CHANNEL, $visitor_channels );
 		$this->assertSame( array( 'site:site123:woo:carts:' ), $channels->allowed_publish_prefixes( 0, $site_id ) );
 
 		$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
@@ -50,14 +52,17 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertContains( 'site:site123:' . ORDERS_CHANNEL, $staff_channels, 'staff auto-subscribe to the feed' );
 		$this->assertContains( 'site:site123:' . CONNECTIONS_CHANNEL, $staff_channels, 'and to the relay\'s connection count' );
 		$this->assertContains( 'site:site123:' . CARTS_PRESENCE_CHANNEL, $staff_channels, 'and to shopper presence' );
+		$this->assertContains( 'site:site123:' . STAFF_PRESENCE_CHANNEL, $staff_channels, 'and to their own presence' );
 		$this->assertNotContains( 'site:site123:' . CONNECTIONS_CHANNEL, $visitor_channels );
 		$this->assertContains( 'site:site123:woo:orders:', $channels->allowed_prefixes( $admin_id, $site_id, $staff_channels ) );
-		// Staff read the orders feed but PHP is its only publisher; presence stays writable for their own storefront visits.
+		// Staff read the orders feed but PHP is its only publisher; presence stays writable for their own storefront visits, and the staff namespace is theirs alone.
 		$staff_publish = $channels->allowed_publish_prefixes( $admin_id, $site_id );
 		$this->assertContains( 'site:site123:woo:carts:', $staff_publish );
+		$this->assertContains( 'site:site123:woo:staff:', $staff_publish );
 		$this->assertNotContains( 'site:site123:woo:orders:', $staff_publish );
+		$this->assertNotContains( 'site:site123:woo:staff:', $channels->allowed_publish_prefixes( 0, $site_id ) );
 		// WordSocket's own collaboration namespace rides along for anyone who edits posts; none of ShopSocket's business.
-		$this->assertSame( array( 'site:site123:woo:carts:' ), array_values( array_filter( $staff_publish, static fn( $p ) => ! str_ends_with( $p, ':yjs:' ) ) ) );
+		$this->assertEqualsCanonicalizing( array( 'site:site123:woo:carts:', 'site:site123:woo:staff:' ), array_values( array_filter( $staff_publish, static fn( $p ) => ! str_ends_with( $p, ':yjs:' ) ) ) );
 	}
 
 	/*

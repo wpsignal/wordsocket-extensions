@@ -56,6 +56,13 @@ add_action(
 		$wps->channels()->reserve( CARTS_NS, STAFF_CAP, '__return_true' );
 
 		/*
+		 * Staff announce their own tabs here. Only staff may write it, so the
+		 * board can trust a membership to be one of its own people and set
+		 * them apart in the figures; shoppers never read it.
+		 */
+		$wps->channels()->reserve( STAFF_NS, STAFF_CAP );
+
+		/*
 		 * Products are posts: without this, every product save would also
 		 * publish WordSocket's generic post.updated next to woo.stock.changed.
 		 */
@@ -97,8 +104,36 @@ function register_orders_channel( array $channels, int $user_id, string $site_id
 		$channels[] = 'site:' . $site_id . ':' . ORDERS_NS . ':feed';
 		$channels[] = 'site:' . $site_id . ':' . CONNECTIONS_CHANNEL;
 		$channels[] = 'site:' . $site_id . ':' . CARTS_PRESENCE_CHANNEL;
+		$channels[] = 'site:' . $site_id . ':' . STAFF_PRESENCE_CHANNEL;
 	}
 	return $channels;
 }
 // Staff tokens only.
 add_filter( 'wpsignal_token_channels', __NAMESPACE__ . '\register_orders_channel', 10, 3 );
+
+/**
+ * Staff enter presence on every page where the WordSocket client runs, wp-admin
+ * included, carrying the same per-browser visitor id the storefront uses. The
+ * board crosses the two rosters: a visitor id seen on both is a staff member
+ * browsing the store, and each staff membership is one of the open tabs.
+ *
+ * Runs after WordSocket's own enqueue (priority 10), and only when the client
+ * is there to carry it. `setPresence()` before the socket is open is kept and
+ * sent on connect.
+ *
+ * @return void
+ */
+function enter_staff_presence(): void {
+	if ( ! current_user_can( STAFF_CAP ) || ! wp_script_is( 'wpsignal', 'enqueued' ) ) {
+		return;
+	}
+	wp_add_inline_script(
+		'wpsignal',
+		sprintf(
+			'window.WPS && window.WPS.setPresence( %s, { v: window.WPS.visitorId() } );',
+			wp_json_encode( STAFF_PRESENCE_CHANNEL )
+		)
+	);
+}
+add_action( 'wp_enqueue_scripts', __NAMESPACE__ . '\enter_staff_presence', 20 );
+add_action( 'admin_enqueue_scripts', __NAMESPACE__ . '\enter_staff_presence', 20 );
