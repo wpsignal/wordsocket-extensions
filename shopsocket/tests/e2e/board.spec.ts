@@ -297,12 +297,22 @@ test.describe("ShopSocket dashboard", () => {
     }
   });
 
-  /*
-   * Cart history (0.7). Written against WordSocket 0.30's tracker and the
-   * history tables, not yet run: the rehearsal port was held by a hand-started
-   * relay when it was written. Run `npm run test:e2e:http` and fix what fails.
-   */
+  // Cart history (0.7): the Away column, the abandoned panel, and the order on a row.
   test("a hidden tab moves the cart to the Away column, a closed tab lands in the abandoned panel, and an order shows on its row", async ({ admin, page, browser, baseURL, requestUtils }) => {
+    // Three waits of up to the grace plus a checkout: well past the default 30 s.
+    test.setTimeout(120_000);
+    /*
+     * History on: with it off, WooCommerce emptying the cart at checkout deletes
+     * the row (what earlier versions did), so a left cart could never show its order.
+     */
+    const option = "shopsocket_storefront";
+    let before = "";
+    try {
+      before = wp("option", "get", option, "--format=json");
+    } catch {
+      before = ""; // the option does not exist: a site on its defaults
+    }
+    wp("option", "update", option, JSON.stringify({ history_enabled: true }), "--format=json");
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
     const rows = page.locator(".shopsocket-carts tbody tr");
@@ -314,6 +324,7 @@ test.describe("ShopSocket dashboard", () => {
     const row = panel.locator("tbody tr", { hasText: "E2E History Widget" });
 
     const visitor = await visitorContext(browser, baseURL);
+    let orderId = 0;
     try {
       const shop = await visitor.newPage();
       await shop.goto(product.permalink);
@@ -340,7 +351,9 @@ test.describe("ShopSocket dashboard", () => {
       // Closed: the leave stamps the row, and after the grace the panel lists the cart.
       await shop.close();
       await expect(row).toBeVisible({ timeout: 45_000 });
-      await expect(row.locator("td").nth(2)).not.toBeEmpty();
+      // The cells after the product column: value, when they left, the order (none yet).
+      await expect(row.locator("td").nth(1)).not.toBeEmpty();
+      await expect(row.locator("td").nth(2)).toBeEmpty();
 
       // The shopper comes back and checks out: the row shows the order.
       const back = await visitor.newPage();
@@ -353,12 +366,17 @@ test.describe("ShopSocket dashboard", () => {
       await back.getByLabel(/email/i).first().fill("grace@example.com");
       await back.getByRole("button", { name: /place order/i }).click();
       await expect(back).toHaveURL(/order-received/, { timeout: 30_000 });
+      orderId = Number(back.url().match(/order-received\/(\d+)/)?.[1] ?? 0);
       await back.close();
-      await expect(row.locator("td").nth(3).locator("a")).toHaveText(/^#\d+/, { timeout: 45_000 });
+      await expect(row.locator("td").nth(2).locator("a")).toHaveText(/^#\d+/, { timeout: 45_000 });
     } finally {
       await visitor.close();
       clearCarts(product.id);
+      // The order too, or the next run's "Grace" search finds more than one.
+      if (orderId) await deleteOrder(requestUtils, orderId);
       await deleteProduct(requestUtils, product.id);
+      if (before) wp("option", "update", option, before, "--format=json");
+      else wp("option", "delete", option);
     }
   });
 });

@@ -40,22 +40,33 @@ test.describe("Storefront settings", () => {
     await admin.visitAdminPage("admin.php", "page=wordsocket&tab=shopsocket");
     await expect(page.getByRole("tab", { name: "ShopSocket" })).toHaveAttribute("aria-selected", "true");
 
-    // The two site-wide toggles, in order: the in-cart count, then the notification.
+    // The three site-wide toggles, in order: the in-cart count, the notification, then cart history (off by default).
     // Found by position, since their labels change with their state.
     const toggles = () => page.locator(".shopsocket-tab").getByRole("checkbox");
-    await expect(toggles()).toHaveCount(2);
+    await expect(toggles()).toHaveCount(3);
     await expect(toggles().nth(0)).toBeChecked();
     await expect(toggles().nth(1)).toBeChecked();
+    await expect(toggles().nth(2)).not.toBeChecked();
+    await expect(page.getByLabel("Keep carts for (days)")).toHaveCount(0);
 
     await toggles().nth(0).uncheck();
+    // History on shows its two retentions; change one.
+    await toggles().nth(2).check();
+    await page.getByLabel("Keep carts for (days)").fill("45");
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.locator(".components-snackbar").getByText("Settings saved.")).toBeVisible();
 
     await page.reload();
-    await expect(toggles()).toHaveCount(2);
+    await expect(toggles()).toHaveCount(3);
     await expect(toggles().nth(0)).not.toBeChecked();
     await expect(toggles().nth(1)).toBeChecked();
-    expect(JSON.parse(wp("option", "get", OPTION, "--format=json")).in_carts_enabled).toBe(false);
+    await expect(toggles().nth(2)).toBeChecked();
+    await expect(page.getByLabel("Keep carts for (days)")).toHaveValue("45");
+    const saved = JSON.parse(wp("option", "get", OPTION, "--format=json"));
+    expect(saved.in_carts_enabled).toBe(false);
+    expect(saved.history_enabled).toBe(true);
+    expect(saved.history_retention_days).toBe(45);
+    expect(saved.journeys_retention_months).toBe(12);
   });
 
   test("a product set to Off shows no count and raises no toast, even for a shopper who holds it", async ({ browser, baseURL, requestUtils }) => {
