@@ -39,17 +39,18 @@ export const num = (loc: Locator) => async () => Number((await loc.textContent()
 
 /**
  * Forget the cart rows holding `productId`, or every row when no product is
- * given. The rehearsal site is shared with manual testing, so tests clear only
- * what they created.
+ * given, in the history tables (0.7). The rehearsal site is shared with manual
+ * testing, so tests clear only what they created.
  */
 export function clearCarts(productId?: number): void {
-  if (productId === undefined) {
-    wp("eval", "delete_transient('shopsocket_carts'); delete_transient('shopsocket_carts_pub');");
-    return;
-  }
+  const ns = "\\WPSignal\\Extensions\\ShopSocket";
+  const where = productId === undefined ? "1 = 1" : `cart_id IN (SELECT cart_id FROM $items WHERE product_id = ${productId})`;
   wp(
     "eval",
-    `$rows = get_transient('shopsocket_carts'); if (is_array($rows)) { foreach ($rows as $id => $row) { if (in_array(${productId}, (array) ($row['products'] ?? []), true)) { unset($rows[$id]); } } set_transient('shopsocket_carts', $rows, 2 * DAY_IN_SECONDS); delete_transient('shopsocket_carts_pub'); }`,
+    `global $wpdb; $carts = ${ns}\\carts_table(); $items = ${ns}\\cart_items_table(); $journeys = ${ns}\\journeys_table(); ` +
+      `$ids = $wpdb->get_col("SELECT cart_id FROM $carts WHERE ${where}"); ` +
+      `foreach ($ids as $id) { $wpdb->delete($journeys, ['cart_id' => $id]); $wpdb->delete($items, ['cart_id' => $id]); $wpdb->delete($carts, ['cart_id' => $id]); } ` +
+      `delete_transient('shopsocket_carts_pub');`,
   );
 }
 

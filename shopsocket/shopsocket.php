@@ -59,13 +59,13 @@ const STAFF_NS = 'woo:staff';
 /** The staff presence channel: the board reads it to tell staff tabs and visits from shoppers'. */
 const STAFF_PRESENCE_CHANNEL = 'woo:staff:live';
 
-/** The WordSocket release this plugin needs: presence, publish grants, the stats route (0.22), and the `window.WPS` id and channel helpers (0.23). */
-const MIN_WORDSOCKET = '0.23.0';
+/** The WordSocket release this plugin needs: presence, publish grants, the stats route (0.22), the `window.WPS` helpers (0.23), and visitor journeys (0.30). */
+const MIN_WORDSOCKET = '0.30.0';
 
 /**
  * Whether the active WordSocket is new enough, judged by what this plugin
  * uses rather than a version string: version-2 tokens, the stats route, and
- * the browser API that carries `uuid()`, `visitorId()`, and `onChannel()`.
+ * the browser API that carries `presence.track()` (API version 4).
  *
  * @return bool
  */
@@ -75,7 +75,7 @@ function wordsocket_ready(): bool {
 		&& \WPSignal\Token::TOKEN_VERSION >= 2
 		&& method_exists( \WPSignal\Publisher::class, 'stats' )
 		&& defined( '\WPSignal\Client::API_VERSION' )
-		&& \WPSignal\Client::API_VERSION >= 2;
+		&& \WPSignal\Client::API_VERSION >= 4;
 }
 
 // HPOS compatibility, declared before WooCommerce checks it.
@@ -91,7 +91,9 @@ add_action(
 require_once DIR . 'inc/channels.php';
 require_once DIR . 'inc/settings.php';
 require_once DIR . 'inc/payloads.php';
+require_once DIR . 'inc/history.php';
 require_once DIR . 'inc/carts.php';
+require_once DIR . 'inc/privacy.php';
 require_once DIR . 'inc/triggers.php';
 require_once DIR . 'inc/storefront.php';
 require_once DIR . 'inc/blocks.php';

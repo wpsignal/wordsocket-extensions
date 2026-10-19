@@ -24,6 +24,9 @@ const DEFAULTS: ShopSocketStorefrontSettings = {
   activity_enabled: true,
   in_carts_excluded_categories: [],
   activity_excluded_categories: [],
+  history_enabled: false,
+  history_retention_days: 30,
+  journeys_retention_months: 12,
 };
 
 type ExclusionKey =
@@ -36,7 +39,7 @@ function coreComponents(): Components {
 }
 
 export function SettingsTab() {
-  const { ToggleControl, FormTokenField, Button, Spinner } = coreComponents();
+  const { ToggleControl, FormTokenField, Button, Spinner, TextControl } = coreComponents();
   const [settings, setSettings] = useState<ShopSocketStorefrontSettings>(
     window.shopSocketSettings?.storefront ?? DEFAULTS,
   );
@@ -200,6 +203,56 @@ export function SettingsTab() {
                     __("Except in these categories", "shopsocket"),
                   )}
                 </FlexItem>
+              </Flex>
+            </CollapsibleCard.Content>
+          </CollapsibleCard.Root>
+        </FlexItem>
+        <FlexItem>
+          <CollapsibleCard.Root defaultOpen>
+            <CollapsibleCard.Header>
+              <Card.Title>{__("Cart history", "shopsocket")}</Card.Title>
+            </CollapsibleCard.Header>
+            <CollapsibleCard.Content>
+              <Flex direction="column" gap={4} align="stretch">
+                <FlexItem>
+                  <ToggleControl
+                    label={__("Keep a history of carts", "shopsocket")}
+                    help={__(
+                      "Off: a cart is forgotten with its session, as before. On: each cart stays on your site with what it held, when its shopper left and whether it became an order, and the pages they visited are kept as a journey. Nothing leaves your site.",
+                      "shopsocket",
+                    )}
+                    checked={settings.history_enabled}
+                    onChange={(value: boolean) => update({ history_enabled: value })}
+                  />
+                </FlexItem>
+                {settings.history_enabled && (
+                  <FlexItem>
+                    <Flex gap={4} align="flex-start" wrap>
+                      <FlexItem>
+                        <TextControl
+                          type="number"
+                          min={1}
+                          max={365}
+                          label={__("Keep carts for (days)", "shopsocket")}
+                          help={__("A cart's products, value and outcome, linked to the shopper's account when they were logged in.", "shopsocket")}
+                          value={String(settings.history_retention_days)}
+                          onChange={(value: string) => update({ history_retention_days: Math.min(365, Math.max(1, Number(value) || 1)) })}
+                        />
+                      </FlexItem>
+                      <FlexItem>
+                        <TextControl
+                          type="number"
+                          min={1}
+                          max={36}
+                          label={__("Keep journeys for (months)", "shopsocket")}
+                          help={__("The pages a shopper opened, as ids and durations, under a random browser id and never under an account.", "shopsocket")}
+                          value={String(settings.journeys_retention_months)}
+                          onChange={(value: string) => update({ journeys_retention_months: Math.min(36, Math.max(1, Number(value) || 1)) })}
+                        />
+                      </FlexItem>
+                    </Flex>
+                  </FlexItem>
+                )}
               </Flex>
             </CollapsibleCard.Content>
           </CollapsibleCard.Root>

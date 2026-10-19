@@ -296,4 +296,69 @@ test.describe("ShopSocket dashboard", () => {
       await deleteProduct(requestUtils, product.id);
     }
   });
+
+  /*
+   * Cart history (0.7). Written against WordSocket 0.30's tracker and the
+   * history tables, not yet run: the rehearsal port was held by a hand-started
+   * relay when it was written. Run `npm run test:e2e:http` and fix what fails.
+   */
+  test("a hidden tab moves the cart to the Away column, a closed tab lands in the abandoned panel, and an order shows on its row", async ({ admin, page, browser, baseURL, requestUtils }) => {
+    await admin.visitAdminPage("admin.php", PAGE);
+    await waitForLive(page);
+    const rows = page.locator(".shopsocket-carts tbody tr");
+    const liveShoppers = rows.nth(0).locator("td.is-live");
+    const awayShoppers = rows.nth(0).locator("td.is-away");
+    const away0 = await num(awayShoppers)();
+    const product = await createProduct(requestUtils, "E2E History Widget", 20);
+    const panel = page.locator(".shopsocket-abandoned");
+    const row = panel.locator("tbody tr", { hasText: "E2E History Widget" });
+
+    const visitor = await visitorContext(browser, baseURL);
+    try {
+      const shop = await visitor.newPage();
+      await shop.goto(product.permalink);
+      await waitForLive(shop);
+      await addToCart(shop);
+      await expect(page.locator(".shopsocket-live-products a", { hasText: "E2E History Widget" })).toBeVisible({ timeout: 15_000 });
+
+      // Hidden: the journey's last step is `away`, and the cart moves from the Live column to Away.
+      const liveWithShopper = await num(liveShoppers)();
+      await shop.evaluate(() => {
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await expect.poll(num(awayShoppers), { timeout: 15_000 }).toBe(away0 + 1);
+      await expect.poll(num(liveShoppers), { timeout: 15_000 }).toBe(liveWithShopper - 1);
+      await shop.evaluate(() => {
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await expect.poll(num(awayShoppers), { timeout: 15_000 }).toBe(away0);
+
+      // Closed: the leave stamps the row, and after the grace the panel lists the cart.
+      await shop.close();
+      await expect(row).toBeVisible({ timeout: 45_000 });
+      await expect(row.locator("td").nth(2)).not.toBeEmpty();
+
+      // The shopper comes back and checks out: the row shows the order.
+      const back = await visitor.newPage();
+      await back.goto("/checkout/");
+      await back.getByLabel(/first name/i).first().fill("Grace");
+      await back.getByLabel(/last name/i).first().fill("Hopper");
+      await back.getByLabel(/^address$/i).first().fill("1 Main St");
+      await back.getByLabel(/city/i).first().fill("Arlington");
+      await back.getByLabel(/postcode|zip/i).first().fill("22201");
+      await back.getByLabel(/email/i).first().fill("grace@example.com");
+      await back.getByRole("button", { name: /place order/i }).click();
+      await expect(back).toHaveURL(/order-received/, { timeout: 30_000 });
+      await back.close();
+      await expect(row.locator("td").nth(3).locator("a")).toHaveText(/^#\d+/, { timeout: 45_000 });
+    } finally {
+      await visitor.close();
+      clearCarts(product.id);
+      await deleteProduct(requestUtils, product.id);
+    }
+  });
 });

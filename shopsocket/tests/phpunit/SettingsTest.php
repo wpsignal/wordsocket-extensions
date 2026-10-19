@@ -57,6 +57,9 @@ final class SettingsTest extends ExtensionTestCase {
 				'activity_enabled'             => true,
 				'in_carts_excluded_categories' => array(),
 				'activity_excluded_categories' => array(),
+				'history_enabled'              => false,
+				'history_retention_days'       => 30,
+				'journeys_retention_months'    => 12,
 			),
 			settings(),
 			'a site without the option behaves as before the settings existed'
@@ -68,16 +71,23 @@ final class SettingsTest extends ExtensionTestCase {
 				'activity_enabled'             => true,
 				'in_carts_excluded_categories' => array( 3, 7 ),
 				'activity_excluded_categories' => array( 9 ),
+				'history_enabled'              => true,
+				'history_retention_days'       => 365,
+				'journeys_retention_months'    => 1,
 			),
 			sanitize_settings(
 				array(
 					'in_carts_enabled'             => '0',
 					'in_carts_excluded_categories' => array( '3', 7, 3, -1, 'x' ),
 					'activity_excluded_categories' => array( 9 ),
+					'history_enabled'              => '1',
+					'history_retention_days'       => 4000,
+					'journeys_retention_months'    => 0,
 				)
 			),
-			'booleans coerced, term ids deduplicated and cleaned, missing keys defaulted'
+			'booleans coerced, term ids deduplicated and cleaned, missing keys defaulted, retentions clamped to their ranges'
 		);
+		$this->assertSame( 30, sanitize_settings( array( 'history_retention_days' => 'soon' ) )['history_retention_days'], 'a non-number falls back to the default' );
 
 		$legacy = sanitize_settings( array( 'excluded_categories' => array( 5 ) ) );
 		$this->assertSame( array( 5 ), $legacy['in_carts_excluded_categories'], 'the pre-release single list applies to both features' );

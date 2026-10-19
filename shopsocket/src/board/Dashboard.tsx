@@ -26,7 +26,7 @@ const config: ShopSocketBoardConfig = window.shopSocket ?? {
   nonce: "",
   orders: [],
   statuses: [],
-  snapshot: { carts: [], online: null },
+  snapshot: { carts: [], abandoned: [], online: null },
   currencySymbol: "",
   channels: { orders: "", stock: "", presence: "", staff: "", connections: "" },
 };
@@ -93,6 +93,7 @@ export function Dashboard() {
 
       <Tiles snapshot={snapshot} stale={stale} />
       <LiveProductsPanel products={snapshot.liveProducts} />
+      <AbandonedPanel rows={snapshot.abandoned} currencySymbol={config.currencySymbol} />
 
       {alerts.length > 0 && (
         <Notice
@@ -179,9 +180,11 @@ function Tiles({
   snapshot: WooDashboardSnapshot;
   stale: boolean;
 }) {
-  const { carts, usersOnline, online, staff } = snapshot;
+  const { carts, usersOnline, online, staff, awayUsers } = snapshot;
   /* translators: %d: how many of the figure above are staff (people or tabs) */
   const staffNote = (count: number) => (count > 0 ? " " + sprintf(__("(%d staff)", "shopsocket"), count) : "");
+  /* translators: %d: how many of the figure above have every tab hidden */
+  const awayNote = (count: number) => (count > 0 ? " " + sprintf(__("(%d away)", "shopsocket"), count) : "");
   return (
     <div
       className={`shopsocket-summary${stale ? " is-stale" : ""}`}
@@ -194,7 +197,7 @@ function Tiles({
             {__("Storefront Customers", "shopsocket")}
           </span>
           <span className="shopsocket-tile__detail">
-            {__("Unique visitors on the storefront right now", "shopsocket") + staffNote(staff.users)}
+            {__("Unique visitors on the storefront right now", "shopsocket") + staffNote(staff.users) + awayNote(awayUsers)}
           </span>
         </div>
         <div className="shopsocket-tile is-connections">
@@ -222,19 +225,13 @@ function Tiles({
           </span>
         </div>
       </div>
-      <CartsPanel live={carts.live} abandoned={carts.abandoned} />
+      <CartsPanel live={carts.live} away={carts.away} abandoned={carts.abandoned} />
     </div>
   );
 }
 
-/** Shoppers, products, and revenue, split into live and abandoned carts. */
-function CartsPanel({
-  live,
-  abandoned,
-}: {
-  live: CartSegment;
-  abandoned: CartSegment;
-}) {
+/** Customers, products, and revenue, split into live, away and abandoned carts. */
+function CartsPanel({ live, away, abandoned }: { live: CartSegment; away: CartSegment; abandoned: CartSegment }) {
   return (
     <div className="shopsocket-carts">
       <table>
@@ -243,15 +240,15 @@ function CartsPanel({
             <th scope="col"></th>
             <th scope="col" className="is-live">
               {__("Live", "shopsocket")}
-              <span className="shopsocket-carts__hint">
-                {__("shopper here now", "shopsocket")}
-              </span>
+              <span className="shopsocket-carts__hint">{__("shopper here now", "shopsocket")}</span>
+            </th>
+            <th scope="col" className="is-away">
+              {__("Away", "shopsocket")}
+              <span className="shopsocket-carts__hint">{__("here, tab hidden", "shopsocket")}</span>
             </th>
             <th scope="col" className="is-abandoned">
               {__("Abandoned", "shopsocket")}
-              <span className="shopsocket-carts__hint">
-                {__("left, cart still held", "shopsocket")}
-              </span>
+              <span className="shopsocket-carts__hint">{__("left, cart still held", "shopsocket")}</span>
             </th>
           </tr>
         </thead>
@@ -259,16 +256,19 @@ function CartsPanel({
           <CartRow
             label={__("Customers", "shopsocket")}
             live={String(live.shoppers)}
+            away={String(away.shoppers)}
             abandoned={String(abandoned.shoppers)}
           />
           <CartRow
             label={__("Products", "shopsocket")}
             live={String(live.products)}
+            away={String(away.products)}
             abandoned={String(abandoned.products)}
           />
           <CartRow
             label={__("Revenue", "shopsocket")}
             live={money(live.revenue, live.currency)}
+            away={money(away.revenue, away.currency)}
             abandoned={money(abandoned.revenue, abandoned.currency)}
           />
         </tbody>
@@ -379,20 +379,72 @@ function LiveProductsPanel({
   );
 }
 
+/** When a cart was left, in the browser's locale, with the date only when it is not today. */
+function leftAt(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const today = new Date().toDateString() === date.toDateString();
+  return new Intl.DateTimeFormat(undefined, today ? { timeStyle: "short" } : { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+/**
+ * Carts whose shopper left and is not back, newest first: what they held, the
+ * value, when, and the order when one followed. The historical record next to the live
+ * split above; with history off it empties as sessions expire.
+ */
+function AbandonedPanel({ rows, currencySymbol }: { rows: WooAbandonedRow[]; currencySymbol: string }) {
+  const ids = useMemo(() => Array.from(new Set(rows.flatMap((r) => r.products))).slice(0, LIVE_PRODUCTS), [rows]);
+  const ref = useProductNames(ids, config);
+  const name = (id: number) => {
+    const product = ref(id);
+    if (product) return product.name;
+    /* translators: %d: product id */
+    return product === null ? sprintf(__("Product #%d (removed)", "shopsocket"), id) : `#${id}`;
+  };
+  return (
+    <section className="shopsocket-live-products shopsocket-abandoned" aria-labelledby="shopsocket-abandoned-heading">
+      <h2 id="shopsocket-abandoned-heading">{__("Recently abandoned", "shopsocket")}</h2>
+      {rows.length === 0 ? (
+        <p className="shopsocket-board__empty">{__("No shopper has left a cart behind recently.", "shopsocket")}</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{__("Products", "shopsocket")}</th>
+              <th scope="col" className="shopsocket-live-products__count">{__("Value", "shopsocket")}</th>
+              <th scope="col" className="shopsocket-live-products__count">{__("Left", "shopsocket")}</th>
+              <th scope="col" className="shopsocket-live-products__count">{__("Order", "shopsocket")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const href = row.order_url ? adminUrlOrNull(row.order_url, config.adminUrl) : null;
+              const label = row.order_id ? `#${row.order_id}` : "";
+              return (
+                <tr key={row.id} data-cart={row.id} data-journey={row.journey}>
+                  <th scope="row" title={row.journey}>
+                    {row.products.map((id) => `${name(id)}${(row.quantities?.[id] ?? 1) > 1 ? ` \u00d7${row.quantities[id]}` : ""}`).join(", ")}
+                  </th>
+                  <td className="shopsocket-live-products__count">{money(row.value, row.currency || currencySymbol)}</td>
+                  <td className="shopsocket-live-products__count" title={row.left_at}>{leftAt(row.left_at)}</td>
+                  <td className="shopsocket-live-products__count">{href ? <a href={href}>{label}</a> : label}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
 /** One row of the carts table. */
-function CartRow({
-  label,
-  live,
-  abandoned,
-}: {
-  label: string;
-  live: string;
-  abandoned: string;
-}) {
+function CartRow({ label, live, away, abandoned }: { label: string; live: string; away: string; abandoned: string }) {
   return (
     <tr>
       <th scope="row">{label}</th>
       <td className="is-live">{live}</td>
+      <td className="is-away">{away}</td>
       <td className="is-abandoned">{abandoned}</td>
     </tr>
   );

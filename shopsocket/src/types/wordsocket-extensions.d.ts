@@ -94,6 +94,10 @@ interface ShopSocketStorefrontSettings {
 	activity_enabled: boolean;
 	in_carts_excluded_categories: number[];
 	activity_excluded_categories: number[];
+	/** Cart history (0.7): keep cart rows past the session, for this many days, and journeys for this many months. */
+	history_enabled: boolean;
+	history_retention_days: number;
+	journeys_retention_months: number;
 }
 
 /** Core's plugins package, taken from `wp.plugins`; it ships no types here. */

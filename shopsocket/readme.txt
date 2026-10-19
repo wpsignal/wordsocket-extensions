@@ -76,6 +76,8 @@ Inside those encrypted events:
 
 What WPSignal does see, because it needs it to deliver messages: channel names, how many browsers are connected, and an anonymous id for each shopper's browser and cart. None of it is personal.
 
+**What stays on your site.** With cart history off (the default), ShopSocket remembers an open cart only for the length of its WooCommerce session, as it always has. With it on, each cart stays in your own database for the number of days you choose (what it held, its value, when the shopper left and whether it became an order, linked to the shopper's account when they were logged in), and the pages shoppers opened are kept as journeys, for the number of months you choose, under a random browser id and never under an account. Nothing of this leaves your site; WordPress's privacy tools can export and erase a customer's rows.
+
 * [Terms of Service](https://wpsignal.io/terms)
 * [Privacy Policy](https://wpsignal.io/privacy)
 
@@ -94,7 +96,7 @@ ShopSocket is developed in the open at [github.com/wpsignal/wordsocket-extension
 
 = What do I need? =
 
-WooCommerce, the free [WordSocket](https://wordpress.org/plugins/wordsocket/) plugin, and a [WPSignal](https://wpsignal.io/) account (the free plan is enough to start).
+WooCommerce, the free [WordSocket](https://wordpress.org/plugins/wordsocket/) plugin (0.30 or later), and a [WPSignal](https://wpsignal.io/) account (the free plan is enough to start).
 
 = Does it cost anything? =
 
@@ -122,6 +124,10 @@ Yes. Site-wide switches and category exclusions are on the ShopSocket tab of Wor
 
 Developers: `shopsocket_storefront`, `shopsocket_in_carts_enabled`, `shopsocket_activity_enabled`, `shopsocket_activity_throttle`, and `shopsocket_publish_stock` filters.
 
+= What does cart history keep? =
+
+Nothing beyond the session until you switch it on (ShopSocket tab, "Cart history"). On, it keeps each cart's products, value, when its shopper left and whether it became an order for the days you set, and the pages shoppers opened as anonymous journeys for the months you set. The board then lists recently abandoned carts. Everything stays in your own database.
+
 = Who can see the board? =
 
 Anyone who can manage WooCommerce.
@@ -135,6 +141,13 @@ Anyone who can manage WooCommerce.
 5. The Live Stock block on an ordinary page: availability, units left, and the in-cart count, all live.
 
 == Changelog ==
+
+= 0.7.0 =
+* New: cart history. Switch it on under ShopSocket settings to keep each cart's products, value, when the shopper left and whether it became an order, for the days you choose, and shoppers' page journeys for the months you choose. Off by default; off keeps exactly what earlier versions kept
+* New: the board lists recently abandoned carts, and says how many shoppers and carts are "away" (every tab hidden) rather than gone
+* New: a WooCommerce privacy exporter and eraser for the history, and the tables are removed on uninstall
+* Changed: cart rows live in tables of their own instead of a transient, so two shoppers adding at the same moment no longer overwrite each other
+* Requires WordSocket 0.30, whose visitor tracking carries the journeys
 
 = 0.6.0 =
 * New: the board's Storefront Customers and Open Tabs figures say how many of them are your own staff
@@ -183,6 +196,9 @@ Anyone who can manage WooCommerce.
 * A card on WordSocket's Extensions tab
 
 == Upgrade Notice ==
+
+= 0.7.0 =
+Needs WordSocket 0.30. Cart history is off by default; switch it on under the ShopSocket tab when you want carts and journeys kept.
 
 = 0.6.0 =
 The ShopSocket settings tab now needs WordSocket 0.29; the board and storefront are unaffected.

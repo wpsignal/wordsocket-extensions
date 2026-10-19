@@ -21,17 +21,23 @@ const LEAVE_GRACE_MS = 6_000;
 
 type Config = Pick<ShopSocketBoardConfig, "dashboardUrl" | "nonce" | "snapshot" | "channels">;
 
-/** Cross the cart rows with the set of present cart ids into two segments, counting live carts per product. */
+/*
+ * Cross the cart rows with presence into three segments: live (a visible tab),
+ * away (present, every tab hidden), abandoned (gone). Live carts per product
+ * count the first two, since the shopper is still on the site.
+ */
 function splitCarts(
   rows: WooCartRow[],
   present: Set<string>,
+  awayIds: Set<string>,
 ): Pick<WooDashboardSnapshot, "carts" | "liveProducts"> {
   const live = { shoppers: 0, products: new Set<number>(), revenue: 0, currency: "" };
+  const away = { shoppers: 0, products: new Set<number>(), revenue: 0, currency: "" };
   const abandoned = { shoppers: 0, products: new Set<number>(), revenue: 0, currency: "" };
   const liveCounts = new Map<number, { carts: number; units: number }>();
   for (const row of rows) {
     const isLive = present.has(row.id);
-    const seg = isLive ? live : abandoned;
+    const seg = isLive ? (awayIds.has(row.id) ? away : live) : abandoned;
     seg.shoppers += 1;
     seg.revenue += row.value;
     seg.currency = seg.currency || row.currency;
@@ -53,9 +59,18 @@ function splitCarts(
     currency: s.currency,
   });
   return {
-    carts: { live: finish(live), abandoned: finish(abandoned) },
+    carts: { live: finish(live), away: finish(away), abandoned: finish(abandoned) },
     liveProducts: [...liveCounts].map(([id, count]) => ({ id, ...count })),
   };
+}
+
+/*
+ * The left carts the panel shows: the shopper is not present (a present one
+ * is back, and a live or away cart again) and the leave is older than the
+ * grace, so a navigation never flashes a cart through the panel.
+ */
+function recentlyAbandoned(rows: WooAbandonedRow[], present: Set<string>, now: number): WooAbandonedRow[] {
+  return rows.filter((row) => !present.has(row.id) && now - Date.parse(row.left_at) >= LEAVE_GRACE_MS);
 }
 
 /** Called with the orders a refresh found changed: the orders, when the request left, and the `since` it asked for. */
@@ -71,6 +86,17 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
   const onOrdersRef = useRef(onOrders);
   onOrdersRef.current = onOrders;
   const [rows, setRows] = useState<WooCartRow[]>(config.snapshot.carts);
+  const [abandoned, setAbandoned] = useState<WooAbandonedRow[]>(config.snapshot.abandoned ?? []);
+  const [awayUsers, setAwayUsers] = useState(0);
+  const [awayIds, setAwayIds] = useState<Set<string>>(() => new Set());
+  // Re-evaluated when the youngest leave crosses the grace, so a row appears without a refresh.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const pending = abandoned.map((row) => Date.parse(row.left_at) + LEAVE_GRACE_MS - Date.now()).filter((ms) => ms > 0);
+    if (pending.length === 0) return undefined;
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(...pending) + 50);
+    return () => clearTimeout(timer);
+  }, [abandoned, now]);
   const [online, setOnline] = useState<WooDashboardData["online"]>(config.snapshot.online);
   const [present, setPresent] = useState<Set<string>>(() => new Set());
   const [usersOnline, setUsersOnline] = useState(0);
@@ -124,6 +150,7 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
         });
         if (alive) {
           setRows(fresh.carts);
+          if (fresh.abandoned) setAbandoned(fresh.abandoned);
           if (fresh.online) showOnline(fresh.online);
           else setOnline(fresh.online);
           setStale(false);
@@ -157,7 +184,18 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
      * is the live-cart split. The staff roster carries { v } from every admin
      * and storefront page a staff member has open.
      */
-    type Member = { v?: string; b?: string | null };
+    /*
+ * A shopper's presence state: `v` and `b` are the visitor and cart ids, `j`
+ * the journey WordSocket's tracker keeps (0.30), whose last step is `away`
+ * while the tab is hidden.
+ */
+type Member = { v?: string; b?: string | null; j?: string };
+
+/** Whether a member's tab is hidden: the journey's last step is `away`. */
+function isAway(m: Member): boolean {
+  const last = (m.j ?? "").split(">").pop() ?? "";
+  return last.startsWith("away:");
+}
     type PresenceFrame = {
       action?: string;
       id?: string;
@@ -220,10 +258,18 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
       if (!alive) return;
       const carts = new Set<string>();
       const users = new Set<string>();
+      // Away only when every tab of theirs is hidden: one visible tab is a present shopper.
+      const activeUsers = new Set<string>();
+      const activeCarts = new Set<string>();
       shoppers.members.forEach((m) => {
         if (m.b) carts.add(m.b);
         if (m.v) users.add(m.v);
+        if (isAway(m)) return;
+        if (m.b) activeCarts.add(m.b);
+        if (m.v) activeUsers.add(m.v);
       });
+      setAwayUsers(users.size - activeUsers.size);
+      setAwayIds(new Set([...carts].filter((b) => !activeCarts.has(b))));
       const staffVisitors = new Set<string>();
       staff.members.forEach((m) => {
         if (m.v) staffVisitors.add(m.v);
@@ -255,11 +301,12 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
       offs.push(
         wps.on(CARTS_EVENT, (data, channel) => {
           if (!wps.onChannel(channel, config.channels.orders)) return;
-          const payload = data as { carts?: WooCartRow[] };
+          const payload = data as { carts?: WooCartRow[]; abandoned?: WooAbandonedRow[] };
           if (Array.isArray(payload.carts)) {
             setRows(payload.carts);
             setStale(false);
           }
+          if (Array.isArray(payload.abandoned)) setAbandoned(payload.abandoned);
         }),
       );
       offs.push(
@@ -294,8 +341,15 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
   }, [config.dashboardUrl, config.nonce, config.channels, config.snapshot.as_of]);
 
   const snapshot = useMemo<WooDashboardSnapshot>(
-    () => ({ ...splitCarts(rows, present), usersOnline, staff: staffShare, online }),
-    [rows, present, usersOnline, staffShare, online],
+    () => ({
+      ...splitCarts(rows, present, awayIds),
+      usersOnline,
+      staff: staffShare,
+      awayUsers,
+      abandoned: recentlyAbandoned(abandoned, present, now),
+      online,
+    }),
+    [rows, present, awayIds, usersOnline, staffShare, awayUsers, abandoned, now, online],
   );
 
   return { snapshot, stale };

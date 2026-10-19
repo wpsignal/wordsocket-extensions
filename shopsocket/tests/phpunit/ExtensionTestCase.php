@@ -126,24 +126,68 @@ abstract class ExtensionTestCase extends TestCase {
 		);
 	}
 
-	/** Remove all cart state so each test starts from an empty store. */
+	/** Remove all cart state (the three history tables and the publish hash) so each test starts from an empty store. */
 	protected function clear_carts(): void {
-		delete_transient( 'shopsocket_carts' );
+		global $wpdb;
+		foreach ( array( \WPSignal\Extensions\ShopSocket\journeys_table(), \WPSignal\Extensions\ShopSocket\cart_items_table(), \WPSignal\Extensions\ShopSocket\carts_table() ) as $table ) {
+			$wpdb->query( "DELETE FROM {$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		}
 		delete_transient( 'shopsocket_carts_pub' );
+		\WPSignal\Extensions\ShopSocket\invalidate_cart_caches();
 	}
 
 	/** Seed one cart row directly, bypassing the WooCommerce cart; one unit of each product unless `$quantities` says otherwise. */
 	protected function seed_cart( string $id, array $products, float $value, array $quantities = array() ): void {
-		$carts = get_transient( 'shopsocket_carts' );
-		$carts = is_array( $carts ) ? $carts : array();
-		$carts[ $id ] = array(
-			'products'   => array_map( 'intval', $products ),
-			'quantities' => $quantities,
-			'value'      => $value,
-			'currency'   => get_woocommerce_currency(),
-			'last_seen'  => time(),
+		global $wpdb;
+		$now = current_time( 'mysql', true );
+		$wpdb->replace(
+			\WPSignal\Extensions\ShopSocket\carts_table(),
+			array(
+				'cart_id'    => $id,
+				'currency'   => get_woocommerce_currency(),
+				'value'      => $value,
+				'first_seen' => $now,
+				'last_seen'  => $now,
+			)
 		);
-		set_transient( 'shopsocket_carts', $carts, DAY_IN_SECONDS );
+		$wpdb->delete( \WPSignal\Extensions\ShopSocket\cart_items_table(), array( 'cart_id' => $id ) );
+		foreach ( array_map( 'intval', $products ) as $product_id ) {
+			$wpdb->insert(
+				\WPSignal\Extensions\ShopSocket\cart_items_table(),
+				array(
+					'cart_id'    => $id,
+					'product_id' => $product_id,
+					'quantity'   => max( 1, (int) ( $quantities[ $product_id ] ?? 1 ) ),
+				)
+			);
+		}
+		\WPSignal\Extensions\ShopSocket\invalidate_cart_caches();
+	}
+
+	/** Switch cart history on or off for the rest of the test. */
+	protected function set_history( bool $enabled, int $days = 30, int $months = 12 ): void {
+		update_option(
+			'shopsocket_storefront',
+			array_merge(
+				\WPSignal\Extensions\ShopSocket\settings(),
+				array(
+					'history_enabled'           => $enabled,
+					'history_retention_days'    => $days,
+					'journeys_retention_months' => $months,
+				)
+			)
+		);
+	}
+
+	/** One cart row as stored, or null. */
+	protected function stored_cart( string $id ): ?array {
+		return \WPSignal\Extensions\ShopSocket\cart_row( $id );
+	}
+
+	/** Every journey row, oldest first. */
+	protected function journeys(): array {
+		global $wpdb;
+		return (array) $wpdb->get_results( 'SELECT * FROM ' . \WPSignal\Extensions\ShopSocket\journeys_table() . ' ORDER BY started_at, journey_id', ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	}
 
 	/** A managed-stock simple product, deleted in tearDown. */

@@ -1,9 +1,15 @@
-/**
- * This shopper, as the server and the relay know them: their cart id, the
- * products they hold, and their presence on the carts channel. The cart id
- * comes from the server (the WooCommerce session cookie is HttpOnly), and
- * presence under it is what shows the cart as live on the board while this
- * connection is open; the relay drops it the moment the socket closes.
+/*
+ * This shopper, as the server and the relay know them.
+ *
+ * - The cart id comes from the server (the WooCommerce session cookie is
+ *   HttpOnly) and rides in presence as `b`, which is what shows the cart as
+ *   live on the board while this connection is open; the relay drops it the
+ *   moment the socket closes.
+ * - Presence itself is WordSocket's `WPS.presence.track()` (0.30): it carries
+ *   the visitor id, the journey id and the journey (`v`, `n`, `j`), goes
+ *   `away` while the tab is hidden, and reports each visit and leave to
+ *   WordPress, where `inc/history.php` stamps the cart row. This module only
+ *   adds `b`. On an older WordSocket it falls back to plain `setPresence`.
  */
 
 export interface ViewerConfig {
@@ -47,6 +53,24 @@ export function startViewer(
   const quantities = new Map<number, number>();
   let inFlight = false;
   let dirty = false;
+  let tracker: WPSPresenceTracker | null = null;
+
+  /*
+   * `v` (WordSocket's per-browser visitor id) counts the visitor as online,
+   * `b` ties the cart to this connection; the board dedupes `v` across tabs.
+   * The tracker adds `n` and `j` and keeps the journey; it is started once,
+   * on the first sync, and updated with the cart id after each.
+   */
+  function announce(b: string | null): void {
+    const wps = window.WPS;
+    if (!wps || !config.presenceChannel) return;
+    if (wps.presence) {
+      if (tracker) tracker.update({ b });
+      else tracker = wps.presence.track(config.presenceChannel, { state: { b } });
+      return;
+    }
+    wps.setPresence(config.presenceChannel, { v: wps.visitorId(), b });
+  }
 
   /**
    * Pull this shopper's cart id, held products, and this page's live count
@@ -80,14 +104,7 @@ export function startViewer(
       if (config.productId && typeof viewer?.count === "number") {
         onCount(Number(config.productId), viewer.count);
       }
-      const wps = window.WPS;
-      if (wps && config.presenceChannel) {
-        /*
-         * `v` (WordSocket's per-browser visitor id) counts the visitor as online,
-         * `b` ties the cart to this connection; the board dedupes `v` across tabs.
-         */
-        wps.setPresence(config.presenceChannel, { v: wps.visitorId(), b: viewer?.id ?? null });
-      }
+      announce(viewer?.id ?? null);
     } catch {
       // Offline or blocked: the seeded values and live events still apply.
     } finally {

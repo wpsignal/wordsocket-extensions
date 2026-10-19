@@ -33,9 +33,24 @@ interface WooCartRow {
 	currency: string;
 }
 
+/** A cart whose shopper left (inc/history.php `abandoned_rows()`), newest leave first. */
+interface WooAbandonedRow extends WooCartRow {
+	/** The shopper's journey, `kind:id:ms` steps joined by `>`; empty with history off. */
+	journey: string;
+	/** When the shopper left, RFC 3339 UTC. */
+	left_at: string;
+	converted_at: string | null;
+	/** Set when the cart later became an order. */
+	order_id: number | null;
+	/** The order's edit screen, built without loading the order; followed only into this site's admin. */
+	order_url: string;
+}
+
 /** The raw dashboard payload from the server (rows + online). */
 interface WooDashboardData {
 	carts: WooCartRow[];
+	/** The latest carts whose shopper left at some point, newest leave first; absent on a payload from before 0.7. */
+	abandoned?: WooAbandonedRow[];
 	/** Null when WordSocket is older than 0.22 or the server could not be reached. */
 	online: { active_connections: number; max_connections: number } | null;
 	/** The server's clock (Unix seconds) when the figures were read; sent back as `since` on the next refresh. */
@@ -55,8 +70,10 @@ interface WooCartSegment {
 /** What the board renders: rows split into live and abandoned. */
 interface WooDashboardSnapshot {
 	carts: {
-		/** Carts whose shopper has an open tab (a live connection) right now. */
+		/** Carts whose shopper has a visible tab right now. */
 		live: WooCartSegment;
+		/** Carts whose shopper is connected but has every tab hidden. */
+		away: WooCartSegment;
 		/** Carts still held by a shopper who has left the site. */
 		abandoned: WooCartSegment;
 	};
@@ -64,6 +81,10 @@ interface WooDashboardSnapshot {
 	usersOnline: number;
 	/** The staff share of the figures: visitors above who are staff, and open tabs (admin or storefront) that are theirs. */
 	staff: { users: number; tabs: number };
+	/** Connected visitors whose every tab is hidden. */
+	awayUsers: number;
+	/** Left carts whose shopper is not back and whose leave is older than the grace, newest first. */
+	abandoned: WooAbandonedRow[];
 	online: { active_connections: number; max_connections: number } | null;
 	/** Products in live carts: how many of those carts hold each, and the units across them, unordered. */
 	liveProducts: Array< { id: number; carts: number; units: number } >;

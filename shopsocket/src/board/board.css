@@ -385,6 +385,10 @@ body.shopsocket-fullscreen {
     font-weight: 600;
   }
 
+  td.is-away {
+    color: #996800;
+  }
+
   td.is-abandoned {
     color: #8c8f94;
   }
@@ -453,6 +457,13 @@ body.shopsocket-fullscreen {
   tbody .shopsocket-live-products__count {
     font-weight: 600;
   }
+}
+
+/* Recently abandoned: the live-products table, with wrapping product lists. */
+
+.shopsocket-abandoned tbody th {
+  font-weight: 400;
+  max-width: 48ch;
 }
 
 @media (max-width: 782px) {

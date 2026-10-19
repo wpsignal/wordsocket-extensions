@@ -1,10 +1,12 @@
 <?php
 /**
- * Cart rows: what each shopper has in their cart, keyed by `cart_id()`.
+ * Cart rows: what each shopper has in their cart, keyed by `cart_id()`, in
+ * the tables `inc/history.php` creates.
  *
- * Only contents live here. Live or abandoned is decided by the dashboard,
- * which crosses these rows with the relay's presence membership. A row is
- * read from the shopper's own request and lasts as long as their session.
+ * Only contents and the lifecycle stamps live here. Live or abandoned is
+ * decided by the dashboard, which crosses these rows with the relay's
+ * presence membership. A row is written from the shopper's own request and,
+ * with history off, lasts as long as their session.
  *
  * @package WPSignal\Extensions\ShopSocket
  */
@@ -18,8 +20,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const CARTS_TRANSIENT = 'shopsocket_carts';
-const CARTS_PUB_HASH  = 'shopsocket_carts_pub';
+// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL, WordPress.DB.PreparedSQLPlaceholders -- The plugin's own tables: names come from the table functions, fragments from prepare(), one placeholder per id.
+
+/** The hash of the last `woo.carts` publish, so staff only hear about a change. */
+const CARTS_PUB_HASH = 'shopsocket_carts_pub';
 
 /**
  * Seconds a row survives without a cart change: the WooCommerce session lifetime.
@@ -29,40 +33,6 @@ const CARTS_PUB_HASH  = 'shopsocket_carts_pub';
 function cart_lifetime(): int {
 	// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WooCommerce's own filter, read for its value.
 	return max( 60, (int) apply_filters( 'wc_session_expiration', 2 * DAY_IN_SECONDS ) );
-}
-
-/**
- * Cart rows by id, dropping empty carts and rows past the session lifetime.
- *
- * @return array<string, array<string, mixed>>
- */
-function read_carts(): array {
-	$carts = get_transient( CARTS_TRANSIENT );
-	if ( ! is_array( $carts ) ) {
-		return array();
-	}
-	$cutoff = time() - cart_lifetime();
-	$live   = array();
-	foreach ( $carts as $id => $row ) {
-		if ( is_array( $row ) && ! empty( $row['products'] ) && (int) ( $row['last_seen'] ?? 0 ) >= $cutoff ) {
-			$live[ $id ] = $row;
-		}
-	}
-	return $live;
-}
-
-/**
- * Persist the cart map (or drop it when empty).
- *
- * @param array<string, array<string, mixed>> $carts Rows by cart id.
- * @return void
- */
-function write_carts( array $carts ): void {
-	if ( empty( $carts ) ) {
-		delete_transient( CARTS_TRANSIENT );
-		return;
-	}
-	set_transient( CARTS_TRANSIENT, $carts, cart_lifetime() );
 }
 
 /**
@@ -118,31 +88,18 @@ function record_cart( string $id ): void {
 	if ( '' === $id ) {
 		return;
 	}
-	$carts = read_carts();
 	$state = current_cart_state();
-
 	if ( null === $state ) {
-		if ( isset( $carts[ $id ] ) ) {
-			unset( $carts[ $id ] );
-			write_carts( $carts );
-			publish_carts_changed();
-		}
+		forget_cart( $id );
 		return;
 	}
-
-	$carts[ $id ] = array(
-		'products'   => $state['products'],
-		'quantities' => $state['quantities'],
-		'value'      => $state['value'],
-		'currency'   => get_woocommerce_currency(),
-		'last_seen'  => time(),
-	);
-	write_carts( $carts );
+	upsert_cart_row( $id, $state );
 	publish_carts_changed();
 }
 
 /**
- * Forget the requester's cart entirely (checkout or an emptied cart).
+ * Forget the requester's cart (checkout or an emptied cart). With history on,
+ * a converted row stays as the record of its order.
  *
  * @param string $id Cart id.
  * @return void
@@ -151,35 +108,41 @@ function forget_cart( string $id ): void {
 	if ( '' === $id ) {
 		return;
 	}
-	$carts = read_carts();
-	if ( isset( $carts[ $id ] ) ) {
-		unset( $carts[ $id ] );
-		write_carts( $carts );
+	$row = cart_row( $id );
+	if ( null === $row ) {
+		return;
+	}
+	if ( history_enabled() && null !== $row['converted_at'] ) {
+		return;
+	}
+	if ( delete_cart_row( $id ) ) {
 		publish_carts_changed();
 	}
 }
 
 /**
- * Every row for the dashboard: `{ id, products, value, currency }`.
+ * Every open cart for the dashboard: `{ id, products, quantities, value, currency }`.
  *
  * @return array<int, array{id: string, products: int[], quantities: array<int, int>, value: float, currency: string}>
  */
 function cart_rows(): array {
-	$rows = array();
-	foreach ( read_carts() as $id => $row ) {
-		$products = array_map( 'intval', (array) ( $row['products'] ?? array() ) );
-		$stored   = (array) ( $row['quantities'] ?? array() );
-		// A row written before quantities were kept counts one unit per product.
-		$quantities = array();
-		foreach ( $products as $product_id ) {
-			$quantities[ $product_id ] = max( 1, (int) ( $stored[ $product_id ] ?? 1 ) );
+	global $wpdb;
+	$cutoff = gmdate( 'Y-m-d H:i:s', time() - cart_lifetime() );
+	$carts  = (array) $wpdb->get_results( $wpdb->prepare( 'SELECT cart_id, value, currency FROM ' . carts_table() . ' WHERE converted_at IS NULL AND last_seen >= %s ORDER BY last_seen DESC', $cutoff ), ARRAY_A );
+	$items  = cart_items( array_map( static fn( array $row ): string => (string) $row['cart_id'], $carts ) );
+	$rows   = array();
+	foreach ( $carts as $cart ) {
+		$id         = (string) $cart['cart_id'];
+		$quantities = $items[ $id ] ?? array();
+		if ( empty( $quantities ) ) {
+			continue;
 		}
 		$rows[] = array(
-			'id'         => (string) $id,
-			'products'   => $products,
+			'id'         => $id,
+			'products'   => array_keys( $quantities ),
 			'quantities' => $quantities,
-			'value'      => round( (float) ( $row['value'] ?? 0 ), 2 ),
-			'currency'   => (string) ( $row['currency'] ?? get_woocommerce_currency() ),
+			'value'      => round( (float) $cart['value'], 2 ),
+			'currency'   => (string) $cart['currency'],
 		);
 	}
 	return $rows;
@@ -192,28 +155,47 @@ function cart_rows(): array {
  * @return int
  */
 function count_in_carts( int $product_id ): int {
-	$count = 0;
-	foreach ( read_carts() as $row ) {
-		if ( in_array( $product_id, array_map( 'intval', (array) ( $row['products'] ?? array() ) ), true ) ) {
-			++$count;
-		}
+	global $wpdb;
+
+	/*
+	 * Cached for a minute under the write generation: a product page may ask for
+	 * several products, and every write to the tables starts a new generation,
+	 * so a count is never stale after a change and never older than a minute
+	 * otherwise (a session expiring is the only change that is not a write).
+	 */
+	$key    = 'in_carts_' . cache_generation() . '_' . $product_id;
+	$cached = wp_cache_get( $key, CACHE_GROUP );
+	if ( false !== $cached ) {
+		return (int) $cached;
 	}
+	$cutoff = gmdate( 'Y-m-d H:i:s', time() - cart_lifetime() );
+	$count  = (int) $wpdb->get_var(
+		$wpdb->prepare(
+			'SELECT COUNT(*) FROM ' . cart_items_table() . ' i INNER JOIN ' . carts_table() . ' c ON c.cart_id = i.cart_id WHERE i.product_id = %d AND c.converted_at IS NULL AND c.last_seen >= %s',
+			$product_id,
+			$cutoff
+		)
+	);
+	wp_cache_set( $key, $count, CACHE_GROUP, MINUTE_IN_SECONDS );
 	return $count;
 }
 
 /**
- * Publish the rows to staff when they differ from the last publish.
+ * Publish the open and recently abandoned rows to staff when they differ from the last publish.
  *
  * @return void
  */
 function publish_carts_changed(): void {
-	$rows = cart_rows();
-	$hash = md5( (string) wp_json_encode( $rows ) );
+	$payload = array(
+		'carts'     => cart_rows(),
+		'abandoned' => abandoned_rows(),
+	);
+	$hash    = md5( (string) wp_json_encode( $payload ) );
 	if ( get_transient( CARTS_PUB_HASH ) === $hash ) {
 		return;
 	}
 	set_transient( CARTS_PUB_HASH, $hash, cart_lifetime() );
-	WPS::publish( ORDERS_CHANNEL, 'woo.carts', array( 'carts' => $rows ) );
+	WPS::publish( ORDERS_CHANNEL, 'woo.carts', $payload );
 }
 
 /**

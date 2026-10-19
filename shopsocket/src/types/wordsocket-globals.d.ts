@@ -1,6 +1,6 @@
 /**
  * The part of WordSocket's client API (`window.WPS`, wp-plugin/src/types,
- * WordSocket 0.23) this plugin uses. Update when the contract changes.
+ * WordSocket 0.30) this plugin uses. Update when the contract changes.
  */
 
 type WPSEventHandler = ( data: Record< string, unknown >, channel: string ) => void;
@@ -55,4 +55,30 @@ interface WPSApi {
 	visitorId(): string;
 	/** Whether `channel` is `expected`, allowing the qualified `site:{id}:` spelling. */
 	onChannel( channel: string, expected: string ): boolean;
+	/** Visitor tracking over presence (WordSocket 0.30); absent on older versions. */
+	readonly presence?: WPSPresenceApi;
+}
+
+/** Options for `WPS.presence.track()`. */
+interface WPSTrackOptions {
+	/** The plugin's own fields, carried in presence state and in every report (this plugin's cart id `b`). */
+	state?: Record< string, unknown >;
+	/** Whether to report visits and leaves to WordPress. Default true. */
+	report?: boolean;
+}
+
+/** What `WPS.presence.track()` returns. */
+interface WPSPresenceTracker {
+	readonly visitor: string;
+	journeyId(): string;
+	journey(): string;
+	/** Replace the plugin's fields; presence is announced again at once. */
+	update( state: Record< string, unknown > ): void;
+	onChange( handler: ( journey: string, journeyId: string ) => void ): () => void;
+	stop(): void;
+}
+
+interface WPSPresenceApi {
+	/** Track this visitor on a channel: presence as `{ v, n, j, ...state }`, visits and leaves reported to WordPress. */
+	track( channel: string, options?: WPSTrackOptions ): WPSPresenceTracker;
 }
