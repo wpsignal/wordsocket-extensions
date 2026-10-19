@@ -81,10 +81,11 @@ function current_cart_state(): ?array {
 /**
  * Upsert the requester's row from their cart, or drop it when the cart is empty.
  *
- * @param string $id Cart id (see `cart_id()`).
+ * @param string $id      Cart id (see `cart_id()`).
+ * @param bool   $restart Whether this is an add to cart, which starts a converted row over as a new cart.
  * @return void
  */
-function record_cart( string $id ): void {
+function record_cart( string $id, bool $restart = false ): void {
 	if ( '' === $id ) {
 		return;
 	}
@@ -93,7 +94,7 @@ function record_cart( string $id ): void {
 		forget_cart( $id );
 		return;
 	}
-	upsert_cart_row( $id, $state );
+	upsert_cart_row( $id, $state, '', $restart );
 	publish_carts_changed();
 }
 
@@ -208,11 +209,11 @@ function cart_item_parent_id( array $item ): int {
 	return (int) ( $item['product_id'] ?? 0 );
 }
 
-// A cart change in the shopper's own request: recapture their cart row.
+// An add in the shopper's own request: recapture their cart row, and a converted row starts over.
 add_action(
 	'woocommerce_add_to_cart',
 	static function (): void {
-		record_cart( cart_id() );
+		record_cart( cart_id(), true );
 	},
 	5
 );

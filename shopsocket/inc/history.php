@@ -175,42 +175,68 @@ function now_sql(): string {
  * @param string $id      Cart id.
  * @param array  $state   `current_cart_state()`, non-null.
  * @param string $visitor The browser's visitor id when a report carried one, else ''.
+ * @param bool   $restart Whether a converted row starts over as a new cart: only a real add to cart says so.
  * @return void
  */
-function upsert_cart_row( string $id, array $state, string $visitor = '' ): void {
+function upsert_cart_row( string $id, array $state, string $visitor = '', bool $restart = false ): void {
 	global $wpdb;
 	$now      = now_sql();
 	$user_sql = history_enabled() && is_user_logged_in() ? (string) get_current_user_id() : 'NULL';
 
 	/*
 	 * The visitor id is only known from a tracker report; a cart hook keeps
-	 * what is stored for an open cart (a converted row is a new cart and starts
-	 * over). History off writes NULL. `prepare()` turns null into '', so the
-	 * NULL and the column name are spelled out; the id itself is prepared.
+	 * what is stored. History off writes NULL. `prepare()` turns null into '',
+	 * so the NULL and the column name are spelled out; the id itself is prepared.
 	 */
 	if ( ! history_enabled() ) {
 		$visitor_sql = 'NULL';
 	} elseif ( '' !== $visitor ) {
 		$visitor_sql = $wpdb->prepare( '%s', $visitor );
 	} else {
-		$visitor_sql = 'IF(converted_at IS NULL, visitor, NULL)';
+		$visitor_sql = 'visitor';
 	}
+
+	/*
+	 * A converted row is the record of its order. Only an add to cart starts
+	 * it over (first seen now, no leave, no journey, no order): a visit or
+	 * leave report never does, because the checkout page's own report can
+	 * land in the same second as the order and must not erase the conversion.
+	 */
+	$fresh = $restart
+		? array(
+			'visitor'      => 'IF(converted_at IS NULL, ' . $visitor_sql . ', ' . ( 'visitor' === $visitor_sql ? 'NULL' : $visitor_sql ) . ')',
+			'first_seen'   => 'IF(converted_at IS NULL, first_seen, VALUES(first_seen))',
+			'left_at'      => 'IF(converted_at IS NULL, left_at, NULL)',
+			'journey'      => 'IF(converted_at IS NULL, journey, NULL)',
+			'journey_id'   => 'IF(converted_at IS NULL, journey_id, NULL)',
+			'order_id'     => 'IF(converted_at IS NULL, order_id, NULL)',
+			'converted_at' => 'NULL',
+		)
+		: array(
+			'visitor'      => $visitor_sql,
+			'first_seen'   => 'first_seen',
+			'left_at'      => 'left_at',
+			'journey'      => 'journey',
+			'journey_id'   => 'journey_id',
+			'order_id'     => 'order_id',
+			'converted_at' => 'converted_at',
+		);
 	$wpdb->query(
 		$wpdb->prepare(
 			'INSERT INTO ' . carts_table() . ' (cart_id, user_id, visitor, currency, value, first_seen, last_seen)
 			VALUES (%s, ' . $user_sql . ', NULL, %s, %f, %s, %s)
 			ON DUPLICATE KEY UPDATE
 				user_id = ' . $user_sql . ',
-				visitor = ' . $visitor_sql . ',
+				visitor = ' . $fresh['visitor'] . ',
 				currency = VALUES(currency),
 				value = VALUES(value),
-				first_seen = IF(converted_at IS NULL, first_seen, VALUES(first_seen)),
+				first_seen = ' . $fresh['first_seen'] . ',
 				last_seen = VALUES(last_seen),
-				left_at = IF(converted_at IS NULL, left_at, NULL),
-				journey = IF(converted_at IS NULL, journey, NULL),
-				journey_id = IF(converted_at IS NULL, journey_id, NULL),
-				order_id = IF(converted_at IS NULL, order_id, NULL),
-				converted_at = NULL',
+				left_at = ' . $fresh['left_at'] . ',
+				journey = ' . $fresh['journey'] . ',
+				journey_id = ' . $fresh['journey_id'] . ',
+				order_id = ' . $fresh['order_id'] . ',
+				converted_at = ' . $fresh['converted_at'],
 			$id,
 			get_woocommerce_currency(),
 			$state['value'],
@@ -237,29 +263,29 @@ function upsert_cart_row( string $id, array $state, string $visitor = '' ): void
 const CACHE_GROUP = 'shopsocket';
 
 /**
- * The cache generation: part of every count key, bumped on every write, so a
- * stale count is never served after a change and no per-key deletion is needed.
+ * The cache generation: part of every count key and replaced on every write,
+ * so a stale count is never served after a change and no per-key deletion is needed.
  *
- * @return int
+ * @return string
  */
-function cache_generation(): int {
+function cache_generation(): string {
 	$generation = wp_cache_get( 'carts_generation', CACHE_GROUP );
-	if ( false === $generation ) {
-		$generation = 1;
+	if ( ! is_string( $generation ) || '' === $generation ) {
+		$generation = uniqid( '', true );
 		wp_cache_set( 'carts_generation', $generation, CACHE_GROUP );
 	}
-	return (int) $generation;
+	return $generation;
 }
 
 /**
- * Forget every cached count: called after any write to the cart tables.
+ * Forget every cached count: called after any write to the cart tables. A
+ * fresh token rather than an increment, because `wp_cache_incr()` differs
+ * between drop-ins (one left the generation at 0 and the counts stale).
  *
  * @return void
  */
 function invalidate_cart_caches(): void {
-	if ( false === wp_cache_incr( 'carts_generation', 1, CACHE_GROUP ) ) {
-		wp_cache_set( 'carts_generation', 1, CACHE_GROUP );
-	}
+	wp_cache_set( 'carts_generation', uniqid( '', true ), CACHE_GROUP );
 }
 
 /**

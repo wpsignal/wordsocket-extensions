@@ -187,6 +187,11 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertNotNull( $this->stored_cart( $id ), 'kept' );
 		$this->assertSame( $order->get_id(), (int) $this->stored_cart( $id )['order_id'] );
 
+		// A report that lands after the conversion, the cart not yet emptied, must not erase it (the checkout page's own visit races the order).
+		on_visitor_report( $this->report( 'checkout:0:0', false ) );
+		$this->assertSame( $order->get_id(), (int) $this->stored_cart( $id )['order_id'] );
+		$this->assertNotNull( $this->stored_cart( $id )['converted_at'] );
+
 		// The checkout empties the cart: the record stays. The next cart of the same shopper starts the row over.
 		WC()->cart->empty_cart();
 		record_cart( $id );
