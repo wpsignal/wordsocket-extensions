@@ -11,7 +11,7 @@ import {
   useState,
 } from "@wordpress/element";
 import { Button, Notice, ToggleControl } from "@wordpress/components";
-import { useLiveOrders, useStockAlerts } from "./useLiveOrders";
+import { useLiveOrders, useStaffAlerts, useStockAlerts } from "./useLiveOrders";
 import { useConnectionState } from "./useConnectionState";
 import { useDashboardSnapshot } from "./useDashboardSnapshot";
 import { useProductNames } from "./useProductNames";
@@ -56,6 +56,15 @@ export function Dashboard() {
 
   const { rows, reconcile } = useLiveOrders(config.orders, onNewOrder, config.channels);
   const alerts = useStockAlerts(config.channels);
+  const staffAlerts = useStaffAlerts(config.channels);
+  /* One lookup for every alert's products, rather than a request per notice. */
+  const alertProducts = useProductNames(
+    useMemo(
+      () => Array.from(new Set(staffAlerts.alerts.flatMap((alert) => alert.products))).slice(0, LIVE_PRODUCTS),
+      [staffAlerts.alerts],
+    ),
+    config,
+  );
   const connection = useConnectionState();
   const { snapshot, stale } = useDashboardSnapshot(config, reconcile);
 
@@ -90,6 +99,15 @@ export function Dashboard() {
           </Button>
         </div>
       </div>
+
+      {staffAlerts.alerts.map((alert) => (
+        <AlertNotice
+          key={alert.visitor}
+          alert={alert}
+          name={(id) => alertProducts(id)?.name ?? `#${id}`}
+          onDismiss={() => staffAlerts.dismiss(alert.visitor)}
+        />
+      ))}
 
       <Tiles snapshot={snapshot} stale={stale} />
       <LiveProductsPanel products={snapshot.liveProducts} />
@@ -435,6 +453,30 @@ function AbandonedPanel({ rows, currencySymbol }: { rows: WooAbandonedRow[]; cur
         </table>
       )}
     </section>
+  );
+}
+
+/** "Right now": a shopper a rule asked staff to look at, with their cart and where they are. */
+function AlertNotice({ alert, name, onDismiss }: { alert: WooAlertEvent; name: (id: number) => string; onDismiss: () => void }) {
+  const names = alert.products.map(name).join(", ");
+  return (
+    <Notice status="info" className="shopsocket-board__alert" onRemove={onDismiss}>
+      <strong>{alert.message || __("A shopper may need a hand", "shopsocket")}</strong>{" "}
+      {alert.step
+        ? sprintf(
+            /* translators: 1: where the shopper is (a page kind), 2: the cart's products, 3: the cart's value */
+            __("On %1$s with %2$s (%3$s).", "shopsocket"),
+            alert.step,
+            names || __("an empty cart", "shopsocket"),
+            money(alert.value, alert.currency),
+          )
+        : sprintf(
+            /* translators: 1: the cart's products, 2: the cart's value */
+            __("Cart: %1$s (%2$s).", "shopsocket"),
+            names || __("empty", "shopsocket"),
+            money(alert.value, alert.currency),
+          )}
+    </Notice>
   );
 }
 

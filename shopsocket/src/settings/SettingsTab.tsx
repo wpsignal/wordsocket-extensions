@@ -13,7 +13,7 @@
 import { useEffect, useState } from "@wordpress/element";
 import { __ } from "@wordpress/i18n";
 import apiFetch from "@wordpress/api-fetch";
-import { CollapsibleCard, Card, Stack } from "@wordpress/ui";
+import { CollapsibleCard, Card, Stack, Text } from "@wordpress/ui";
 import { Flex, FlexItem } from "@wordpress/components";
 
 type Components = typeof import("@wordpress/components");
@@ -30,8 +30,7 @@ const DEFAULTS: ShopSocketStorefrontSettings = {
 };
 
 type ExclusionKey =
-  | "in_carts_excluded_categories"
-  | "activity_excluded_categories";
+  "in_carts_excluded_categories" | "activity_excluded_categories";
 
 function coreComponents(): Components {
   return (window as unknown as { wp: { components: Components } }).wp
@@ -39,7 +38,8 @@ function coreComponents(): Components {
 }
 
 export function SettingsTab() {
-  const { ToggleControl, FormTokenField, Button, Spinner, TextControl } = coreComponents();
+  const { ToggleControl, FormTokenField, Button, Spinner, TextControl } =
+    coreComponents();
   const [settings, setSettings] = useState<ShopSocketStorefrontSettings>(
     window.shopSocketSettings?.storefront ?? DEFAULTS,
   );
@@ -127,7 +127,7 @@ export function SettingsTab() {
 
   return (
     <div className="shopsocket-tab">
-      <h2>{__("ShopSocket", "shopsocket")}</h2>
+      <Text variant="heading-xl" render={<h2 />}>{__("ShopSocket", "shopsocket")}</Text>
       <p>
         {__(
           "What shoppers see on the storefront. The board under WooCommerce is unaffected by these settings.",
@@ -135,11 +135,12 @@ export function SettingsTab() {
         )}
       </p>
 
-      <h4>{__("Storefront settings", "shopsocket")}</h4>
-
       <Flex direction="column" gap={4}>
         <FlexItem>
-          <CollapsibleCard.Root defaultOpen>
+          <h4>{__("Storefront settings", "shopsocket")}</h4>
+        </FlexItem>
+        <FlexItem>
+          <CollapsibleCard.Root>
             <CollapsibleCard.Header>
               <Stack align="center" justify="space-between">
                 <Card.Title>{__("In-cart count", "shopsocket")}</Card.Title>
@@ -149,10 +150,7 @@ export function SettingsTab() {
               <Flex direction="column" gap={4} align="stretch">
                 <FlexItem>
                   <ToggleControl
-                    label={__(
-                      "Enable",
-                      "shopsocket",
-                    )}
+                    label={__("Enable", "shopsocket")}
                     help={__(
                       'Shoppers see "N shoppers have this in their cart right now" under the price.',
                       "shopsocket",
@@ -175,7 +173,7 @@ export function SettingsTab() {
           </CollapsibleCard.Root>
         </FlexItem>
         <FlexItem>
-          <CollapsibleCard.Root defaultOpen>
+          <CollapsibleCard.Root>
             <CollapsibleCard.Header>
               <Card.Title>
                 {__("Added-to-cart notification", "shopsocket")}
@@ -208,9 +206,12 @@ export function SettingsTab() {
           </CollapsibleCard.Root>
         </FlexItem>
         <FlexItem>
-          <CollapsibleCard.Root defaultOpen>
+          <h4>{__("Cart settings", "shopsocket")}</h4>
+        </FlexItem>
+        <FlexItem>
+          <CollapsibleCard.Root>
             <CollapsibleCard.Header>
-              <Card.Title>{__("Cart history", "shopsocket")}</Card.Title>
+              <Card.Title>{__("History", "shopsocket")}</Card.Title>
             </CollapsibleCard.Header>
             <CollapsibleCard.Content>
               <Flex direction="column" gap={4} align="stretch">
@@ -222,7 +223,9 @@ export function SettingsTab() {
                       "shopsocket",
                     )}
                     checked={settings.history_enabled}
-                    onChange={(value: boolean) => update({ history_enabled: value })}
+                    onChange={(value: boolean) =>
+                      update({ history_enabled: value })
+                    }
                   />
                 </FlexItem>
                 {settings.history_enabled && (
@@ -234,9 +237,20 @@ export function SettingsTab() {
                           min={1}
                           max={365}
                           label={__("Keep carts for (days)", "shopsocket")}
-                          help={__("A cart's products, value and outcome, linked to the shopper's account when they were logged in.", "shopsocket")}
+                          help={__(
+                            "A cart's products, value and outcome, linked to the shopper's account when they were logged in.",
+                            "shopsocket",
+                          )}
+                          style={{ width: "100%" }}
                           value={String(settings.history_retention_days)}
-                          onChange={(value: string) => update({ history_retention_days: Math.min(365, Math.max(1, Number(value) || 1)) })}
+                          onChange={(value: string) =>
+                            update({
+                              history_retention_days: Math.min(
+                                365,
+                                Math.max(1, Number(value) || 1),
+                              ),
+                            })
+                          }
                         />
                       </FlexItem>
                       <FlexItem>
@@ -245,12 +259,37 @@ export function SettingsTab() {
                           min={1}
                           max={36}
                           label={__("Keep journeys for (months)", "shopsocket")}
-                          help={__("The pages a shopper opened, as ids and durations, under a random browser id and never under an account.", "shopsocket")}
+                          help={__(
+                            "The pages a shopper opened, as ids and durations, under a random browser id and never under an account.",
+                            "shopsocket",
+                          )}
+                          style={{ width: "100%" }}
                           value={String(settings.journeys_retention_months)}
-                          onChange={(value: string) => update({ journeys_retention_months: Math.min(36, Math.max(1, Number(value) || 1)) })}
+                          onChange={(value: string) =>
+                            update({
+                              journeys_retention_months: Math.min(
+                                36,
+                                Math.max(1, Number(value) || 1),
+                              ),
+                            })
+                          }
                         />
                       </FlexItem>
                     </Flex>
+                  </FlexItem>
+                )}
+                {window.WPS?.rules && window.shopSocketSettings?.rulesUrl && (
+                  <FlexItem>
+                    <p className="description shopsocket-tab__note">
+                      {__(
+                        "Shopper moments, including the cart reminder ShopSocket ships switched off, live on the ",
+                        "shopsocket",
+                      )}
+                      <a href={window.shopSocketSettings.rulesUrl}>
+                        {__("Moments tab", "shopsocket")}
+                      </a>
+                      .
+                    </p>
                   </FlexItem>
                 )}
               </Flex>
@@ -258,13 +297,6 @@ export function SettingsTab() {
           </CollapsibleCard.Root>
         </FlexItem>
         <FlexItem>
-          <p className="description shopsocket-tab__note">
-            {__(
-              "A product set to On or Off on its own edit screen (Product data, ShopSocket tab) keeps that choice whatever these settings say.",
-              "shopsocket",
-            )}
-          </p>
-
           <Button
             variant="primary"
             onClick={() => save.run()}

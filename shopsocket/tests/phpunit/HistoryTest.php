@@ -81,6 +81,8 @@ final class HistoryTest extends ExtensionTestCase {
 	public function test_the_tables_exist_and_are_versioned(): void {
 		global $wpdb;
 		$this->assertSame( DB_VERSION, get_option( DB_VERSION_OPTION ) );
+		$this->assertSame( '2', DB_VERSION );
+		$this->assertContains( 'firings', array_column( $wpdb->get_results( 'SHOW COLUMNS FROM ' . journeys_table(), ARRAY_A ), 'Field' ), 'version 2 adds the firings on a journey' );
 		foreach ( array( carts_table(), cart_items_table(), journeys_table() ) as $table ) {
 			$this->assertSame( $table, $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ), "$table exists" );
 		}
@@ -234,6 +236,31 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertSame( 'left', $journeys[0]['outcome'] );
 		$this->assertNotNull( $journeys[0]['ended_at'] );
 		$this->assertSame( $long, $this->stored_cart( $id )['journey'], 'the live copy keeps the longer journey too' );
+	}
+
+	public function test_a_cart_starts_at_most_thirty_journeys_an_hour_and_a_stranger_cannot_change_one(): void {
+		$this->set_history( true );
+		$product = $this->make_product( 10 );
+		WC()->cart->add_to_cart( $product->get_id(), 1 );
+		$id = cart_id();
+
+		// The ids are the browser's word: a loop of fresh ones fills nothing past the hourly cap.
+		for ( $i = 0; $i < 35; $i++ ) {
+			on_visitor_report( $this->report( 'home:2:1200', false, sprintf( '%08x-0000-4000-8000-000000000000', $i ) ) );
+		}
+		$this->assertCount( 30, $this->journeys() );
+
+		// A known journey still updates past the cap, but only for the visitor it was created under.
+		$known = sprintf( '%08x-0000-4000-8000-000000000000', 3 );
+		on_visitor_report( $this->report( 'home:2:1200>product:' . $product->get_id() . ':0', false, $known ) );
+		$by_id = array_column( $this->journeys(), null, 'journey_id' );
+		$this->assertSame( 2, (int) $by_id[ $known ]['steps'] );
+		on_visitor_report( $this->report( 'home:2:1200>product:' . $product->get_id() . ':0>cart:0:0', true, $known, self::JOURNEY_2 ) );
+		$by_id = array_column( $this->journeys(), null, 'journey_id' );
+		$this->assertSame( 2, (int) $by_id[ $known ]['steps'], 'another visitor id changes nothing' );
+		$this->assertSame( 'open', $by_id[ $known ]['outcome'] );
+		$this->assertSame( self::VISITOR, $by_id[ $known ]['visitor'] );
+		$this->assertSame( $id, $by_id[ $known ]['cart_id'] );
 	}
 
 	public function test_a_second_journey_from_the_same_visitor_ends_the_first_and_a_conversion_closes_the_open_one(): void {

@@ -265,9 +265,11 @@ function enqueue_settings_panel(): void {
 		SLUG . '-settings',
 		'window.shopSocketSettings = ' . wp_json_encode(
 			array(
-				'boardUrl'   => admin_url( 'admin.php?page=' . SLUG ),
-				'docsUrl'    => 'https://wpsignal.io/extensions/shopsocket',
-				'storefront' => settings(),
+				'boardUrl'    => admin_url( 'admin.php?page=' . SLUG ),
+				'docsUrl'     => 'https://wpsignal.io/extensions/shopsocket',
+				'storefront'  => settings(),
+				'journeysUrl' => rest_url( REST_NS . '/journeys' ),
+				'rulesUrl'    => admin_url( 'admin.php?page=wordsocket&tab=moments' ),
 			),
 			JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
 		) . ';',

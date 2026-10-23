@@ -127,3 +127,18 @@ interface WooStockEvent {
 	availability_text: string;
 	availability_class: string;
 }
+
+/** Payload of `woo.alert`: the Alert staff rule action, published by PHP (inc/rules.php). */
+interface WooAlertEvent {
+	visitor: string;
+	cart_id: string;
+	message: string;
+	/** The journey step kind the shopper was on. */
+	step: string;
+	products: number[];
+	value: number;
+	currency: string;
+	wants_chat: boolean;
+	/** Unix seconds when it was raised. */
+	at: number;
+}

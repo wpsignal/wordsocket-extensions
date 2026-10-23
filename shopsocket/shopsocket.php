@@ -94,6 +94,7 @@ require_once DIR . 'inc/payloads.php';
 require_once DIR . 'inc/history.php';
 require_once DIR . 'inc/carts.php';
 require_once DIR . 'inc/privacy.php';
+require_once DIR . 'inc/rules.php';
 require_once DIR . 'inc/triggers.php';
 require_once DIR . 'inc/storefront.php';
 require_once DIR . 'inc/blocks.php';

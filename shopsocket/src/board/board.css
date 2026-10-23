@@ -500,3 +500,8 @@ body.shopsocket-fullscreen {
     font-size: 11px;
   }
 }
+
+/* A staff alert from a rule, above the tiles. */
+.shopsocket-board__alert {
+  margin: 0 0 16px;
+}

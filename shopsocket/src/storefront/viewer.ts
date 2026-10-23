@@ -19,9 +19,23 @@ export interface ViewerConfig {
   presenceChannel?: string;
 }
 
+/** What the rules' cart context reads, from the last sync. */
+export interface CartSnapshot {
+  count: number;
+  total: number;
+  currency: string;
+  products: Array<{ id: number; name: string; qty: number; categories: number[] }>;
+  /** The first product's name, for `{cart.product}`. */
+  product: string;
+}
+
 export interface Viewer {
   /** The shopper's cart id once known, so their own events can be told apart. */
   readonly cartId: string | null;
+  /** The cart as last synced, for the rules' context. */
+  readonly cart: CartSnapshot;
+  /** Called after every sync, when the cart may have changed. Returns the unsubscribe. */
+  onCart(handler: (cart: CartSnapshot) => void): () => void;
   /** Re-read this shopper's cart from the server. */
   sync(): void;
   /** Whether this shopper holds the product. */
@@ -36,6 +50,9 @@ interface ViewerState {
   products?: number[];
   quantities?: Record<string, number>;
   count?: number;
+  total?: number;
+  currency?: string;
+  items?: CartSnapshot["products"];
 }
 
 /**
@@ -54,6 +71,8 @@ export function startViewer(
   let inFlight = false;
   let dirty = false;
   let tracker: WPSPresenceTracker | null = null;
+  let cart: CartSnapshot = { count: 0, total: 0, currency: "", products: [], product: "" };
+  const cartHandlers = new Set<(cart: CartSnapshot) => void>();
 
   /*
    * `v` (WordSocket's per-browser visitor id) counts the visitor as online,
@@ -100,6 +119,15 @@ export function startViewer(
         quantities.set(Number(id), Math.max(1, Number(viewer?.quantities?.[String(id)]) || 1));
       });
       if (viewer?.id) cartId = viewer.id;
+      const items = viewer?.items ?? [];
+      cart = {
+        count: items.reduce((n, item) => n + Math.max(1, Number(item.qty) || 1), 0),
+        total: Number(viewer?.total) || 0,
+        currency: viewer?.currency ?? "",
+        products: items,
+        product: items[0]?.name ?? "",
+      };
+      cartHandlers.forEach((fn) => fn(cart));
       onHeld?.(Array.from(quantities.keys()));
       if (config.productId && typeof viewer?.count === "number") {
         onCount(Number(config.productId), viewer.count);
@@ -179,6 +207,15 @@ export function startViewer(
   return {
     get cartId() {
       return cartId;
+    },
+    get cart() {
+      return cart;
+    },
+    onCart(handler) {
+      cartHandlers.add(handler);
+      return () => {
+        cartHandlers.delete(handler);
+      };
     },
     sync: () => {
       void sync();

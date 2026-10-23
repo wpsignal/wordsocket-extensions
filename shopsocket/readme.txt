@@ -128,6 +128,10 @@ Developers: `shopsocket_storefront`, `shopsocket_in_carts_enabled`, `shopsocket_
 
 Nothing beyond the session until you switch it on (ShopSocket tab, "Cart history"). On, it keeps each cart's products, value, when its shopper left and whether it became an order for the days you set, and the pages shoppers opened as anonymous journeys for the months you set. The board then lists recently abandoned carts. Everything stays in your own database.
 
+= Can it nudge a shopper? =
+
+With WordSocket 0.31 or later, yes, through moments you set up on WordSocket's Moments tab: when the cart holds something and the shopper is on the cart page, show a prompt; when they hide the tab, remind them on return; and alert your team on the Realtime board. Nothing fires until you switch a moment on, and every prompt can be dismissed.
+
 = Who can see the board? =
 
 Anyone who can manage WooCommerce.
@@ -141,6 +145,12 @@ Anyone who can manage WooCommerce.
 5. The Live Stock block on an ordinary page: availability, units left, and the in-cart count, all live.
 
 == Changelog ==
+
+= 0.8.0 =
+* New: with WordSocket 0.31, the Moments tab knows the shop. Conditions on the cart (items, count, total, a product, a category) and the WooCommerce pages, and one action: alert your team on the Realtime board
+* New: one moment ships switched off, listed on WordSocket's Moments tab: a shopper who hides the tab with a cart sees the tab title flash and, on return, a banner naming what is waiting
+* New: with history on, the journeys record which moments fired, and the Moments tab can replay a moment over them before you switch it on
+* Nothing changes on WordSocket 0.30: the rules pieces load only when the engine is there
 
 = 0.7.0 =
 * New: cart history. Switch it on under ShopSocket settings to keep each cart's products, value, when the shopper left and whether it became an order, for the days you choose, and shoppers' page journeys for the months you choose. Off by default; off keeps exactly what earlier versions kept
@@ -196,6 +206,9 @@ Anyone who can manage WooCommerce.
 * A card on WordSocket's Extensions tab
 
 == Upgrade Notice ==
+
+= 0.8.0 =
+Shopper moments need WordSocket 0.31; on 0.30 nothing changes. The one shipped moment is off until you switch it on.
 
 = 0.7.0 =
 Needs WordSocket 0.30. Cart history is off by default; switch it on under the ShopSocket tab when you want carts and journeys kept.

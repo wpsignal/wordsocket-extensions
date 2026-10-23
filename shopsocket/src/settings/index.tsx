@@ -4,10 +4,12 @@
  * and later, a ShopSocket tab holding the storefront settings.
  */
 import { registerPlugin } from "@wordpress/plugins";
+import apiFetch from "@wordpress/api-fetch";
 import { __ } from "@wordpress/i18n";
 import "./settings.css";
 import ShopSocketLogo from "./ShopSocketLogo";
 import { SettingsTab } from "./SettingsTab";
+import { registerConditions } from "../storefront/rules-vocabulary";
 
 const SLUG = "shopsocket";
 
@@ -15,6 +17,25 @@ const SLUG = "shopsocket";
 // It saves through WordSocket's useTask, so it needs 0.29 (registerTab alone came in 0.28).
 if (window.wordsocket?.registerTab && window.wordsocket.useTask) {
   window.wordsocket.registerTab({ name: SLUG, title: __("ShopSocket", "shopsocket"), render: SettingsTab });
+}
+
+/*
+ * On WordSocket 0.31 the Moments tab replays a rule over stored journeys: the
+ * cart conditions must be known here too, and the journeys come from
+ * ShopSocket's archive (history on), with `outcome` for the breakdown.
+ */
+if (window.WPS?.rules) {
+  registerConditions(window.WPS.rules);
+  const journeysUrl = window.shopSocketSettings?.journeysUrl;
+  if (journeysUrl) {
+    window.WPS.rules.history({
+      outcomes: true,
+      load: (options) =>
+        apiFetch<{ journeys: WPSHistoryJourney[] }>({
+          url: `${journeysUrl}?days=${options.days ?? 30}&limit=${options.limit ?? 500}`,
+        }).then((res) => res.journeys),
+    });
+  }
 }
 
 function Panel() {

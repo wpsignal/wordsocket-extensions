@@ -151,6 +151,11 @@ final class StorefrontTest extends ExtensionTestCase {
 			$this->assertSame( array( $product->get_id() => 2 ), $rows[0]['quantities'] );
 			$this->assertSame( $rows[0]['id'], $response->get_data()['id'] );
 			$this->assertEquals( (object) array( $product->get_id() => 2 ), $response->get_data()['quantities'], 'the shopper learns how many they hold' );
+			// For the rules' cart context (0.8): the total, the currency, and the items by name.
+			$data = $response->get_data();
+			$this->assertSame( 19.98, $data['total'] );
+			$this->assertSame( get_woocommerce_currency(), $data['currency'] );
+			$this->assertSame( array( 'id' => $product->get_id(), 'name' => 'PHPUnit Widget', 'qty' => 2, 'categories' => $data['items'][0]['categories'] ), $data['items'][0] );
 		} finally {
 			unset( $_COOKIE['wp_woocommerce_session_phpunit'] );
 			WC()->cart->empty_cart();

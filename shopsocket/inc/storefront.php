@@ -324,10 +324,13 @@ add_action(
 		 */
 		wp_register_script_module( STOREFRONT_MODULE . '/viewer', URL . 'build/storefront/viewer.js', array(), storefront_asset( 'viewer.js' )['version'] );
 		wp_register_script_module( STOREFRONT_MODULE . '/woocommerce', URL . 'build/storefront/woocommerce.js', array( '@wordpress/interactivity' ), storefront_asset( 'woocommerce.js' )['version'] );
+		// The rules vocabulary (shared with the settings bundle) and the module that wires it to the viewer (0.8).
+		wp_register_script_module( STOREFRONT_MODULE . '/rules-vocabulary', URL . 'build/storefront/rules-vocabulary.js', array(), storefront_asset( 'rules-vocabulary.js' )['version'] );
+		wp_register_script_module( STOREFRONT_MODULE . '/rules', URL . 'build/storefront/rules.js', array( STOREFRONT_MODULE . '/rules-vocabulary' ), storefront_asset( 'rules.js' )['version'] );
 		wp_register_script_module(
 			STOREFRONT_MODULE,
 			URL . 'build/storefront/storefront.js',
-			array( '@wordpress/interactivity', STOREFRONT_MODULE . '/viewer', STOREFRONT_MODULE . '/woocommerce' ),
+			array( '@wordpress/interactivity', STOREFRONT_MODULE . '/viewer', STOREFRONT_MODULE . '/woocommerce', STOREFRONT_MODULE . '/rules' ),
 			storefront_asset( 'storefront.js' )['version']
 		);
 		wp_enqueue_script_module( STOREFRONT_MODULE );
@@ -346,6 +349,10 @@ add_action(
 				),
 				'cartIdUrl'         => rest_url( REST_NS . '/cart-id' ),
 				'nonce'             => wp_create_nonce( 'wp_rest' ),
+				// The rules actions' routes (0.8); the engine itself is WordSocket's.
+				'rules'             => array(
+					'alertUrl' => rest_url( REST_NS . '/alert' ),
+				),
 
 				/*
 				 * Always on for the script: the per-product decisions reach the
@@ -396,6 +403,29 @@ add_action(
 
 
 /**
+ * The products in a cart as the rules' cart context sees them: id, name, units, category ids.
+ *
+ * @param array<int, int> $quantities Units per parent product id.
+ * @return array<int, array{id: int, name: string, qty: int, categories: int[]}>
+ */
+function cart_items_for_rules( array $quantities ): array {
+	$items = array();
+	foreach ( $quantities as $product_id => $qty ) {
+		$product = wc_get_product( (int) $product_id );
+		if ( ! $product instanceof WC_Product ) {
+			continue;
+		}
+		$items[] = array(
+			'id'         => (int) $product_id,
+			'name'       => $product->get_name(),
+			'qty'        => max( 1, (int) $qty ),
+			'categories' => array_map( 'intval', (array) $product->get_category_ids() ),
+		);
+	}
+	return $items;
+}
+
+/**
  * Whether the request already carries a WooCommerce session cookie.
  *
  * @return bool
@@ -444,6 +474,10 @@ add_action(
 						'id'         => cart_id(),
 						'products'   => $state ? $state['products'] : array(),
 						'quantities' => $state ? (object) $state['quantities'] : new \stdClass(),
+						// For the rules' cart context (0.8): the total, the currency, and each product's name and categories.
+						'total'      => $state ? $state['value'] : 0,
+						'currency'   => get_woocommerce_currency(),
+						'items'      => $state ? cart_items_for_rules( $state['quantities'] ) : array(),
 					);
 					$product = (int) $request->get_param( 'product' );
 					if ( $product > 0 ) {

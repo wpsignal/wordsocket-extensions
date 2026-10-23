@@ -83,6 +83,10 @@ interface WordSocketExtensionsApi {
 
 /** Localized by inc/admin-board.php for the WordSocket settings screen. */
 interface ShopSocketSettingsConfig {
+	/** `GET /shopsocket/v1/journeys`, the replay feed for WordSocket's Moments tab (0.8). */
+	journeysUrl?: string;
+	/** `admin.php?page=wordsocket&tab=moments`. */
+	rulesUrl?: string;
 	boardUrl: string;
 	docsUrl: string;
 	storefront: ShopSocketStorefrontSettings;

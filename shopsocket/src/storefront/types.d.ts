@@ -91,6 +91,8 @@ export interface StorefrontState {
   channels?: { stock?: string; activity?: string };
   cartIdUrl?: string;
   nonce?: string;
+  /** The rules actions' routes (0.8); the nonce is the state's own. */
+  rules?: { alertUrl?: string };
   stock: Record<string, StockEntry>;
   pulses: Record<string, boolean>;
   toast: { message: string; href: string; visible: boolean; image: string; kind: "info" | "error"; sticky: boolean; key: string };

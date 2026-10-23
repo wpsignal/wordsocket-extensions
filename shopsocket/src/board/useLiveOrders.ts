@@ -127,3 +127,22 @@ export function useStockAlerts(channels: Channels) {
 
   return alerts;
 }
+
+/**
+ * Alerts the Alert staff rule action raised: published by PHP on the orders
+ * feed (which only PHP writes), newest first, at most ten, each dismissible.
+ */
+export function useStaffAlerts(channels: Channels) {
+  const [alerts, setAlerts] = useState<WooAlertEvent[]>([]);
+  useEffect(() => {
+    const wps = window.WPS;
+    if (!wps) return undefined;
+    return wps.on("woo.alert", (data, channel) => {
+      if (!wps.onChannel(channel, channels.orders)) return;
+      const event = data as unknown as WooAlertEvent;
+      setAlerts((current) => [event, ...current.filter((a) => a.visitor !== event.visitor)].slice(0, 10));
+    });
+  }, [channels.orders]);
+  const dismiss = (visitor: string) => setAlerts((current) => current.filter((a) => a.visitor !== visitor));
+  return { alerts, dismiss };
+}

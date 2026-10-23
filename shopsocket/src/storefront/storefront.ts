@@ -14,6 +14,7 @@
  */
 import { store, getContext } from "@wordpress/interactivity";
 import { startViewer } from "shopsocket/storefront/viewer";
+import { startRules } from "shopsocket/storefront/rules";
 import {
   feedWooCommerceStore,
   refreshCart,
@@ -347,3 +348,6 @@ const viewer = startViewer(
     state.mine = Object.fromEntries(held.map((id) => [id, true]));
   },
 );
+
+// The rules vocabulary rides the viewer's cart; a no-op on a WordSocket without the engine.
+startRules(viewer, { ...(state.rules ?? {}), nonce: state.nonce });

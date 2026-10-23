@@ -15,6 +15,9 @@
  *   (`wpsignal_visitor_visit` / `wpsignal_visitor_leave`) and the checkout
  *   hooks. No job of ShopSocket's own: the prune rides WooCommerce's
  *   `woocommerce_cleanup_sessions`.
+ * - The visitor and journey ids in a report are the browser's word: a cart
+ *   starts at most NEW_JOURNEYS_PER_HOUR journey rows an hour, and a journey
+ *   row changes only for reports carrying the visitor id it was created under.
  * - Abandonment is judged on the board: a left cart whose shopper is not
  *   present and whose leave is older than the board's grace. With history off the tables hold exactly what the
  *   transient held, for the session lifetime, with no user or visitor ids.
@@ -30,7 +33,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL, WordPress.DB.PreparedSQLPlaceholders -- The plugin's own tables: names come from the table functions, fragments from prepare(), one placeholder per id.
 
-const DB_VERSION        = '1';
+const DB_VERSION        = '2';
 const DB_VERSION_OPTION = 'shopsocket_db_version';
 
 /** Rows the board lists under "Recently abandoned". */
@@ -38,6 +41,9 @@ const BOARD_ABANDONED = 50;
 
 /** Rows one prune statement deletes before checking the clock. */
 const PRUNE_BATCH = 1000;
+
+/** Journey rows one cart may start in an hour; a tab is a journey, a return after 30 minutes another. */
+const NEW_JOURNEYS_PER_HOUR = 30;
 
 /**
  * The carts table name.
@@ -122,6 +128,7 @@ function install(): void {
 			started_at datetime NOT NULL,
 			last_seen datetime NOT NULL,
 			ended_at datetime NULL,
+			firings text NULL,
 			PRIMARY KEY  (journey_id),
 			KEY visitor (visitor),
 			KEY cart_id (cart_id),
@@ -445,24 +452,45 @@ function on_visitor_report( array $report ): void {
 	);
 
 	/*
+	 * A journey not yet on file costs a row, and the ids are the browser's word: a cart starts at most
+	 * NEW_JOURNEYS_PER_HOUR an hour, so a loop of fresh ids cannot fill the table.
+	 */
+	$known = (string) $wpdb->get_var( $wpdb->prepare( 'SELECT journey_id FROM ' . journeys_table() . ' WHERE journey_id = %s', $journey_id ) );
+	if ( '' === $known ) {
+		$recent = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(*) FROM ' . journeys_table() . ' WHERE cart_id = %s AND started_at >= %s',
+				$cart_id,
+				gmdate( 'Y-m-d H:i:s', time() - HOUR_IN_SECONDS )
+			)
+		);
+		if ( $recent >= NEW_JOURNEYS_PER_HOUR ) {
+			return;
+		}
+	}
+
+	/*
 	 * The archive row: created by the first report, changed only by a report
-	 * at least as far along (the leave of page N races the visit of page N+1),
-	 * and never reopened once converted.
+	 * from the visitor it was created under (`$owned`) that is at least as far
+	 * along (the leave of page N races the visit of page N+1), and never
+	 * reopened once converted. Assignments run in order, so `steps` is last.
 	 */
 	$outcome = $leaving ? 'left' : 'open';
 	$ended   = $leaving ? $wpdb->prepare( '%s', $now ) : 'NULL';
+	$owned   = 'visitor = VALUES(visitor)';
+	$ahead   = $owned . ' AND VALUES(steps) >= steps';
 	$wpdb->query(
 		$wpdb->prepare(
 			'INSERT INTO ' . journeys_table() . ' (journey_id, visitor, cart_id, journey, steps, outcome, value, started_at, last_seen, ended_at)
 			VALUES (%s, %s, %s, %s, %d, %s, %f, %s, %s, ' . $ended . ')
 			ON DUPLICATE KEY UPDATE
-				cart_id = VALUES(cart_id),
-				value = VALUES(value),
-				last_seen = IF(VALUES(steps) >= steps, VALUES(last_seen), last_seen),
-				journey = IF(VALUES(steps) >= steps, VALUES(journey), journey),
-				outcome = IF(outcome = \'converted\', outcome, IF(VALUES(steps) >= steps, VALUES(outcome), outcome)),
-				ended_at = IF(outcome = \'converted\', ended_at, IF(VALUES(steps) >= steps, VALUES(ended_at), ended_at)),
-				steps = GREATEST(steps, VALUES(steps))',
+				cart_id = IF(' . $owned . ', VALUES(cart_id), cart_id),
+				value = IF(' . $owned . ', VALUES(value), value),
+				last_seen = IF(' . $ahead . ', VALUES(last_seen), last_seen),
+				journey = IF(' . $ahead . ', VALUES(journey), journey),
+				outcome = IF(outcome = \'converted\' OR NOT (' . $ahead . '), outcome, VALUES(outcome)),
+				ended_at = IF(outcome = \'converted\' OR NOT (' . $ahead . '), ended_at, VALUES(ended_at)),
+				steps = IF(' . $owned . ', GREATEST(steps, VALUES(steps)), steps)',
 			$journey_id,
 			$visitor,
 			$cart_id,
@@ -607,6 +635,52 @@ function order_edit_url( int $order_id ): string {
  */
 function datetime_to_rfc3339( string $datetime ): string {
 	return str_replace( ' ', 'T', $datetime ) . 'Z';
+}
+
+/**
+ * Journeys for the Moments tab's replay: the archive plus the live rows' copies, newest first, with the outcome and whether a cart was there.
+ *
+ * @param int $days  How far back.
+ * @param int $limit At most this many.
+ * @return array<int, array{journey: string, started_at: string, outcome: string, value: float, has_cart: bool, context: array}>
+ */
+function journeys_for_replay( int $days, int $limit ): array {
+	global $wpdb;
+	if ( ! history_enabled() ) {
+		return array();
+	}
+	$since = gmdate( 'Y-m-d H:i:s', time() - max( 1, $days ) * DAY_IN_SECONDS );
+	$rows  = (array) $wpdb->get_results(
+		$wpdb->prepare(
+			'SELECT journey, started_at, outcome, value, cart_id FROM ' . journeys_table() . ' WHERE started_at >= %s ORDER BY started_at DESC LIMIT %d',
+			$since,
+			max( 1, $limit )
+		),
+		ARRAY_A
+	);
+	return array_map(
+		static function ( array $row ): array {
+			$value = round( (float) ( $row['value'] ?? 0 ), 2 );
+			$has   = '' !== (string) ( $row['cart_id'] ?? '' );
+			return array(
+				'journey'    => (string) $row['journey'],
+				'started_at' => datetime_to_rfc3339( (string) $row['started_at'] ),
+				'outcome'    => (string) $row['outcome'],
+				'value'      => $value,
+				'has_cart'   => $has,
+				// What the cart conditions can know from a stored journey: items were there, and what they came to.
+				'context'    => array(
+					'cart' => array(
+						'count'    => $has ? 1 : 0,
+						'total'    => $value,
+						'products' => array(),
+						'product'  => '',
+					),
+				),
+			);
+		},
+		$rows
+	);
 }
 
 /**
