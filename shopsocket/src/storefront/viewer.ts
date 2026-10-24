@@ -1,17 +1,10 @@
 /*
  * This shopper, as the server and the relay know them.
  *
- * - The cart id comes from the server (the WooCommerce session cookie is
- *   HttpOnly) and rides in presence as `b`, which is what shows the cart as
- *   live on the board while this connection is open; the relay drops it the
- *   moment the socket closes.
- * - Presence itself is WordSocket's `WPS.presence.track()` (0.30): it carries
- *   the visitor id, the journey id and the journey (`v`, `n`, `j`), goes
- *   `away` while the tab is hidden, and reports each visit and leave to
- *   WordPress, where `inc/history.php` stamps the cart row. This module adds `b` and,
- *   on WordSocket 0.31, reads the shopper's state from the visit report's answer
- *   instead of fetching it on load. On an older WordSocket it falls back to
- *   plain `setPresence`.
+ * - The cart id comes from the server and rides in presence as `b`.
+ * - Presence is WordSocket's `WPS.presence.track()`, which carries `v`, `n` and `j` and reports
+ *   visits and leaves; this module adds `b`, reads the shopper's state from the visit report's
+ *   answer, and falls back to plain `setPresence` on an older WordSocket.
  */
 
 export interface ViewerConfig {
@@ -213,15 +206,7 @@ export function startViewer(
     }, "wc/store/cart");
   }
 
-  /**
-   * Whether this shopper has a cart, without asking the server: WooCommerce sets
-   * the readable `woocommerce_items_in_cart` cookie while a cart holds something
-   * (the session cookie itself is HttpOnly), and a sync that found items counts
-   * too. A cartless visitor writes nothing in `inc/history.php`, so their visit
-   * and leave reports would only boot WordPress for nothing: the tracker holds
-   * them until this is true, and the first report after that carries the whole
-   * journey from `sessionStorage`. Presence is announced regardless.
-   */
+  /** Whether this shopper has a cart: the `woocommerce_items_in_cart` cookie, or a synced cart with items. */
   function hasCart(): boolean {
     return (
       cart.count > 0 ||
@@ -229,14 +214,7 @@ export function startViewer(
     );
   }
 
-  /**
-   * Start presence now and read this shopper's state from the visit report's
-   * answer (WordSocket 0.31: the `shopsocket` key `inc/storefront.php` fills), so
-   * the page makes one request instead of a visit and a `/cart-id` fetch, and
-   * none at all for a visitor without a cart. False when nothing will answer: no
-   * presence API, no `onVisit`, or a tracker that does not report (a page cached
-   * before 0.30); then a shopper with a cart fetches instead.
-   */
+  /** Start presence and read this shopper's state from the visit report's answer; false when nothing will answer. */
   function startTracked(): boolean {
     const wps = window.WPS;
     if (!wps?.presence || !config.presenceChannel || !config.cartIdUrl)
@@ -250,11 +228,7 @@ export function startViewer(
       const mine = answer?.shopsocket;
       if (mine && typeof mine === "object") apply(mine as ViewerState);
       else if (hasCart()) sync();
-      /*
-       * A cartless visitor gets no answer and fetches nothing: the page's seeded
-       * count stands until a live event moves it, and the cart hooks sync the
-       * moment something is added.
-       */
+      /* A cartless visitor gets no answer and fetches nothing. */
     });
     return true;
   }

@@ -1,12 +1,9 @@
 <?php
 /**
- * Cart rows: what each shopper has in their cart, keyed by `cart_id()`, in
- * the tables `inc/history.php` creates.
+ * Cart rows: what each shopper has in their cart, keyed by `cart_id()`, in the tables `inc/history.php` creates.
  *
- * Only contents and the lifecycle stamps live here. Live or abandoned is
- * decided by the dashboard, which crosses these rows with the relay's
- * presence membership. A row is written from the shopper's own request and,
- * with history off, lasts as long as their session.
+ * - Contents and lifecycle stamps only; the dashboard decides live or abandoned from presence.
+ * - A row is written from the shopper's own request and, with history off, lasts their session.
  *
  * @package WPSignal\Extensions\ShopSocket
  */

@@ -1,16 +1,11 @@
 /**
- * The ShopSocket tab on WordSocket's settings page: the site-wide switches for the shopper-facing
- * features, the categories they skip and the cart history. Reads and writes the
- * `shopsocket_storefront` option through `/wp/v2/settings`.
+ * The ShopSocket tab on WordSocket's settings page: the site-wide switches, the categories they
+ * skip and the cart history, read and written as the `shopsocket_storefront` option through
+ * `/wp/v2/settings`.
  *
- * - Layout, text, cards, the notice, the spinner and the save button come from `@wordpress/ui`,
- *   which this repo bundles tree-shaken, the same pieces WordSocket's own tabs are built from.
- * - The form controls (`ToggleControl`, `FormTokenField`, `TextControl`) come from core's
- *   `wp.components` global rather than the `@wordpress/components` this repo bundles for the board
- *   (the board needs a newer version than core ships, at about 2 MB); WordSocket's settings page
- *   loads core's copy, so the tab uses it and stays small.
- * - A save runs through WordSocket's `useTask` (0.29), which shows the "Settings saved." toast or
- *   the red error in WordSocket's own snackbar list.
+ * - Layout, text, cards, the notice, the spinner and the save button are `@wordpress/ui`.
+ * - The form controls come from core's `wp.components` global, which the settings page loads.
+ * - A save runs through WordSocket's `useTask`, which shows the toast or the error.
  */
 import { useEffect, useState } from "@wordpress/element";
 import { __ } from "@wordpress/i18n";
