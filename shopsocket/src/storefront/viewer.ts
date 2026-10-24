@@ -8,8 +8,10 @@
  * - Presence itself is WordSocket's `WPS.presence.track()` (0.30): it carries
  *   the visitor id, the journey id and the journey (`v`, `n`, `j`), goes
  *   `away` while the tab is hidden, and reports each visit and leave to
- *   WordPress, where `inc/history.php` stamps the cart row. This module only
- *   adds `b`. On an older WordSocket it falls back to plain `setPresence`.
+ *   WordPress, where `inc/history.php` stamps the cart row. This module adds `b` and,
+ *   on WordSocket 0.31, reads the shopper's state from the visit report's answer
+ *   instead of fetching it on load. On an older WordSocket it falls back to
+ *   plain `setPresence`.
  */
 
 export interface ViewerConfig {
@@ -24,7 +26,12 @@ export interface CartSnapshot {
   count: number;
   total: number;
   currency: string;
-  products: Array<{ id: number; name: string; qty: number; categories: number[] }>;
+  products: Array<{
+    id: number;
+    name: string;
+    qty: number;
+    categories: number[];
+  }>;
   /** The first product's name, for `{cart.product}`. */
   product: string;
 }
@@ -71,7 +78,13 @@ export function startViewer(
   let inFlight = false;
   let dirty = false;
   let tracker: WPSPresenceTracker | null = null;
-  let cart: CartSnapshot = { count: 0, total: 0, currency: "", products: [], product: "" };
+  let cart: CartSnapshot = {
+    count: 0,
+    total: 0,
+    currency: "",
+    products: [],
+    product: "",
+  };
   const cartHandlers = new Set<(cart: CartSnapshot) => void>();
 
   /*
@@ -85,10 +98,40 @@ export function startViewer(
     if (!wps || !config.presenceChannel) return;
     if (wps.presence) {
       if (tracker) tracker.update({ b });
-      else tracker = wps.presence.track(config.presenceChannel, { state: { b } });
+      else
+        tracker = wps.presence.track(config.presenceChannel, { state: { b } });
       return;
     }
     wps.setPresence(config.presenceChannel, { v: wps.visitorId(), b });
+  }
+
+  /** Take in this shopper's state as the server answered it, from either route. */
+  function apply(viewer: ViewerState): void {
+    quantities.clear();
+    (viewer?.products ?? []).forEach((id) => {
+      quantities.set(
+        Number(id),
+        Math.max(1, Number(viewer?.quantities?.[String(id)]) || 1),
+      );
+    });
+    if (viewer?.id) cartId = viewer.id;
+    const items = viewer?.items ?? [];
+    cart = {
+      count: items.reduce(
+        (n, item) => n + Math.max(1, Number(item.qty) || 1),
+        0,
+      ),
+      total: Number(viewer?.total) || 0,
+      currency: viewer?.currency ?? "",
+      products: items,
+      product: items[0]?.name ?? "",
+    };
+    cartHandlers.forEach((fn) => fn(cart));
+    onHeld?.(Array.from(quantities.keys()));
+    if (config.productId && typeof viewer?.count === "number") {
+      onCount(Number(config.productId), viewer.count);
+    }
+    announce(viewer?.id ?? null);
   }
 
   /**
@@ -113,26 +156,7 @@ export function startViewer(
         headers: config.nonce ? { "X-WP-Nonce": config.nonce } : {},
       });
       if (!res.ok) return;
-      const viewer: ViewerState = await res.json();
-      quantities.clear();
-      (viewer?.products ?? []).forEach((id) => {
-        quantities.set(Number(id), Math.max(1, Number(viewer?.quantities?.[String(id)]) || 1));
-      });
-      if (viewer?.id) cartId = viewer.id;
-      const items = viewer?.items ?? [];
-      cart = {
-        count: items.reduce((n, item) => n + Math.max(1, Number(item.qty) || 1), 0),
-        total: Number(viewer?.total) || 0,
-        currency: viewer?.currency ?? "",
-        products: items,
-        product: items[0]?.name ?? "",
-      };
-      cartHandlers.forEach((fn) => fn(cart));
-      onHeld?.(Array.from(quantities.keys()));
-      if (config.productId && typeof viewer?.count === "number") {
-        onCount(Number(config.productId), viewer.count);
-      }
-      announce(viewer?.id ?? null);
+      apply((await res.json()) as ViewerState);
     } catch {
       // Offline or blocked: the seeded values and live events still apply.
     } finally {
@@ -155,7 +179,10 @@ export function startViewer(
     if (jq) {
       jq(document.body).on("added_to_cart removed_from_cart", () => sync());
     }
-    for (const type of ["wc-blocks_added_to_cart", "wc-blocks_removed_from_cart"]) {
+    for (const type of [
+      "wc-blocks_added_to_cart",
+      "wc-blocks_removed_from_cart",
+    ]) {
       document.body.addEventListener(type, () => sync());
     }
     const data = window.wp?.data;
@@ -166,7 +193,9 @@ export function startViewer(
       const cart = data.select("wc/store/cart");
       const items = cart?.getCartData?.()?.items;
       if (!Array.isArray(items)) return;
-      const pending = Boolean(cart?.hasPendingItemsOperations?.() || cart?.isCustomerDataUpdating?.());
+      const pending = Boolean(
+        cart?.hasPendingItemsOperations?.() || cart?.isCustomerDataUpdating?.(),
+      );
       const key = items.map((i) => `${i.id}:${i.quantity}`).join(",");
       if (last === null) {
         last = key;
@@ -184,12 +213,35 @@ export function startViewer(
     }, "wc/store/cart");
   }
 
-  /*
-   * One fetch on load, then events and the shopper's own cart changes keep it
-   * current. WordSocket's client is a classic footer script that runs before this
-   * module, so `window.WPS` is already there for presence.
+  /**
+   * Start presence now and read this shopper's state from the visit report's
+   * answer (WordSocket 0.31: the `shopsocket` key `inc/storefront.php` fills), so
+   * the page makes one request instead of a visit and a `/cart-id` fetch. False
+   * when nothing will answer: no presence API, no `onVisit`, or a tracker that
+   * does not report (a page cached before 0.30); a failed report fetches instead.
    */
-  sync();
+  function startTracked(): boolean {
+    const wps = window.WPS;
+    if (!wps?.presence || !config.presenceChannel || !config.cartIdUrl)
+      return false;
+    tracker = wps.presence.track(config.presenceChannel, {
+      state: { b: null },
+    });
+    if (typeof tracker.onVisit !== "function") return false;
+    tracker.onVisit((answer) => {
+      const mine = answer?.shopsocket;
+      if (mine && typeof mine === "object") apply(mine as ViewerState);
+      else sync();
+    });
+    return true;
+  }
+
+  /*
+   * One answer on load (the visit report's, or a fetch), then events and the
+   * shopper's own cart changes keep it current. WordSocket's client is a classic
+   * footer script that runs before this module, so `window.WPS` is already there.
+   */
+  if (!startTracked()) sync();
   watchOwnCart();
 
   /*

@@ -458,33 +458,8 @@ add_action(
 					),
 				),
 				'callback'            => static function ( \WP_REST_Request $request ) {
-					if ( ( has_wc_session_cookie() || is_user_logged_in() ) && function_exists( 'wc_load_cart' ) ) {
-						wc_load_cart();
-					}
-
-					/*
-					 * The row store is a cache of live carts, so every load and every
-					 * reconnect writes this shopper's row back from the real cart: a
-					 * row lost to cache eviction or a cleared transient returns the
-					 * moment its shopper is on the site again.
-					 */
-					record_cart( cart_id() );
-					$state    = current_cart_state();
-					$response = array(
-						'id'         => cart_id(),
-						'products'   => $state ? $state['products'] : array(),
-						'quantities' => $state ? (object) $state['quantities'] : new \stdClass(),
-						// For the rules' cart context (0.8): the total, the currency, and each product's name and categories.
-						'total'      => $state ? $state['value'] : 0,
-						'currency'   => get_woocommerce_currency(),
-						'items'      => $state ? cart_items_for_rules( $state['quantities'] ) : array(),
-					);
-					$product = (int) $request->get_param( 'product' );
-					if ( $product > 0 ) {
-						$response['count'] = count_in_carts( $product );
-					}
 					// Per-visitor identity and a live count: no CDN or page cache may store this.
-					$rest = rest_ensure_response( $response );
+					$rest = rest_ensure_response( viewer_state( (int) $request->get_param( 'product' ) ) );
 					$rest->header( 'Cache-Control', 'no-store, max-age=0' );
 					return $rest;
 				},
@@ -492,4 +467,70 @@ add_action(
 			)
 		);
 	}
+);
+
+/**
+ * This shopper's state for the browser: cart id, held products, the rules' cart fields, and the live count of `$product` when one is given.
+ *
+ * @param int $product The page's product id, 0 for none.
+ * @return array{id: string, products: int[], quantities: object, total: float|int, currency: string, items: array, count?: int}
+ */
+function viewer_state( int $product = 0 ): array {
+	if ( ( has_wc_session_cookie() || is_user_logged_in() ) && function_exists( 'wc_load_cart' ) ) {
+		wc_load_cart();
+	}
+
+	/*
+	 * The row store is a cache of live carts, so every load and every
+	 * reconnect writes this shopper's row back from the real cart: a
+	 * row lost to cache eviction or a cleared transient returns the
+	 * moment its shopper is on the site again.
+	 */
+	record_cart( cart_id() );
+	$state    = current_cart_state();
+	$response = array(
+		'id'         => cart_id(),
+		'products'   => $state ? $state['products'] : array(),
+		'quantities' => $state ? (object) $state['quantities'] : new \stdClass(),
+		// For the rules' cart context (0.8): the total, the currency, and each product's name and categories.
+		'total'      => $state ? $state['value'] : 0,
+		'currency'   => get_woocommerce_currency(),
+		'items'      => $state ? cart_items_for_rules( $state['quantities'] ) : array(),
+	);
+	if ( $product > 0 ) {
+		$response['count'] = count_in_carts( $product );
+	}
+	return $response;
+}
+
+/**
+ * The product a journey's open step is on, 0 when the page is not a product.
+ *
+ * @param string $journey The journey, its last step the current page.
+ * @return int
+ */
+function journey_product( string $journey ): int {
+	$last = (string) substr( strrchr( '>' . $journey, '>' ), 1 );
+	$step = explode( ':', $last );
+	return 'product' === ( $step[0] ?? '' ) ? max( 0, (int) ( $step[1] ?? 0 ) ) : 0;
+}
+
+/*
+ * The visit report WordSocket 0.31 sends on every page load answers with this
+ * shopper's state too, so the page makes one request instead of a visit and a
+ * `/cart-id` fetch (the viewer still fetches on cart changes and reconnects).
+ * The live count rides along for a product page, read from the journey's open
+ * step, since the report carries no product of its own.
+ */
+add_filter(
+	'wpsignal_visitor_visit_response',
+	static function ( array $answer, array $report ): array {
+		if ( ! function_exists( 'WC' ) ) {
+			return $answer;
+		}
+		$answer['shopsocket'] = viewer_state( journey_product( (string) ( $report['journey'] ?? '' ) ) );
+		return $answer;
+	},
+	10,
+	2
 );
