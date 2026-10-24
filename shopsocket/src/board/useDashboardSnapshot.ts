@@ -98,6 +98,7 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
     return () => clearTimeout(timer);
   }, [abandoned, now]);
   const [online, setOnline] = useState<WooDashboardData["online"]>(config.snapshot.online);
+  const [strip, setStrip] = useState<WooWeekStrip | null>(config.snapshot.strip ?? null);
   const [present, setPresent] = useState<Set<string>>(() => new Set());
   const [usersOnline, setUsersOnline] = useState(0);
   const [staffShare, setStaffShare] = useState({ users: 0, tabs: 0 });
@@ -151,6 +152,7 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
         if (alive) {
           setRows(fresh.carts);
           if (fresh.abandoned) setAbandoned(fresh.abandoned);
+          if (fresh.strip !== undefined) setStrip(fresh.strip);
           if (fresh.online) showOnline(fresh.online);
           else setOnline(fresh.online);
           setStale(false);
@@ -348,8 +350,9 @@ function isAway(m: Member): boolean {
       awayUsers,
       abandoned: recentlyAbandoned(abandoned, present, now),
       online,
+      strip,
     }),
-    [rows, present, awayIds, usersOnline, staffShare, awayUsers, abandoned, now, online],
+    [rows, present, awayIds, usersOnline, staffShare, awayUsers, abandoned, now, online, strip],
   );
 
   return { snapshot, stale };

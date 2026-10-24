@@ -92,6 +92,7 @@ require_once DIR . 'inc/channels.php';
 require_once DIR . 'inc/settings.php';
 require_once DIR . 'inc/payloads.php';
 require_once DIR . 'inc/history.php';
+require_once DIR . 'inc/strip.php';
 require_once DIR . 'inc/carts.php';
 require_once DIR . 'inc/privacy.php';
 require_once DIR . 'inc/rules.php';

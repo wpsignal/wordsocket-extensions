@@ -28,6 +28,43 @@
   font-size: 14px;
 }
 
+/* This week: three tiles in a row, the leak sentence, the products table */
+
+.shopsocket-week {
+  margin-bottom: 16px;
+
+  h2 {
+    margin-top: 0;
+  }
+}
+
+.shopsocket-week__tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.shopsocket-week__leak {
+  margin: 0 0 12px;
+  font-size: 14px;
+  max-width: 72ch;
+}
+
+.shopsocket-week__off {
+  margin: 0 0 16px;
+  color: #50575e;
+  font-size: 14px;
+}
+
+.shopsocket-tile__detail.is-good {
+  color: #00800a;
+}
+
+.shopsocket-tile__detail.is-bad {
+  color: #d63638;
+}
+
 /* Tiles, the left column of the summary grid */
 
 .shopsocket-tiles {
@@ -467,7 +504,8 @@ body.shopsocket-fullscreen {
 }
 
 @media (max-width: 782px) {
-  .shopsocket-summary {
+  .shopsocket-summary,
+  .shopsocket-week__tiles {
     grid-template-columns: 1fr;
   }
 

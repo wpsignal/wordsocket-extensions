@@ -15,6 +15,8 @@ import { useLiveOrders, useStaffAlerts, useStockAlerts } from "./useLiveOrders";
 import { useConnectionState } from "./useConnectionState";
 import { useDashboardSnapshot } from "./useDashboardSnapshot";
 import { useProductNames } from "./useProductNames";
+import { money } from "./format";
+import { WeekStrip } from "./WeekStrip";
 import { adminUrlOrNull } from "./trust";
 import { LiveOrders } from "./LiveOrders";
 import { playChime } from "./chime";
@@ -23,6 +25,7 @@ const config: ShopSocketBoardConfig = window.shopSocket ?? {
   dashboardUrl: "",
   productsUrl: "",
   adminUrl: "",
+  historyUrl: "",
   nonce: "",
   orders: [],
   statuses: [],
@@ -109,6 +112,7 @@ export function Dashboard() {
         />
       ))}
 
+      <WeekStrip strip={snapshot.strip} config={config} />
       <Tiles snapshot={snapshot} stale={stale} />
       <LiveProductsPanel products={snapshot.liveProducts} />
       <AbandonedPanel rows={snapshot.abandoned} currencySymbol={config.currencySymbol} />
@@ -176,19 +180,6 @@ export function Dashboard() {
 }
 
 type CartSegment = WooDashboardSnapshot["carts"]["live"];
-
-/** A whole-unit amount in the browser's locale, or a rounded number when the currency is unknown. */
-function money(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return String(Math.round(amount));
-  }
-}
 
 /** The "right now" figures: users online, open connections, and the carts panel. */
 function Tiles({

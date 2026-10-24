@@ -23,6 +23,7 @@ use function WPSignal\Extensions\ShopSocket\page_step;
 use function WPSignal\Extensions\ShopSocket\prune;
 use function WPSignal\Extensions\ShopSocket\record_cart;
 use function WPSignal\Extensions\ShopSocket\settings;
+use function WPSignal\Extensions\ShopSocket\week_strip;
 use const WPSignal\Extensions\ShopSocket\DB_VERSION;
 use const WPSignal\Extensions\ShopSocket\DB_VERSION_OPTION;
 use const WPSignal\Extensions\ShopSocket\ORDERS_CHANNEL;
@@ -355,6 +356,7 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertSame( $order->get_id(), $firings[0]['order'], 'the firing within the window is credited with the order of another journey' );
 		$this->assertSame( 900, $firings[0]['ms'] );
 		$this->assertArrayHasKey( 'order_at', $firings[0] );
+		$this->assertSame( (float) $order->get_total(), $firings[0]['value'], 'the order total rides on the stamp' );
 		$this->assertArrayNotHasKey( 'order', $firings[1], 'a firing older than the window is not' );
 		$this->assertSame( 5, $firings[2]['order'], 'an earlier order keeps its claim' );
 		$this->assertArrayNotHasKey( 'order', $firings[3], 'a dismissal is what followed a firing, not one' );
@@ -363,6 +365,52 @@ final class HistoryTest extends ExtensionTestCase {
 		$replay = array_column( journeys_for_replay( 30, 10 ), null, 'journey' );
 		$this->assertSame( $order->get_id(), $replay['home:2:1200']['firings'][0]['order'], 'the replay feed carries the stamp' );
 		$this->assertSame( array(), $replay[ 'product:' . $product->get_id() . ':0' ]['firings'], 'and an empty list where nothing fired' );
+	}
+
+	public function test_the_week_strip_reads_left_carts_recovered_orders_conversion_the_leak_and_the_products(): void {
+		global $wpdb;
+		$this->assertNull( week_strip(), 'history off: no strip' );
+		$this->set_history( true );
+		$now   = current_time( 'mysql', true );
+		$early = gmdate( 'Y-m-d H:i:s', time() - 10 * DAY_IN_SECONDS );
+
+		// Three carts left this week (two hold 9001), one converted this week holding 9001, one left last week.
+		foreach ( array( 'aaaa000000000001' => array( 9001, 9002 ), 'aaaa000000000002' => array( 9001 ), 'aaaa000000000003' => array( 9003 ) ) as $id => $products ) {
+			$this->seed_cart( $id, $products, 10.0 );
+			$wpdb->update( carts_table(), array( 'left_at' => $now ), array( 'cart_id' => $id ) );
+		}
+		$this->seed_cart( 'aaaa000000000004', array( 9001 ), 50.0 );
+		$wpdb->update( carts_table(), array( 'left_at' => $now, 'converted_at' => $now, 'order_id' => 77 ), array( 'cart_id' => 'aaaa000000000004' ) );
+		$this->seed_cart( 'aaaa000000000005', array( 9002 ), 10.0 );
+		$this->age_cart( 'aaaa000000000005', array( 'first_seen', 'last_seen', 'left_at' ), 10 * DAY_IN_SECONDS );
+
+		// Journeys: two reached checkout this week and one converted; two leavers left from the cart, one from a product.
+		$rows = array(
+			array( self::JOURNEY, 'home:1:1000>cart:0:48000>away:0:5000', 'left', 'aaaa000000000001', $now ),
+			array( self::JOURNEY_2, 'product:9001:9000>cart:0:30000', 'left', 'aaaa000000000002', $now ),
+			array( '9e3f4a5b-6c7d-4e8f-a091-2c3d4e5f6071', 'home:1:1000>product:9003:7000', 'left', 'aaaa000000000003', $now ),
+			array( 'af405b6c-7d8e-4f90-b1a2-3d4e5f607182', 'cart:0:1000>checkout:0:20000', 'left', null, $now ),
+			array( 'b0516c7d-8e9f-4a01-c2b3-4e5f60718293', 'cart:0:1000>checkout:0:20000>thanks:0:1', 'converted', 'aaaa000000000004', $now ),
+			array( 'c1627d8e-9f00-4b12-d3c4-5f6071829304', 'cart:0:1000>checkout:0:20000', 'left', null, $early ),
+		);
+		foreach ( $rows as list( $jid, $journey, $outcome, $cart, $started ) ) {
+			$wpdb->insert( journeys_table(), array( 'journey_id' => $jid, 'visitor' => self::VISITOR, 'cart_id' => $cart, 'journey' => $journey, 'steps' => substr_count( $journey, '>' ) + 1, 'outcome' => $outcome, 'started_at' => $started, 'last_seen' => $started ) );
+		}
+		// One moment credited with this week's order, another with an order from last week.
+		$wpdb->update(
+			journeys_table(),
+			array( 'firings' => wp_json_encode( array( array( 'rule' => 'r1', 'action' => 'show', 'step' => 0, 'ms' => 1, 'at' => $now, 'order' => 77, 'order_at' => $now, 'value' => 50.0 ), array( 'rule' => 'r1', 'action' => 'show', 'step' => 0, 'ms' => 1, 'at' => $early, 'order' => 66, 'order_at' => $early, 'value' => 20.0 ) ) ) ),
+			array( 'journey_id' => self::JOURNEY )
+		);
+
+		wp_cache_delete( 'week_strip', 'shopsocket' );
+		$strip = week_strip();
+		$this->assertSame( array( 'count' => 3, 'value' => 30.0, 'currency' => get_woocommerce_currency(), 'previous' => 1 ), $strip['left'] );
+		$this->assertSame( array( 'count' => 1, 'value' => 50.0, 'previous' => 1 ), $strip['recovered'] );
+		$this->assertSame( array( 'reached' => 2, 'orders' => 1, 'percent' => 50, 'previous_percent' => 0 ), $strip['conversion'] );
+		$this->assertSame( array( 'kind' => 'cart', 'count' => 2, 'leavers' => 3, 'median_ms' => 39000 ), $strip['leak'], 'the last step that is not away, median of the two cart leavers' );
+		$this->assertSame( array( array( 'id' => 9001, 'left' => 2, 'bought' => 1 ), array( 'id' => 9002, 'left' => 1, 'bought' => 0 ), array( 'id' => 9003, 'left' => 1, 'bought' => 0 ) ), $strip['products'] );
+		$this->assertSame( $strip, week_strip(), 'served from the cache' );
 	}
 
 	public function test_prune_respects_the_toggle_and_both_retentions(): void {

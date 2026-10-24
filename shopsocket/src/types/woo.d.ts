@@ -7,6 +7,8 @@ interface ShopSocketBoardConfig {
 	productsUrl: string;
 	/** The wp-admin base; an order link is only followed when it points there. */
 	adminUrl: string;
+	/** The ShopSocket settings tab, where cart history is switched on. */
+	historyUrl: string;
 	nonce: string;
 	/** The channel each event is trusted from (inc/channels.php). */
 	channels: { orders: string; stock: string; presence: string; staff: string; connections: string };
@@ -51,12 +53,30 @@ interface WooDashboardData {
 	carts: WooCartRow[];
 	/** The latest carts whose shopper left at some point, newest leave first; absent on a payload from before 0.7. */
 	abandoned?: WooAbandonedRow[];
+	/** This week's strip (inc/strip.php); null with history off, absent on a payload from before 0.8. */
+	strip?: WooWeekStrip | null;
 	/** Null when WordSocket is older than 0.22 or the server could not be reached. */
 	online: { active_connections: number; max_connections: number } | null;
 	/** The server's clock (Unix seconds) when the figures were read; sent back as `since` on the next refresh. */
 	as_of?: number;
 	/** Orders created or changed since the `since` the request named; absent when it named none. */
 	orders?: WooOrderEvent[];
+}
+
+/** The board's "This week" strip (inc/strip.php `week_strip()`): the last seven days against the seven before. */
+interface WooWeekStrip {
+	/** Start of the window, RFC 3339 UTC. */
+	since: string;
+	/** Carts whose shopper left and that never became an order. */
+	left: { count: number; value: number; currency: string; previous: number };
+	/** Orders credited to a moment that fired. */
+	recovered: { count: number; value: number; previous: number };
+	/** Orders against journeys that reached checkout, as a percentage. */
+	conversion: { reached: number; orders: number; percent: number; previous_percent: number };
+	/** Where most carted leavers left from; null when nobody left. */
+	leak: { kind: string; count: number; leavers: number; median_ms: number } | null;
+	/** The products most often in a left cart, with how many carts bought each. */
+	products: Array< { id: number; left: number; bought: number } >;
 }
 
 /** One cart segment, computed on the board by crossing rows with presence. */
@@ -86,6 +106,8 @@ interface WooDashboardSnapshot {
 	/** Left carts whose shopper is not back and whose leave is older than the grace, newest first. */
 	abandoned: WooAbandonedRow[];
 	online: { active_connections: number; max_connections: number } | null;
+	/** This week's strip; null with history off. */
+	strip: WooWeekStrip | null;
 	/** Products in live carts: how many of those carts hold each, and the units across them, unordered. */
 	liveProducts: Array< { id: number; carts: number; units: number } >;
 }

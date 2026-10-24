@@ -359,6 +359,8 @@ function mark_left( string $id ): void {
 /**
  * The shopper checked out: stamp the order on the cart row and close the journey as converted.
  *
+ * @since 0.8.0 Credits the cart's firings with the order.
+ *
  * @param string $id       Cart id.
  * @param int    $order_id The order.
  * @param float  $total    The order total, kept on the journey.
@@ -394,18 +396,21 @@ function mark_converted( string $id, int $order_id, float $total ): void {
 			$id
 		)
 	);
-	attribute_conversion( $id, $order_id, $now );
+	attribute_conversion( $id, $order_id, $now, $total );
 }
 
 /**
  * Stamp the order on every moment that fired for this cart within the attribution window, across its journeys.
  *
+ * @since 0.8.0
+ *
  * @param string $cart_id  The cart that converted.
  * @param int    $order_id The order.
  * @param string $now      The conversion time, SQL UTC.
+ * @param float  $value    The order total.
  * @return int Firings stamped.
  */
-function attribute_conversion( string $cart_id, int $order_id, string $now ): int {
+function attribute_conversion( string $cart_id, int $order_id, string $now, float $value = 0 ): int {
 	global $wpdb;
 	$window  = max( 0, (int) apply_filters( 'shopsocket_attribution_window', 7 * DAY_IN_SECONDS ) );
 	$since   = gmdate( 'Y-m-d H:i:s', time() - $window );
@@ -427,6 +432,7 @@ function attribute_conversion( string $cart_id, int $order_id, string $now ): in
 			}
 			$firing['order']    = $order_id;
 			$firing['order_at'] = $now;
+			$firing['value']    = round( $value, 2 );
 			$changed            = true;
 			++$stamped;
 		}
@@ -742,6 +748,8 @@ function datetime_to_rfc3339( string $datetime ): string {
 
 /**
  * Journeys for the Moments tab's replay: the archive plus the live rows' copies, newest first, with the outcome and whether a cart was there.
+ *
+ * @since 0.8.0 Returns each journey's `firings`.
  *
  * @param int $days  How far back.
  * @param int $limit At most this many.

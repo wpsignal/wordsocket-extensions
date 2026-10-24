@@ -40,10 +40,12 @@ function online_now(): ?array {
 }
 
 /**
- * The open rows, the recently abandoned ones, and the online count; the board
+ * The open rows, the recently abandoned ones, this week's strip and the online count; the board
  * splits open rows into live and abandoned itself.
  * `as_of` is this server's clock when the figures were read: the board sends
  * it back as `since` on its next refresh.
+ *
+ * @since 0.8.0 Adds `strip`.
  *
  * @return array{carts: array<int, array<string, mixed>>, abandoned: array<int, array<string, mixed>>, online: array{active_connections: int, max_connections: int}|null, as_of: int}
  */
@@ -51,6 +53,7 @@ function dashboard_snapshot(): array {
 	return array(
 		'carts'     => cart_rows(),
 		'abandoned' => abandoned_rows(),
+		'strip'     => week_strip(),
 		'online'    => online_now(),
 		'as_of'     => time(),
 	);

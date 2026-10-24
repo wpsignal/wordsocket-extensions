@@ -94,6 +94,8 @@ function order_statuses(): array {
 /**
  * Render the dashboard screen and enqueue its bundle.
  *
+ * @since 0.8.0 Adds `historyUrl` to the board config.
+ *
  * @return void
  */
 function render_dashboard(): void {
@@ -142,6 +144,7 @@ function render_dashboard(): void {
 				'dashboardUrl'   => rest_url( REST_NS . '/dashboard' ),
 				'productsUrl'    => rest_url( REST_NS . '/products' ),
 				'adminUrl'       => admin_url(),
+				'historyUrl'     => admin_url( 'admin.php?page=wordsocket&tab=shopsocket' ),
 				'nonce'          => wp_create_nonce( 'wp_rest' ),
 				'orders'         => board_orders(),
 				'statuses'       => order_statuses(),
