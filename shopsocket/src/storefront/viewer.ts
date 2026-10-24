@@ -59,6 +59,8 @@ interface ViewerState {
  * Start following this shopper: one sync on load, then on every change to
  * their own cart and on every recovered connection. `onCount` receives the
  * live count for the page's product whenever a sync returns one.
+ *
+ * @since 0.8.0 Reads the shopper's state from the visit answer and reports only with a cart.
  */
 export function startViewer(
   config: ViewerConfig,
@@ -206,7 +208,11 @@ export function startViewer(
     }, "wc/store/cart");
   }
 
-  /** Whether this shopper has a cart: the `woocommerce_items_in_cart` cookie, or a synced cart with items. */
+  /**
+   * Whether this shopper has a cart: the `woocommerce_items_in_cart` cookie, or a synced cart with items.
+   *
+   * @since 0.8.0
+   */
   function hasCart(): boolean {
     return (
       cart.count > 0 ||
@@ -214,7 +220,11 @@ export function startViewer(
     );
   }
 
-  /** Start presence and read this shopper's state from the visit report's answer; false when nothing will answer. */
+  /**
+   * Start presence and read this shopper's state from the visit report's answer; false when nothing will answer.
+   *
+   * @since 0.8.0
+   */
   function startTracked(): boolean {
     const wps = window.WPS;
     if (!wps?.presence || !config.presenceChannel || !config.cartIdUrl)

@@ -472,6 +472,8 @@ add_action(
 /**
  * This shopper's state for the browser: cart id, held products, the rules' cart fields, and the live count of `$product` when one is given.
  *
+ * @since 0.8.0
+ *
  * @param int $product The page's product id, 0 for none.
  * @return array{id: string, products: int[], quantities: object, total: float|int, currency: string, items: array, count?: int}
  */
@@ -505,6 +507,8 @@ function viewer_state( int $product = 0 ): array {
 
 /**
  * The product a journey's open step is on, 0 when the page is not a product.
+ *
+ * @since 0.8.0
  *
  * @param string $journey The journey, its last step the current page.
  * @return int

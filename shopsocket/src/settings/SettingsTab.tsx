@@ -41,6 +41,12 @@ function coreComponents(): Components {
     .components;
 }
 
+/**
+ * The ShopSocket settings tab.
+ *
+ * @since 0.5.0
+ * @since 0.8.0 Laid out with `@wordpress/ui`.
+ */
 export function SettingsTab() {
   const { ToggleControl, FormTokenField, TextControl } = coreComponents();
   const [settings, setSettings] = useState<ShopSocketStorefrontSettings>(

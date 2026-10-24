@@ -251,11 +251,17 @@ add_filter(
 	}
 );
 
-/** What a report says happened: the firing, or what the shopper did with the prompt (WordSocket 0.31's kinds). */
+/**
+ * What a report says happened: the firing, or what the shopper did with the prompt (WordSocket 0.31's kinds).
+ *
+ * @since 0.8.0
+ */
 const FIRING_KINDS = array( 'fired', 'returned', 'dismissed', 'clicked' );
 
 /**
  * A firing lands on the journey row, when history is on; a journey not yet reported starts its row here, cart permitting.
+ *
+ * @since 0.8.0 Stores `ms` and `kind`.
  *
  * @param array $report `{ visitor, journey_id, rule_id, action, step, user_id, data }`.
  * @return void

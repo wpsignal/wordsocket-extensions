@@ -180,6 +180,8 @@ const CACHE_PROBE_KEY   = 'cache_probe';
 /**
  * Whether an earlier request's marker is still in the object cache, leaving a fresh one for the next request.
  *
+ * @since 0.8.0
+ *
  * @return bool
  */
 function object_cache_persists(): bool {
