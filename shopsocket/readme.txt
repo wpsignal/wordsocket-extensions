@@ -149,8 +149,10 @@ Anyone who can manage WooCommerce.
 = 0.8.0 =
 * New: with WordSocket 0.31, the Moments tab knows the shop. Conditions on the cart (items, count, total, a product, a category) and the WooCommerce pages, and one action: alert your team on the Realtime board
 * New: one moment ships switched off, listed on WordSocket's Moments tab: a shopper who hides the tab with a cart sees the tab title flash and, on return, a banner naming what is waiting
-* New: with history on, the journeys record which moments fired, and the Moments tab can replay a moment over them before you switch it on
+* New: with history on, the journeys record which moments fired, and the Moments tab can replay a moment over them before you switch it on; a moment that fires right after a shopper's first add to cart is recorded too
 * Nothing changes on WordSocket 0.30: the rules pieces load only when the engine is there
+* Faster pages on WordSocket 0.31: the shopper's cart state comes back in the visit report WordSocket already sends, so a page load makes one request instead of two; the cart-id route still serves cart changes and reconnects.
+* The History settings warn when your site has no persistent object cache, since with history on every page a shopper with a cart opens writes to the database; Redis or Memcached is recommended on a busy store.
 
 = 0.7.0 =
 * New: cart history. Switch it on under ShopSocket settings to keep each cart's products, value, when the shopper left and whether it became an order, for the days you choose, and shoppers' page journeys for the months you choose. Off by default; off keeps exactly what earlier versions kept
