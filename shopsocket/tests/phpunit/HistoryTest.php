@@ -12,10 +12,12 @@ use function WPSignal\Extensions\ShopSocket\cart_items_table;
 use function WPSignal\Extensions\ShopSocket\count_in_carts;
 use function WPSignal\Extensions\ShopSocket\erase_user;
 use function WPSignal\Extensions\ShopSocket\forget_cart;
+use function WPSignal\Extensions\ShopSocket\journeys_for_replay;
 use function WPSignal\Extensions\ShopSocket\journeys_table;
 use function WPSignal\Extensions\ShopSocket\mark_converted;
 use function WPSignal\Extensions\ShopSocket\mark_left;
 use function WPSignal\Extensions\ShopSocket\on_order_created;
+use function WPSignal\Extensions\ShopSocket\on_rule_fired;
 use function WPSignal\Extensions\ShopSocket\on_visitor_report;
 use function WPSignal\Extensions\ShopSocket\page_step;
 use function WPSignal\Extensions\ShopSocket\prune;
@@ -293,6 +295,65 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertSame( 'converted', $by_id[ self::JOURNEY_2 ]['outcome'] );
 		$this->assertSame( $order->get_id(), (int) $by_id[ self::JOURNEY_2 ]['order_id'] );
 		$this->assertSame( 'product:' . $product->get_id() . ':5000>thanks:0:0', $by_id[ self::JOURNEY_2 ]['journey'], 'the journey itself still grows' );
+	}
+
+	public function test_a_conversion_stamps_the_moments_that_fired_for_the_cart_within_the_window_across_journeys(): void {
+		global $wpdb;
+		$this->set_history( true );
+		$product = $this->make_product( 10 );
+		WC()->cart->add_to_cart( $product->get_id(), 1 );
+		$id = cart_id();
+
+		// A moment fires in the first journey; the shopper returns after the gap, which starts a second one.
+		on_visitor_report( $this->report( 'home:2:1200', false ) );
+		on_rule_fired(
+			array(
+				'visitor'    => self::VISITOR,
+				'journey_id' => self::JOURNEY,
+				'rule_id'    => 'r1',
+				'action'     => 'show',
+				'step'       => 0,
+				'ms'         => 900,
+				'user_id'    => 0,
+				'data'       => array(),
+			)
+		);
+		// Beside it, one that fired before the window and one an earlier order already claimed.
+		$firings   = json_decode( (string) $this->journeys()[0]['firings'], true );
+		$firings[] = array(
+			'rule'   => 'r1',
+			'action' => 'show',
+			'step'   => 0,
+			'ms'     => 0,
+			'at'     => gmdate( 'Y-m-d H:i:s', time() - 8 * DAY_IN_SECONDS ),
+		);
+		$firings[] = array(
+			'rule'     => 'r1',
+			'action'   => 'show',
+			'step'     => 0,
+			'ms'       => 0,
+			'at'       => current_time( 'mysql', true ),
+			'order'    => 5,
+			'order_at' => '2026-01-01 00:00:00',
+		);
+		$wpdb->update( journeys_table(), array( 'firings' => wp_json_encode( $firings ) ), array( 'journey_id' => self::JOURNEY ) );
+		on_visitor_report( $this->report( 'product:' . $product->get_id() . ':0', false, self::JOURNEY_2 ) );
+
+		$order = $this->make_order( $product );
+		mark_converted( $id, $order->get_id(), (float) $order->get_total() );
+		$by_id   = array_column( $this->journeys(), null, 'journey_id' );
+		$firings = json_decode( (string) $by_id[ self::JOURNEY ]['firings'], true );
+		$this->assertSame( 'left', $by_id[ self::JOURNEY ]['outcome'], 'the journey the moment fired in still ended as left' );
+		$this->assertSame( $order->get_id(), $firings[0]['order'], 'the firing within the window is credited with the order of another journey' );
+		$this->assertSame( 900, $firings[0]['ms'] );
+		$this->assertArrayHasKey( 'order_at', $firings[0] );
+		$this->assertArrayNotHasKey( 'order', $firings[1], 'a firing older than the window is not' );
+		$this->assertSame( 5, $firings[2]['order'], 'an earlier order keeps its claim' );
+		$this->assertSame( 'converted', $by_id[ self::JOURNEY_2 ]['outcome'] );
+
+		$replay = array_column( journeys_for_replay( 30, 10 ), null, 'journey' );
+		$this->assertSame( $order->get_id(), $replay['home:2:1200']['firings'][0]['order'], 'the replay feed carries the stamp' );
+		$this->assertSame( array(), $replay[ 'product:' . $product->get_id() . ':0' ]['firings'], 'and an empty list where nothing fired' );
 	}
 
 	public function test_prune_respects_the_toggle_and_both_retentions(): void {

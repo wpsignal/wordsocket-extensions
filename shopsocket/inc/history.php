@@ -394,6 +394,53 @@ function mark_converted( string $id, int $order_id, float $total ): void {
 			$id
 		)
 	);
+	attribute_conversion( $id, $order_id, $now );
+}
+
+/**
+ * Stamp the order on every moment that fired for this cart within the attribution window, across its journeys.
+ *
+ * @param string $cart_id  The cart that converted.
+ * @param int    $order_id The order.
+ * @param string $now      The conversion time, SQL UTC.
+ * @return int Firings stamped.
+ */
+function attribute_conversion( string $cart_id, int $order_id, string $now ): int {
+	global $wpdb;
+	/*
+	 * Why: the journey a moment fires in is often not the one that converts. A shopper nudged while away
+	 * comes back after the 30 minute gap, which starts a new journey, so a per-journey outcome would call
+	 * the moment a failure when it did its job (seen on woo.wpsignal.local, 2026-10-23). The stamp lives on
+	 * the firing, so "recovered orders" is a count over firings with no join at read time.
+	 */
+	$window = max( 0, (int) apply_filters( 'shopsocket_attribution_window', 7 * DAY_IN_SECONDS ) );
+	$since  = gmdate( 'Y-m-d H:i:s', time() - $window );
+	$rows   = (array) $wpdb->get_results(
+		$wpdb->prepare( 'SELECT journey_id, firings FROM ' . journeys_table() . ' WHERE cart_id = %s AND firings IS NOT NULL', $cart_id ),
+		ARRAY_A
+	);
+	$stamped = 0;
+	foreach ( $rows as $row ) {
+		$firings = json_decode( (string) $row['firings'], true );
+		if ( ! is_array( $firings ) ) {
+			continue;
+		}
+		$changed = false;
+		foreach ( $firings as &$firing ) {
+			if ( ! is_array( $firing ) || isset( $firing['order'] ) || (string) ( $firing['at'] ?? '' ) < $since ) {
+				continue;
+			}
+			$firing['order']    = $order_id;
+			$firing['order_at'] = $now;
+			$changed            = true;
+			++$stamped;
+		}
+		unset( $firing );
+		if ( $changed ) {
+			$wpdb->update( journeys_table(), array( 'firings' => wp_json_encode( $firings ) ), array( 'journey_id' => $row['journey_id'] ), array( '%s' ), array( '%s' ) );
+		}
+	}
+	return $stamped;
 }
 
 /**
@@ -708,7 +755,7 @@ function datetime_to_rfc3339( string $datetime ): string {
  *
  * @param int $days  How far back.
  * @param int $limit At most this many.
- * @return array<int, array{journey: string, started_at: string, outcome: string, value: float, has_cart: bool, context: array}>
+ * @return array<int, array{journey: string, started_at: string, outcome: string, value: float, has_cart: bool, context: array, firings: array}>
  */
 function journeys_for_replay( int $days, int $limit ): array {
 	global $wpdb;
@@ -718,7 +765,7 @@ function journeys_for_replay( int $days, int $limit ): array {
 	$since = gmdate( 'Y-m-d H:i:s', time() - max( 1, $days ) * DAY_IN_SECONDS );
 	$rows  = (array) $wpdb->get_results(
 		$wpdb->prepare(
-			'SELECT journey, started_at, outcome, value, cart_id FROM ' . journeys_table() . ' WHERE started_at >= %s ORDER BY started_at DESC LIMIT %d',
+			'SELECT journey, started_at, outcome, value, cart_id, firings FROM ' . journeys_table() . ' WHERE started_at >= %s ORDER BY started_at DESC LIMIT %d',
 			$since,
 			max( 1, $limit )
 		),
@@ -726,14 +773,17 @@ function journeys_for_replay( int $days, int $limit ): array {
 	);
 	return array_map(
 		static function ( array $row ): array {
-			$value = round( (float) ( $row['value'] ?? 0 ), 2 );
-			$has   = '' !== (string) ( $row['cart_id'] ?? '' );
+			$value   = round( (float) ( $row['value'] ?? 0 ), 2 );
+			$has     = '' !== (string) ( $row['cart_id'] ?? '' );
+			$firings = json_decode( (string) ( $row['firings'] ?? '' ), true );
 			return array(
 				'journey'    => (string) $row['journey'],
 				'started_at' => datetime_to_rfc3339( (string) $row['started_at'] ),
 				'outcome'    => (string) $row['outcome'],
 				'value'      => $value,
 				'has_cart'   => $has,
+				// The moments that fired here, with the order a later conversion stamped on them.
+				'firings'    => is_array( $firings ) ? array_values( $firings ) : array(),
 				// What the cart conditions can know from a stored journey: items were there, and what they came to.
 				'context'    => array(
 					'cart' => array(

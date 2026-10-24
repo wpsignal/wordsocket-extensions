@@ -275,6 +275,7 @@ function on_rule_fired( array $report ): void {
 		'rule'   => (string) $report['rule_id'],
 		'action' => (string) $report['action'],
 		'step'   => (int) $report['step'],
+		'ms'     => max( 0, (int) ( $report['ms'] ?? 0 ) ),
 		'at'     => now_sql(),
 	);
 	$wpdb->update( journeys_table(), array( 'firings' => wp_json_encode( array_slice( $firings, -50 ) ) ), array( 'journey_id' => $report['journey_id'] ), array( '%s' ), array( '%s' ) );

@@ -161,7 +161,18 @@ interface WPSFiring {
   rule: string;
   action: string;
   step: number;
+  /** Elapsed ms of that step when the action ran (WordSocket 0.31). */
+  ms?: number;
   data?: Record<string, unknown>;
+}
+interface WPSHistoryFiring {
+  rule: string;
+  action: string;
+  step: number;
+  ms?: number;
+  at?: string;
+  order?: number;
+  order_at?: string;
 }
 interface WPSHistoryJourney {
   journey: string;
@@ -169,6 +180,7 @@ interface WPSHistoryJourney {
   outcome?: string;
   value?: number;
   context?: Record<string, unknown>;
+  firings?: WPSHistoryFiring[];
 }
 interface WPSHistoryProvider {
   load(options: {

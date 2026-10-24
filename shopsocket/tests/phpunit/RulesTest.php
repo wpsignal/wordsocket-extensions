@@ -132,6 +132,7 @@ final class RulesTest extends ExtensionTestCase {
 			'rule_id'    => DEFAULT_RULE_ID,
 			'action'     => 'show',
 			'step'       => 2,
+			'ms'         => 4500,
 			'user_id'    => 0,
 			'data'       => array(),
 		);
@@ -145,6 +146,7 @@ final class RulesTest extends ExtensionTestCase {
 		$this->assertCount( 2, $firings );
 		$this->assertSame( DEFAULT_RULE_ID, $firings[0]['rule'] );
 		$this->assertSame( 3, $firings[1]['step'] );
+		$this->assertSame( 4500, $firings[0]['ms'], 'how far into the step it fired' );
 		$this->assertArrayHasKey( 'at', $firings[1] );
 	}
 
