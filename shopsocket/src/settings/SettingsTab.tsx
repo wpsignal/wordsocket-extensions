@@ -13,7 +13,7 @@
 import { useEffect, useState } from "@wordpress/element";
 import { __ } from "@wordpress/i18n";
 import apiFetch from "@wordpress/api-fetch";
-import { CollapsibleCard, Card, Stack, Text } from "@wordpress/ui";
+import { CollapsibleCard, Card, Notice, Stack, Text } from "@wordpress/ui";
 import { Flex, FlexItem } from "@wordpress/components";
 
 type Components = typeof import("@wordpress/components");
@@ -45,6 +45,22 @@ export function SettingsTab() {
   );
   const [terms, setTerms] = useState<Term[] | null>(null);
   const [dirty, setDirty] = useState(false);
+  /*
+   * Whether the object cache outlives a request, asked twice: the first call plants a marker, and
+   * only a persistent cache still holds it for the second. Null until both answers are in.
+   */
+  const [cache, setCache] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const probe = () =>
+      apiFetch<{ persistent: boolean }>({ path: "/shopsocket/v1/cache" });
+    probe()
+      .then((first) =>
+        first.persistent ? true : probe().then((second) => second.persistent),
+      )
+      .then(setCache)
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     /*
@@ -127,7 +143,9 @@ export function SettingsTab() {
 
   return (
     <div className="shopsocket-tab">
-      <Text variant="heading-xl" render={<h2 />}>{__("ShopSocket", "shopsocket")}</Text>
+      <Text variant="heading-xl" render={<h2 />}>
+        {__("ShopSocket", "shopsocket")}
+      </Text>
       <p>
         {__(
           "What shoppers see on the storefront. The board under WooCommerce is unaffected by these settings.",
@@ -215,6 +233,26 @@ export function SettingsTab() {
             </CollapsibleCard.Header>
             <CollapsibleCard.Content>
               <Flex direction="column" gap={4} align="stretch">
+                {cache === false && (
+                  <FlexItem>
+                    <Notice.Root intent="warning">
+                      <Notice.Title>
+                        {__("No persistent object cache found", "shopsocket")}
+                      </Notice.Title>
+                      <Notice.Description>
+                        {__(
+                          "With history on, every page a shopper with a cart opens writes to your database, and without a persistent object cache WordPress sends its own lookups there on each of those requests too. A busy store will feel it.",
+                          "shopsocket",
+                        )}
+                      </Notice.Description>
+                      <Notice.Actions>
+                        <Notice.ActionLink href="https://developer.wordpress.org/advanced-administration/performance/optimization/">
+                          {__("About object caching", "shopsocket")}
+                        </Notice.ActionLink>
+                      </Notice.Actions>
+                    </Notice.Root>
+                  </FlexItem>
+                )}
                 <FlexItem>
                   <ToggleControl
                     label={__("Keep a history of carts", "shopsocket")}

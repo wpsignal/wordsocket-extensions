@@ -167,6 +167,47 @@ add_action(
 	}
 );
 
+/*
+ * Whether the object cache outlives a request is probed, not asked:
+ * `wp_using_ext_object_cache()` is true under a drop-in that caches nothing
+ * (Lempify's `none` backend). A request plants a marker and the next one looks
+ * for it, so the settings tab asks twice and trusts the second answer. The
+ * History card warns when it is false; history is never locked by it.
+ */
+const CACHE_PROBE_GROUP = 'shopsocket';
+const CACHE_PROBE_KEY   = 'cache_probe';
+
+/**
+ * Whether an earlier request's marker is still in the object cache, leaving a fresh one for the next request.
+ *
+ * @return bool
+ */
+function object_cache_persists(): bool {
+	$marker = substr( hash( 'sha256', 'shopsocket-cache-probe' . wp_salt( 'nonce' ) ), 0, 16 );
+	$seen   = wp_cache_get( CACHE_PROBE_KEY, CACHE_PROBE_GROUP );
+	wp_cache_set( CACHE_PROBE_KEY, $marker, CACHE_PROBE_GROUP, DAY_IN_SECONDS );
+	return $seen === $marker;
+}
+
+add_action(
+	'rest_api_init',
+	static function (): void {
+		register_rest_route(
+			REST_NS,
+			'/cache',
+			array(
+				'methods'             => 'GET',
+				'callback'            => static function () {
+					$response = rest_ensure_response( array( 'persistent' => object_cache_persists() ) );
+					$response->header( 'Cache-Control', 'no-store' );
+					return $response;
+				},
+				'permission_callback' => static fn() => current_user_can( STAFF_CAP ),
+			)
+		);
+	}
+);
+
 /**
  * The per-product choice for a feature: 'on', 'off', or '' for default.
  * Variations follow their parent.

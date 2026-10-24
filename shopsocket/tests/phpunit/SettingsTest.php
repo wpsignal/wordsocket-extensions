@@ -6,10 +6,14 @@
 
 use function WPSignal\Extensions\ShopSocket\feature_enabled;
 use function WPSignal\Extensions\ShopSocket\in_carts_enabled;
+use function WPSignal\Extensions\ShopSocket\object_cache_persists;
 use function WPSignal\Extensions\ShopSocket\sanitize_settings;
 use function WPSignal\Extensions\ShopSocket\settings;
 use function WPSignal\Extensions\ShopSocket\toasts_enabled;
 use const WPSignal\Extensions\ShopSocket\ACTIVITY_CHANNEL;
+use const WPSignal\Extensions\ShopSocket\CACHE_PROBE_GROUP;
+use const WPSignal\Extensions\ShopSocket\CACHE_PROBE_KEY;
+use const WPSignal\Extensions\ShopSocket\REST_NS;
 use const WPSignal\Extensions\ShopSocket\FEATURE_ACTIVITY;
 use const WPSignal\Extensions\ShopSocket\FEATURE_IN_CARTS;
 use const WPSignal\Extensions\ShopSocket\PRODUCT_META;
@@ -224,5 +228,14 @@ final class SettingsTest extends ExtensionTestCase {
 			remove_filter( 'shopsocket_activity_throttle', '__return_zero' );
 			WC()->cart->empty_cart();
 		}
+	}
+
+	public function test_the_cache_probe_sees_its_marker_only_on_a_later_call_and_is_staff_only(): void {
+		wp_cache_delete( CACHE_PROBE_KEY, CACHE_PROBE_GROUP );
+		$this->assertFalse( object_cache_persists(), 'the first call finds nothing and plants the marker' );
+		$this->assertTrue( object_cache_persists(), 'the next call finds it' );
+
+		wp_set_current_user( 0 );
+		$this->assertSame( 401, rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/cache' ) )->get_status(), 'visitors learn nothing about the server' );
 	}
 }
