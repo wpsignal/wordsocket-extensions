@@ -214,11 +214,28 @@ export function startViewer(
   }
 
   /**
+   * Whether this shopper has a cart, without asking the server: WooCommerce sets
+   * the readable `woocommerce_items_in_cart` cookie while a cart holds something
+   * (the session cookie itself is HttpOnly), and a sync that found items counts
+   * too. A cartless visitor writes nothing in `inc/history.php`, so their visit
+   * and leave reports would only boot WordPress for nothing: the tracker holds
+   * them until this is true, and the first report after that carries the whole
+   * journey from `sessionStorage`. Presence is announced regardless.
+   */
+  function hasCart(): boolean {
+    return (
+      cart.count > 0 ||
+      /(?:^|;\s*)woocommerce_items_in_cart=1(?:;|$)/.test(document.cookie)
+    );
+  }
+
+  /**
    * Start presence now and read this shopper's state from the visit report's
    * answer (WordSocket 0.31: the `shopsocket` key `inc/storefront.php` fills), so
-   * the page makes one request instead of a visit and a `/cart-id` fetch. False
-   * when nothing will answer: no presence API, no `onVisit`, or a tracker that
-   * does not report (a page cached before 0.30); a failed report fetches instead.
+   * the page makes one request instead of a visit and a `/cart-id` fetch, and
+   * none at all for a visitor without a cart. False when nothing will answer: no
+   * presence API, no `onVisit`, or a tracker that does not report (a page cached
+   * before 0.30); then a shopper with a cart fetches instead.
    */
   function startTracked(): boolean {
     const wps = window.WPS;
@@ -226,12 +243,18 @@ export function startViewer(
       return false;
     tracker = wps.presence.track(config.presenceChannel, {
       state: { b: null },
+      report: hasCart,
     });
     if (typeof tracker.onVisit !== "function") return false;
     tracker.onVisit((answer) => {
       const mine = answer?.shopsocket;
       if (mine && typeof mine === "object") apply(mine as ViewerState);
-      else sync();
+      else if (hasCart()) sync();
+      /*
+       * A cartless visitor gets no answer and fetches nothing: the page's seeded
+       * count stands until a live event moves it, and the cart hooks sync the
+       * moment something is added.
+       */
     });
     return true;
   }
@@ -241,7 +264,7 @@ export function startViewer(
    * shopper's own cart changes keep it current. WordSocket's client is a classic
    * footer script that runs before this module, so `window.WPS` is already there.
    */
-  if (!startTracked()) sync();
+  if (!startTracked() && hasCart()) sync();
   watchOwnCart();
 
   /*

@@ -210,8 +210,8 @@ interface WPSRulesApi {
 interface WPSTrackOptions {
   /** The plugin's own fields, carried in presence state and in every report (this plugin's cart id `b`). */
   state?: Record<string, unknown>;
-  /** Whether to report visits and leaves to WordPress. Default true. */
-  report?: boolean;
+  /** Whether to report visits and leaves to WordPress. Default true; a function (0.31) is read before each report. */
+  report?: boolean | (() => boolean);
 }
 
 /** What `WPS.presence.track()` returns. */
