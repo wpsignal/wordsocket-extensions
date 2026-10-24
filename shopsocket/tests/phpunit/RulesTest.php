@@ -147,7 +147,13 @@ final class RulesTest extends ExtensionTestCase {
 		$this->assertSame( DEFAULT_RULE_ID, $firings[0]['rule'] );
 		$this->assertSame( 3, $firings[1]['step'] );
 		$this->assertSame( 4500, $firings[0]['ms'], 'how far into the step it fired' );
+		$this->assertSame( 'fired', $firings[0]['kind'], 'a report without a kind is the firing itself' );
 		$this->assertArrayHasKey( 'at', $firings[1] );
+		on_rule_fired( array_merge( $report, array( 'kind' => 'dismissed' ) ) );
+		on_rule_fired( array_merge( $report, array( 'kind' => 'bogus' ) ) );
+		$firings = json_decode( (string) $this->journeys()[0]['firings'], true );
+		$this->assertSame( 'dismissed', $firings[2]['kind'], 'what the shopper did with the prompt lands on the same list' );
+		$this->assertSame( 'fired', $firings[3]['kind'], 'an unknown kind reads as a firing' );
 	}
 
 	public function test_a_firing_before_any_visit_report_starts_the_journey_row_and_the_next_report_fills_it(): void {

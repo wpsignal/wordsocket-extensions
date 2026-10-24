@@ -81,7 +81,7 @@ interface WPSPromptContent {
 }
 type WPSPresentationMount = (
   root: HTMLElement,
-  close: () => void,
+  close: (reason?: "dismissed") => void,
 ) => { open(node: Node): void; close(): void };
 interface WPSShowOptions {
   rule?: string;
@@ -100,9 +100,14 @@ interface WPSRecoveryApi {
   clearBadge(): void;
   sound(): boolean;
   onReturn(handler: () => void): () => void;
-  onClose(handler: () => void): () => void;
-  /** Called each time a prompt opens, with the moment (`id:rev`) that showed it, if any. */
-  onShow(handler: (rule?: string) => void): () => void;
+  /** Each close, with the moment and action that showed the prompt and `dismissed` when the visitor closed it. */
+  onClose(
+    handler: (rule?: string, reason?: "dismissed", action?: string) => void,
+  ): () => void;
+  /** Called each time a prompt opens, with the moment (`id:rev`) and action that showed it, if any. */
+  onShow(handler: (rule?: string, action?: string) => void): () => void;
+  /** A click on a link or button inside a prompt, with the moment and action that showed it. */
+  onClick(handler: (rule?: string, action?: string) => void): () => void;
   readonly open: boolean;
   readonly shownBy: string[];
   close(rule?: string): void;
@@ -157,12 +162,15 @@ type WPSRuleContext = Record<string, unknown> & {
   };
   site: { name: string };
 };
+type WPSFiringKind = "fired" | "returned" | "dismissed" | "clicked";
 interface WPSFiring {
   rule: string;
   action: string;
   step: number;
   /** Elapsed ms of that step when the action ran (WordSocket 0.31). */
   ms?: number;
+  /** `fired` when absent; the other kinds are what the visitor did with the prompt. */
+  kind?: WPSFiringKind;
   data?: Record<string, unknown>;
 }
 interface WPSHistoryFiring {
@@ -170,6 +178,7 @@ interface WPSHistoryFiring {
   action: string;
   step: number;
   ms?: number;
+  kind?: WPSFiringKind;
   at?: string;
   order?: number;
   order_at?: string;

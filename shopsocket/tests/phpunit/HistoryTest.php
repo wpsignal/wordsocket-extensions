@@ -336,6 +336,14 @@ final class HistoryTest extends ExtensionTestCase {
 			'order'    => 5,
 			'order_at' => '2026-01-01 00:00:00',
 		);
+		$firings[] = array(
+			'rule'   => 'r1',
+			'action' => 'show',
+			'step'   => 0,
+			'ms'     => 0,
+			'kind'   => 'dismissed',
+			'at'     => current_time( 'mysql', true ),
+		);
 		$wpdb->update( journeys_table(), array( 'firings' => wp_json_encode( $firings ) ), array( 'journey_id' => self::JOURNEY ) );
 		on_visitor_report( $this->report( 'product:' . $product->get_id() . ':0', false, self::JOURNEY_2 ) );
 
@@ -349,6 +357,7 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertArrayHasKey( 'order_at', $firings[0] );
 		$this->assertArrayNotHasKey( 'order', $firings[1], 'a firing older than the window is not' );
 		$this->assertSame( 5, $firings[2]['order'], 'an earlier order keeps its claim' );
+		$this->assertArrayNotHasKey( 'order', $firings[3], 'a dismissal is what followed a firing, not one' );
 		$this->assertSame( 'converted', $by_id[ self::JOURNEY_2 ]['outcome'] );
 
 		$replay = array_column( journeys_for_replay( 30, 10 ), null, 'journey' );

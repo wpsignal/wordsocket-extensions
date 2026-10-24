@@ -407,15 +407,9 @@ function mark_converted( string $id, int $order_id, float $total ): void {
  */
 function attribute_conversion( string $cart_id, int $order_id, string $now ): int {
 	global $wpdb;
-	/*
-	 * Why: the journey a moment fires in is often not the one that converts. A shopper nudged while away
-	 * comes back after the 30 minute gap, which starts a new journey, so a per-journey outcome would call
-	 * the moment a failure when it did its job (seen on woo.wpsignal.local, 2026-10-23). The stamp lives on
-	 * the firing, so "recovered orders" is a count over firings with no join at read time.
-	 */
-	$window = max( 0, (int) apply_filters( 'shopsocket_attribution_window', 7 * DAY_IN_SECONDS ) );
-	$since  = gmdate( 'Y-m-d H:i:s', time() - $window );
-	$rows   = (array) $wpdb->get_results(
+	$window  = max( 0, (int) apply_filters( 'shopsocket_attribution_window', 7 * DAY_IN_SECONDS ) );
+	$since   = gmdate( 'Y-m-d H:i:s', time() - $window );
+	$rows    = (array) $wpdb->get_results(
 		$wpdb->prepare( 'SELECT journey_id, firings FROM ' . journeys_table() . ' WHERE cart_id = %s AND firings IS NOT NULL', $cart_id ),
 		ARRAY_A
 	);
@@ -427,7 +421,8 @@ function attribute_conversion( string $cart_id, int $order_id, string $now ): in
 		}
 		$changed = false;
 		foreach ( $firings as &$firing ) {
-			if ( ! is_array( $firing ) || isset( $firing['order'] ) || (string) ( $firing['at'] ?? '' ) < $since ) {
+			// Only a firing earns the order.
+			if ( ! is_array( $firing ) || isset( $firing['order'] ) || 'fired' !== (string) ( $firing['kind'] ?? 'fired' ) || (string) ( $firing['at'] ?? '' ) < $since ) {
 				continue;
 			}
 			$firing['order']    = $order_id;
@@ -511,11 +506,6 @@ function may_start_journey( string $cart_id, string $journey_id ): bool {
  */
 function start_journey( string $visitor, string $journey_id ): bool {
 	global $wpdb;
-	/*
-	 * Why: a moment can fire between the first add to cart and the next page load (the shipped hidden-cart
-	 * moment does, on a visitor whose cart was empty when the page opened). The visit that opened the page
-	 * wrote no row, since the cart was empty, so the firing had nowhere to land and was lost (2026-10-23).
-	 */
 	if ( ! history_enabled() || '' === $journey_id ) {
 		return false;
 	}
@@ -782,7 +772,7 @@ function journeys_for_replay( int $days, int $limit ): array {
 				'outcome'    => (string) $row['outcome'],
 				'value'      => $value,
 				'has_cart'   => $has,
-				// The moments that fired here, with the order a later conversion stamped on them.
+				// Firings, with any order a later conversion stamped on them.
 				'firings'    => is_array( $firings ) ? array_values( $firings ) : array(),
 				// What the cart conditions can know from a stored journey: items were there, and what they came to.
 				'context'    => array(

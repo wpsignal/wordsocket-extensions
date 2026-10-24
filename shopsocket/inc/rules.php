@@ -251,6 +251,9 @@ add_filter(
 	}
 );
 
+/** What a report says happened: the firing, or what the shopper did with the prompt (WordSocket 0.31's kinds). */
+const FIRING_KINDS = array( 'fired', 'returned', 'dismissed', 'clicked' );
+
 /**
  * A firing lands on the journey row, when history is on; a journey not yet reported starts its row here, cart permitting.
  *
@@ -271,11 +274,13 @@ function on_rule_fired( array $report ): void {
 	}
 	$firings   = json_decode( (string) ( $row['firings'] ?? '' ), true );
 	$firings   = is_array( $firings ) ? $firings : array();
+	$kind      = (string) ( $report['kind'] ?? 'fired' );
 	$firings[] = array(
 		'rule'   => (string) $report['rule_id'],
 		'action' => (string) $report['action'],
 		'step'   => (int) $report['step'],
 		'ms'     => max( 0, (int) ( $report['ms'] ?? 0 ) ),
+		'kind'   => in_array( $kind, FIRING_KINDS, true ) ? $kind : 'fired',
 		'at'     => now_sql(),
 	);
 	$wpdb->update( journeys_table(), array( 'firings' => wp_json_encode( array_slice( $firings, -50 ) ) ), array( 'journey_id' => $report['journey_id'] ), array( '%s' ), array( '%s' ) );
