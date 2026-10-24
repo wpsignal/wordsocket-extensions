@@ -40,6 +40,14 @@ test.describe("Storefront settings", () => {
     await admin.visitAdminPage("admin.php", "page=wordsocket&tab=shopsocket");
     await expect(page.getByRole("tab", { name: "ShopSocket" })).toHaveAttribute("aria-selected", "true");
 
+    // The cards start collapsed, and a collapsed card's controls are hidden to the role queries.
+    const openCards = async () => {
+      for (const title of ["In-cart count", "Added-to-cart notification", "History"]) {
+        await page.locator(".shopsocket-tab").getByRole("button", { name: title }).click();
+      }
+    };
+    await openCards();
+
     // The three site-wide toggles, in order: the in-cart count, the notification, then cart history (off by default).
     // Found by position, since their labels change with their state.
     const toggles = () => page.locator(".shopsocket-tab").getByRole("checkbox");
@@ -57,6 +65,7 @@ test.describe("Storefront settings", () => {
     await expect(page.locator(".components-snackbar").getByText("Settings saved.")).toBeVisible();
 
     await page.reload();
+    await openCards();
     await expect(toggles()).toHaveCount(3);
     await expect(toggles().nth(0)).not.toBeChecked();
     await expect(toggles().nth(1)).toBeChecked();
