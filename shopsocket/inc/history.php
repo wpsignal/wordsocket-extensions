@@ -412,6 +412,89 @@ add_action( 'woocommerce_checkout_order_created', __NAMESPACE__ . '\on_order_cre
 add_action( 'woocommerce_store_api_checkout_order_processed', __NAMESPACE__ . '\on_order_created' );
 
 /**
+ * The shopper's cart behind a bare REST report (a visit, a leave, a firing), from the session cookie or the login: `[ cart_id, state ]`, or null when there is no cart or it is empty.
+ *
+ * @return array{0: string, 1: array}|null
+ */
+function report_cart(): ?array {
+	if ( ( has_wc_session_cookie() || is_user_logged_in() ) && function_exists( 'wc_load_cart' ) && ( ! function_exists( 'WC' ) || ! WC()->cart ) ) {
+		wc_load_cart();
+	}
+	$cart_id = cart_id();
+	$state   = current_cart_state();
+	if ( '' === $cart_id || null === $state ) {
+		return null;
+	}
+	return array( $cart_id, $state );
+}
+
+/**
+ * Whether a journey id may take a row: one already on file always may, a new one only while the cart has started fewer than NEW_JOURNEYS_PER_HOUR in the last hour.
+ *
+ * @param string $cart_id    The cart.
+ * @param string $journey_id The journey.
+ * @return bool
+ */
+function may_start_journey( string $cart_id, string $journey_id ): bool {
+	global $wpdb;
+	/*
+	 * A journey not yet on file costs a row, and the ids are the browser's word: a cart starts at most
+	 * NEW_JOURNEYS_PER_HOUR an hour, so a loop of fresh ids cannot fill the table.
+	 */
+	$known = (string) $wpdb->get_var( $wpdb->prepare( 'SELECT journey_id FROM ' . journeys_table() . ' WHERE journey_id = %s', $journey_id ) );
+	if ( '' !== $known ) {
+		return true;
+	}
+	$recent = (int) $wpdb->get_var(
+		$wpdb->prepare(
+			'SELECT COUNT(*) FROM ' . journeys_table() . ' WHERE cart_id = %s AND started_at >= %s',
+			$cart_id,
+			gmdate( 'Y-m-d H:i:s', time() - HOUR_IN_SECONDS )
+		)
+	);
+	return $recent < NEW_JOURNEYS_PER_HOUR;
+}
+
+/**
+ * Start a journey row with no steps yet, for a report that arrives before any visit has: the next visit or leave fills the journey in and keeps this start.
+ *
+ * @param string $visitor    The visitor id.
+ * @param string $journey_id The journey id.
+ * @return bool Whether a row exists for the journey afterwards.
+ */
+function start_journey( string $visitor, string $journey_id ): bool {
+	global $wpdb;
+	/*
+	 * Why: a moment can fire between the first add to cart and the next page load (the shipped hidden-cart
+	 * moment does, on a visitor whose cart was empty when the page opened). The visit that opened the page
+	 * wrote no row, since the cart was empty, so the firing had nowhere to land and was lost (2026-10-23).
+	 */
+	if ( ! history_enabled() || '' === $journey_id ) {
+		return false;
+	}
+	$cart = report_cart();
+	if ( null === $cart || ! may_start_journey( $cart[0], $journey_id ) ) {
+		return false;
+	}
+	list( $cart_id, $state ) = $cart;
+	upsert_cart_row( $cart_id, $state, $visitor );
+	$now = now_sql();
+	$wpdb->query(
+		$wpdb->prepare(
+			'INSERT IGNORE INTO ' . journeys_table() . " (journey_id, visitor, cart_id, journey, steps, outcome, value, started_at, last_seen)
+			VALUES (%s, %s, %s, '', 0, 'open', %f, %s, %s)",
+			$journey_id,
+			$visitor,
+			$cart_id,
+			$state['value'],
+			$now,
+			$now
+		)
+	);
+	return '' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT journey_id FROM ' . journeys_table() . ' WHERE journey_id = %s', $journey_id ) );
+}
+
+/**
  * Write a WordSocket visit or leave report against the shopper's cart.
  *
  * @param array $report `{ visitor, journey_id, journey, steps, user_id, data, leaving }` from WordSocket.
@@ -422,15 +505,12 @@ function on_visitor_report( array $report ): void {
 	if ( ! history_enabled() ) {
 		return;
 	}
-	if ( ( has_wc_session_cookie() || is_user_logged_in() ) && function_exists( 'wc_load_cart' ) && ( ! function_exists( 'WC' ) || ! WC()->cart ) ) {
-		wc_load_cart();
-	}
-	$cart_id = cart_id();
-	$state   = current_cart_state();
+	$cart = report_cart();
 	// A cartless visitor writes nothing; their journey arrives with the cart when one appears.
-	if ( '' === $cart_id || null === $state ) {
+	if ( null === $cart ) {
 		return;
 	}
+	list( $cart_id, $state ) = $cart;
 	$visitor    = (string) $report['visitor'];
 	$journey_id = (string) $report['journey_id'];
 	$journey    = (string) $report['journey'];
@@ -451,22 +531,8 @@ function on_visitor_report( array $report ): void {
 		)
 	);
 
-	/*
-	 * A journey not yet on file costs a row, and the ids are the browser's word: a cart starts at most
-	 * NEW_JOURNEYS_PER_HOUR an hour, so a loop of fresh ids cannot fill the table.
-	 */
-	$known = (string) $wpdb->get_var( $wpdb->prepare( 'SELECT journey_id FROM ' . journeys_table() . ' WHERE journey_id = %s', $journey_id ) );
-	if ( '' === $known ) {
-		$recent = (int) $wpdb->get_var(
-			$wpdb->prepare(
-				'SELECT COUNT(*) FROM ' . journeys_table() . ' WHERE cart_id = %s AND started_at >= %s',
-				$cart_id,
-				gmdate( 'Y-m-d H:i:s', time() - HOUR_IN_SECONDS )
-			)
-		);
-		if ( $recent >= NEW_JOURNEYS_PER_HOUR ) {
-			return;
-		}
+	if ( ! may_start_journey( $cart_id, $journey_id ) ) {
+		return;
 	}
 
 	/*

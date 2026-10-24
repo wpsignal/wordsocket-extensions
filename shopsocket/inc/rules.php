@@ -179,11 +179,11 @@ add_filter(
 		return array_merge(
 			$kinds,
 			array(
-				'shop'     => __( 'the shop page', 'shopsocket' ),
-				'category' => __( 'a product category', 'shopsocket' ),
-				'cart'     => __( 'the cart', 'shopsocket' ),
-				'checkout' => __( 'the checkout', 'shopsocket' ),
-				'thanks'   => __( 'the order received page', 'shopsocket' ),
+				'shop'     => __( 'The shop page', 'shopsocket' ),
+				'category' => __( 'A product category', 'shopsocket' ),
+				'cart'     => __( 'The cart', 'shopsocket' ),
+				'checkout' => __( 'The checkout', 'shopsocket' ),
+				'thanks'   => __( 'The order received page', 'shopsocket' ),
 			)
 		);
 	}
@@ -195,6 +195,15 @@ add_filter(
 	static function ( array $taxonomies ): array {
 		$taxonomies['category'] = __( 'Product category', 'shopsocket' );
 		return $taxonomies;
+	}
+);
+
+// The product archive is the shop page, the `shop` kind, so WordSocket's grouped Page select does not offer a "Products archive" nothing matches.
+add_filter(
+	'wpsignal_archive_kinds',
+	static function ( array $archives ): array {
+		unset( $archives['product_archive'] );
+		return $archives;
 	}
 );
 
@@ -243,7 +252,7 @@ add_filter(
 );
 
 /**
- * A firing lands on the journey row, when history is on and the journey is known.
+ * A firing lands on the journey row, when history is on; a journey not yet reported starts its row here, cart permitting.
  *
  * @param array $report `{ visitor, journey_id, rule_id, action, step, user_id, data }`.
  * @return void
@@ -255,7 +264,10 @@ function on_rule_fired( array $report ): void {
 	}
 	$row = $wpdb->get_row( $wpdb->prepare( 'SELECT firings FROM ' . journeys_table() . ' WHERE journey_id = %s', $report['journey_id'] ), ARRAY_A );
 	if ( ! is_array( $row ) ) {
-		return;
+		if ( ! start_journey( (string) $report['visitor'], (string) $report['journey_id'] ) ) {
+			return;
+		}
+		$row = array( 'firings' => null );
 	}
 	$firings   = json_decode( (string) ( $row['firings'] ?? '' ), true );
 	$firings   = is_array( $firings ) ? $firings : array();

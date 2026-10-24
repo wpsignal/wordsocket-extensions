@@ -10,6 +10,7 @@ use function WPSignal\Extensions\ShopSocket\cart_id;
 use function WPSignal\Extensions\ShopSocket\journeys_table;
 use function WPSignal\Extensions\ShopSocket\journeys_for_replay;
 use function WPSignal\Extensions\ShopSocket\on_rule_fired;
+use function WPSignal\Extensions\ShopSocket\on_visitor_report;
 use const WPSignal\Extensions\ShopSocket\DEFAULT_RULE_ID;
 use const WPSignal\Extensions\ShopSocket\ORDERS_CHANNEL;
 use const WPSignal\Extensions\ShopSocket\REST_NS;
@@ -145,6 +146,52 @@ final class RulesTest extends ExtensionTestCase {
 		$this->assertSame( DEFAULT_RULE_ID, $firings[0]['rule'] );
 		$this->assertSame( 3, $firings[1]['step'] );
 		$this->assertArrayHasKey( 'at', $firings[1] );
+	}
+
+	public function test_a_firing_before_any_visit_report_starts_the_journey_row_and_the_next_report_fills_it(): void {
+		$this->set_history( true );
+		$report = array(
+			'visitor'    => self::V,
+			'journey_id' => self::J,
+			'rule_id'    => DEFAULT_RULE_ID,
+			'action'     => 'show',
+			'step'       => 2,
+			'user_id'    => 0,
+			'data'       => array(),
+		);
+
+		on_rule_fired( $report );
+		$this->assertSame( array(), $this->journeys(), 'an empty cart has no journey to land on' );
+
+		$product = $this->make_product( 10 );
+		WC()->cart->add_to_cart( $product->get_id(), 1 );
+		on_rule_fired( $report );
+		$rows = $this->journeys();
+		$this->assertCount( 1, $rows, 'the firing starts the row the visit never wrote' );
+		$this->assertSame( '', $rows[0]['journey'] );
+		$this->assertSame( 0, (int) $rows[0]['steps'] );
+		$this->assertSame( cart_id(), $rows[0]['cart_id'] );
+		$this->assertSame( self::V, $rows[0]['visitor'] );
+		$this->assertCount( 1, json_decode( (string) $rows[0]['firings'], true ) );
+		$started = $rows[0]['started_at'];
+
+		on_visitor_report(
+			array(
+				'visitor'    => self::V,
+				'journey_id' => self::J,
+				'journey'    => 'home:0:1000>product:' . $product->get_id() . ':2000>away:0:12000',
+				'steps'      => 3,
+				'user_id'    => 0,
+				'data'       => array(),
+				'leaving'    => false,
+			)
+		);
+		$rows = $this->journeys();
+		$this->assertCount( 1, $rows );
+		$this->assertSame( 3, (int) $rows[0]['steps'], 'the next report fills the journey in' );
+		$this->assertStringStartsWith( 'home:0:1000>', $rows[0]['journey'] );
+		$this->assertSame( $started, $rows[0]['started_at'], 'and keeps the start the firing set' );
+		$this->assertCount( 1, json_decode( (string) $rows[0]['firings'], true ), 'the firing survives the report' );
 	}
 
 	public function test_alert_staff_publishes_the_saved_moments_message_from_php_and_is_rate_limited_per_cart(): void {
