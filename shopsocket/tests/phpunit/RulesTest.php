@@ -219,6 +219,8 @@ final class RulesTest extends ExtensionTestCase {
 		$this->assertSame( array( $product->get_id() ), $alerts[0]['data']['products'] );
 		$this->assertSame( 19.98, $alerts[0]['data']['value'] );
 		$this->assertFalse( $alerts[0]['data']['wants_chat'] );
+		$this->assertSame( 0, $alerts[0]['data']['user_id'], 'a guest' );
+		$this->assertSame( '', $alerts[0]['data']['customer'] );
 
 		list( $status ) = $this->rest_post( 'alert', array( 'v' => self::J, 'rule' => 'alert-1' ) );
 		$this->assertSame( 429, $status, 'the limit is the cart\'s, so a new visitor id does not reset it' );

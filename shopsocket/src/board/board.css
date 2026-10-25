@@ -503,6 +503,10 @@ body.shopsocket-fullscreen {
   max-width: 48ch;
 }
 
+.shopsocket-abandoned__guest {
+  color: #50575e;
+}
+
 @media (max-width: 782px) {
   .shopsocket-summary,
   .shopsocket-week__tiles {

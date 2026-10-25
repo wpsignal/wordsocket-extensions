@@ -33,7 +33,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL, WordPress.DB.PreparedSQLPlaceholders -- The plugin's own tables: names come from the table functions, fragments from prepare(), one placeholder per id.
 
-const DB_VERSION        = '2';
+const DB_VERSION        = '3';
 const DB_VERSION_OPTION = 'shopsocket_db_version';
 
 /** Rows the board lists under "Recently abandoned". */
@@ -78,6 +78,8 @@ function journeys_table(): string {
 /**
  * Create or update the tables once per DB_VERSION, WooCommerce's way.
  *
+ * @since 0.8.0 Version 3 adds `user_id` to the journeys.
+ *
  * @return void
  */
 function install(): void {
@@ -119,6 +121,7 @@ function install(): void {
 		CREATE TABLE {$journey} (
 			journey_id char(36) NOT NULL,
 			visitor char(36) NOT NULL,
+			user_id bigint(20) unsigned NULL,
 			cart_id char(16) NULL,
 			journey text NULL,
 			steps smallint unsigned NOT NULL DEFAULT 0,
@@ -131,6 +134,7 @@ function install(): void {
 			firings text NULL,
 			PRIMARY KEY  (journey_id),
 			KEY visitor (visitor),
+			KEY user_id (user_id),
 			KEY cart_id (cart_id),
 			KEY started_at (started_at),
 			KEY outcome (outcome)
@@ -342,7 +346,9 @@ function cart_items( array $ids ): array {
 }
 
 /**
- * The shopper left the page: stamp the cart row and, with history on, the journey.
+ * The shopper left the page: stamp the cart row, and on a cart's first leave fire `shopsocket_cart_left` with the row and its items.
+ *
+ * @since 0.8.0 Fires `shopsocket_cart_left`.
  *
  * @param string $id Cart id.
  * @return void
@@ -352,8 +358,26 @@ function mark_left( string $id ): void {
 	if ( '' === $id ) {
 		return;
 	}
+	$before = cart_row( $id );
 	$wpdb->update( carts_table(), array( 'left_at' => now_sql() ), array( 'cart_id' => $id ), array( '%s' ), array( '%s' ) );
 	publish_carts_changed();
+	if ( null === $before || null !== $before['left_at'] ) {
+		return;
+	}
+	$row = cart_row( $id );
+	if ( null === $row ) {
+		return;
+	}
+	/**
+	 * A cart's shopper left for the first time.
+	 *
+	 * @since 0.8.0
+	 *
+	 * @param string              $id    The cart id.
+	 * @param array<string,mixed> $row   The cart row: `user_id` (null for a guest), `visitor`, `currency`, `value`, `first_seen`, `last_seen`, `left_at`, `journey`.
+	 * @param array<int,int>      $items The cart's items as `product_id => quantity`.
+	 */
+	do_action( 'shopsocket_cart_left', $id, $row, cart_items( array( $id ) )[ $id ] ?? array() );
 }
 
 /**
@@ -507,11 +531,14 @@ function may_start_journey( string $cart_id, string $journey_id ): bool {
 /**
  * Start a journey row with no steps yet, for a report that arrives before any visit has: the next visit or leave fills the journey in and keeps this start.
  *
+ * @since 0.8.0 Takes the shopper's user id.
+ *
  * @param string $visitor    The visitor id.
  * @param string $journey_id The journey id.
+ * @param int    $user_id    The logged-in shopper, or 0.
  * @return bool Whether a row exists for the journey afterwards.
  */
-function start_journey( string $visitor, string $journey_id ): bool {
+function start_journey( string $visitor, string $journey_id, int $user_id = 0 ): bool {
 	global $wpdb;
 	if ( ! history_enabled() || '' === $journey_id ) {
 		return false;
@@ -525,8 +552,8 @@ function start_journey( string $visitor, string $journey_id ): bool {
 	$now = now_sql();
 	$wpdb->query(
 		$wpdb->prepare(
-			'INSERT IGNORE INTO ' . journeys_table() . " (journey_id, visitor, cart_id, journey, steps, outcome, value, started_at, last_seen)
-			VALUES (%s, %s, %s, '', 0, 'open', %f, %s, %s)",
+			'INSERT IGNORE INTO ' . journeys_table() . ' (journey_id, visitor, user_id, cart_id, journey, steps, outcome, value, started_at, last_seen)
+			VALUES (%s, %s, ' . user_sql( $user_id ) . ", %s, '', 0, 'open', %f, %s, %s)",
 			$journey_id,
 			$visitor,
 			$cart_id,
@@ -539,7 +566,21 @@ function start_journey( string $visitor, string $journey_id ): bool {
 }
 
 /**
+ * The user id as SQL: the id, or NULL for a guest.
+ *
+ * @since 0.8.0
+ *
+ * @param int $user_id The user, or 0.
+ * @return string
+ */
+function user_sql( int $user_id ): string {
+	return $user_id > 0 ? (string) $user_id : 'NULL';
+}
+
+/**
  * Write a WordSocket visit or leave report against the shopper's cart.
+ *
+ * @since 0.8.0 Stamps the shopper's user id on the journey while they are logged in.
  *
  * @param array $report `{ visitor, journey_id, journey, steps, user_id, data, leaving }` from WordSocket.
  * @return void
@@ -560,6 +601,7 @@ function on_visitor_report( array $report ): void {
 	$journey                 = (string) $report['journey'];
 	$steps                   = (int) $report['steps'];
 	$leaving                 = (bool) $report['leaving'];
+	$user                    = user_sql( (int) ( $report['user_id'] ?? 0 ) );
 	$now                     = now_sql();
 
 	upsert_cart_row( $cart_id, $state, $visitor );
@@ -583,7 +625,8 @@ function on_visitor_report( array $report ): void {
 	 * The archive row: created by the first report, changed only by a report
 	 * from the visitor it was created under (`$owned`) that is at least as far
 	 * along (the leave of page N races the visit of page N+1), and never
-	 * reopened once converted. Assignments run in order, so `steps` is last.
+	 * reopened once converted. The user id is set while the shopper is logged
+	 * in and kept afterwards. Assignments run in order, so `steps` is last.
 	 */
 	$outcome = $leaving ? 'left' : 'open';
 	$ended   = $leaving ? $wpdb->prepare( '%s', $now ) : 'NULL';
@@ -591,9 +634,10 @@ function on_visitor_report( array $report ): void {
 	$ahead   = $owned . ' AND VALUES(steps) >= steps';
 	$wpdb->query(
 		$wpdb->prepare(
-			'INSERT INTO ' . journeys_table() . ' (journey_id, visitor, cart_id, journey, steps, outcome, value, started_at, last_seen, ended_at)
-			VALUES (%s, %s, %s, %s, %d, %s, %f, %s, %s, ' . $ended . ')
+			'INSERT INTO ' . journeys_table() . ' (journey_id, visitor, user_id, cart_id, journey, steps, outcome, value, started_at, last_seen, ended_at)
+			VALUES (%s, %s, ' . $user . ', %s, %s, %d, %s, %f, %s, %s, ' . $ended . ')
 			ON DUPLICATE KEY UPDATE
+				user_id = IF(' . $owned . ' AND VALUES(user_id) IS NOT NULL, VALUES(user_id), user_id),
 				cart_id = IF(' . $owned . ', VALUES(cart_id), cart_id),
 				value = IF(' . $owned . ', VALUES(value), value),
 				last_seen = IF(' . $ahead . ', VALUES(last_seen), last_seen),
@@ -695,17 +739,19 @@ function abandoned_rows(): array {
 	global $wpdb;
 	$rows  = $wpdb->get_results(
 		$wpdb->prepare(
-			'SELECT cart_id, value, currency, journey, left_at, converted_at, order_id FROM ' . carts_table() . ' WHERE left_at IS NOT NULL ORDER BY left_at DESC LIMIT %d',
+			'SELECT cart_id, user_id, value, currency, journey, left_at, converted_at, order_id FROM ' . carts_table() . ' WHERE left_at IS NOT NULL ORDER BY left_at DESC LIMIT %d',
 			BOARD_ABANDONED
 		),
 		ARRAY_A
 	);
 	$rows  = (array) $rows;
 	$items = cart_items( array_map( static fn( array $row ): string => (string) $row['cart_id'], $rows ) );
+	$names = customer_names( array_map( 'intval', array_column( $rows, 'user_id' ) ) );
 	$out   = array();
 	foreach ( $rows as $row ) {
 		$id       = (string) $row['cart_id'];
 		$order_id = (int) ( $row['order_id'] ?? 0 );
+		$user_id  = (int) ( $row['user_id'] ?? 0 );
 		$out[]    = array(
 			'id'           => $id,
 			'products'     => array_keys( $items[ $id ] ?? array() ),
@@ -717,9 +763,50 @@ function abandoned_rows(): array {
 			'converted_at' => null === $row['converted_at'] ? null : datetime_to_rfc3339( (string) $row['converted_at'] ),
 			'order_id'     => $order_id > 0 ? $order_id : null,
 			'order_url'    => $order_id > 0 ? order_edit_url( $order_id ) : '',
+			'user_id'      => $user_id > 0 ? $user_id : null,
+			'customer'     => $names[ $user_id ] ?? null,
+			'customer_url' => $user_id > 0 ? customer_edit_url( $user_id ) : '',
 		);
 	}
 	return $out;
+}
+
+/**
+ * Display names for a set of users, as `id => name`; unknown ids are left out.
+ *
+ * @since 0.8.0
+ *
+ * @param int[] $ids User ids, zeros and repeats allowed.
+ * @return array<int, string>
+ */
+function customer_names( array $ids ): array {
+	$ids = array_values( array_unique( array_filter( $ids, static fn( int $id ): bool => $id > 0 ) ) );
+	if ( array() === $ids ) {
+		return array();
+	}
+	$names = array();
+	$users = get_users(
+		array(
+			'include' => $ids,
+			'fields'  => array( 'ID', 'display_name' ),
+		)
+	);
+	foreach ( $users as $user ) {
+		$names[ (int) $user->ID ] = (string) $user->display_name;
+	}
+	return $names;
+}
+
+/**
+ * The profile screen for a customer.
+ *
+ * @since 0.8.0
+ *
+ * @param int $user_id The user.
+ * @return string
+ */
+function customer_edit_url( int $user_id ): string {
+	return admin_url( 'user-edit.php?user_id=' . $user_id );
 }
 
 /**
@@ -813,20 +900,44 @@ function cart_ids_for_user( int $user_id ): array {
 }
 
 /**
- * Delete everything that names a user: their cart rows and items, and the
- * journeys reachable through those carts.
+ * A user's journeys, oldest first, for the privacy exporter.
+ *
+ * @since 0.8.0
+ *
+ * @param int $user_id The user.
+ * @return array<int, array<string, mixed>>
+ */
+function journeys_for_user( int $user_id ): array {
+	global $wpdb;
+	if ( $user_id <= 0 ) {
+		return array();
+	}
+	return (array) $wpdb->get_results(
+		$wpdb->prepare( 'SELECT journey_id, journey, outcome, value, order_id, started_at, ended_at FROM ' . journeys_table() . ' WHERE user_id = %d ORDER BY started_at', $user_id ),
+		ARRAY_A
+	);
+}
+
+/**
+ * Delete everything that names a user: their cart rows and items, the
+ * journeys reachable through those carts, and the journeys stamped with them.
+ *
+ * @since 0.8.0 Removes the journeys stamped with the user too.
  *
  * @param int $user_id The user.
  * @return int Rows removed across the three tables.
  */
 function erase_user( int $user_id ): int {
 	global $wpdb;
-	$ids = cart_ids_for_user( $user_id );
-	if ( empty( $ids ) ) {
+	if ( $user_id <= 0 ) {
 		return 0;
 	}
+	$removed = (int) $wpdb->query( $wpdb->prepare( 'DELETE FROM ' . journeys_table() . ' WHERE user_id = %d', $user_id ) );
+	$ids     = cart_ids_for_user( $user_id );
+	if ( empty( $ids ) ) {
+		return $removed;
+	}
 	$holders = implode( ',', array_fill( 0, count( $ids ), '%s' ) );
-	$removed = 0;
 	foreach ( array( journeys_table(), cart_items_table(), carts_table() ) as $table ) {
 		$removed += (int) $wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE cart_id IN ({$holders})", ...$ids ) );
 	}

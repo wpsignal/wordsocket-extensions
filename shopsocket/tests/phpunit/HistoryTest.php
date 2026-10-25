@@ -14,6 +14,7 @@ use function WPSignal\Extensions\ShopSocket\erase_user;
 use function WPSignal\Extensions\ShopSocket\forget_cart;
 use function WPSignal\Extensions\ShopSocket\journeys_for_replay;
 use function WPSignal\Extensions\ShopSocket\journeys_table;
+use WPSignal\Extensions\ShopSocket\Privacy;
 use function WPSignal\Extensions\ShopSocket\mark_converted;
 use function WPSignal\Extensions\ShopSocket\mark_left;
 use function WPSignal\Extensions\ShopSocket\on_order_created;
@@ -33,6 +34,7 @@ final class HistoryTest extends ExtensionTestCase {
 	private const VISITOR = '0b2b6a4e-9f0a-4c7a-8f1c-1d2e3f4a5b6c';
 	private const JOURNEY = '7c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f';
 	private const JOURNEY_2 = '8d2e3f4a-5b6c-4d7e-9f80-1b2c3d4e5f60';
+	private const JOURNEY_3 = '9e3f4a5b-6c7d-4e8f-a091-2c3d4e5f6071';
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -42,7 +44,14 @@ final class HistoryTest extends ExtensionTestCase {
 
 	protected function tearDown(): void {
 		WC()->cart->empty_cart();
+		wp_set_current_user( 0 );
 		parent::tearDown();
+	}
+
+	/** An existing administrator's id, the user every logged-in case runs as. */
+	private function admin_id(): int {
+		$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
+		return (int) $admins[0];
 	}
 
 	/** A report as WordSocket's visit and leave routes hand it to the actions. */
@@ -84,8 +93,10 @@ final class HistoryTest extends ExtensionTestCase {
 	public function test_the_tables_exist_and_are_versioned(): void {
 		global $wpdb;
 		$this->assertSame( DB_VERSION, get_option( DB_VERSION_OPTION ) );
-		$this->assertSame( '2', DB_VERSION );
-		$this->assertContains( 'firings', array_column( $wpdb->get_results( 'SHOW COLUMNS FROM ' . journeys_table(), ARRAY_A ), 'Field' ), 'version 2 adds the firings on a journey' );
+		$this->assertSame( '3', DB_VERSION );
+		$columns = array_column( $wpdb->get_results( 'SHOW COLUMNS FROM ' . journeys_table(), ARRAY_A ), 'Field' );
+		$this->assertContains( 'firings', $columns, 'version 2 adds the firings on a journey' );
+		$this->assertContains( 'user_id', $columns, 'version 3 adds the shopper behind a journey' );
 		foreach ( array( carts_table(), cart_items_table(), journeys_table() ) as $table ) {
 			$this->assertSame( $table, $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ), "$table exists" );
 		}
@@ -224,7 +235,7 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertSame( 2, (int) $journeys[0]['steps'] );
 		$this->assertSame( 'open', $journeys[0]['outcome'] );
 		$this->assertNull( $journeys[0]['ended_at'] );
-		$this->assertArrayNotHasKey( 'user_id', $journeys[0], 'the archive never names a user' );
+		$this->assertNull( $journeys[0]['user_id'], 'a guest names no user' );
 		$this->assertSame( self::VISITOR, $this->stored_cart( $id )['visitor'] );
 		$this->assertSame( 'home:2:1200>product:' . $product->get_id() . ':0', $this->stored_cart( $id )['journey'] );
 
@@ -239,6 +250,74 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertSame( 'left', $journeys[0]['outcome'] );
 		$this->assertNotNull( $journeys[0]['ended_at'] );
 		$this->assertSame( $long, $this->stored_cart( $id )['journey'], 'the live copy keeps the longer journey too' );
+	}
+
+	public function test_a_logged_in_shoppers_journey_carries_their_user_id_and_keeps_it(): void {
+		$this->set_history( true );
+		$user    = $this->admin_id();
+		$product = $this->make_product( 10 );
+		WC()->cart->add_to_cart( $product->get_id(), 1 );
+		$page = 'product:' . $product->get_id();
+
+		on_visitor_report( $this->report( 'home:2:100', false ) );
+		$this->assertNull( $this->journeys()[0]['user_id'] );
+
+		wp_set_current_user( $user );
+		on_visitor_report( $this->report( 'home:2:100>' . $page . ':0', false ) );
+		$this->assertSame( $user, (int) $this->journeys()[0]['user_id'], 'set by the first report while logged in' );
+		$this->assertSame( $user, (int) $this->stored_cart( cart_id() )['user_id'] );
+
+		wp_set_current_user( 0 );
+		on_visitor_report( $this->report( 'home:2:100>' . $page . ':500>cart:0:0', true ) );
+		$this->assertSame( $user, (int) $this->journeys()[0]['user_id'], 'kept once set' );
+
+		// A firing that starts a journey row carries the user too.
+		on_rule_fired(
+			array(
+				'visitor'    => self::VISITOR,
+				'journey_id' => self::JOURNEY_2,
+				'rule_id'    => 'shopsocket-hidden-cart',
+				'action'     => 'show',
+				'step'       => 0,
+				'ms'         => 0,
+				'kind'       => 'fired',
+				'user_id'    => $user,
+				'data'       => array(),
+			)
+		);
+		$this->assertSame( $user, (int) $this->journeys()[1]['user_id'] );
+	}
+
+	public function test_a_carts_first_leave_fires_the_hook_once_and_the_board_names_the_customer(): void {
+		$this->set_history( true );
+		$user = $this->admin_id();
+		wp_set_current_user( $user );
+		$product = $this->make_product( 10 );
+		WC()->cart->add_to_cart( $product->get_id(), 1 );
+		$id    = cart_id();
+		$fired = array();
+		$heard = static function ( string $cart_id, array $row, array $items ) use ( &$fired ): void {
+			$fired[] = array( $cart_id, $row, $items );
+		};
+		add_action( 'shopsocket_cart_left', $heard, 10, 3 );
+		try {
+			mark_left( $id );
+			mark_left( $id );
+		} finally {
+			remove_action( 'shopsocket_cart_left', $heard );
+		}
+
+		$this->assertCount( 1, $fired, 'once per cart' );
+		$this->assertSame( $id, $fired[0][0] );
+		$this->assertSame( $user, (int) $fired[0][1]['user_id'] );
+		$this->assertNotNull( $fired[0][1]['left_at'] );
+		$this->assertSame( array( $product->get_id() => 1 ), $fired[0][2] );
+
+		$rows = abandoned_rows();
+		$this->assertSame( $id, $rows[0]['id'] );
+		$this->assertSame( $user, $rows[0]['user_id'] );
+		$this->assertSame( get_userdata( $user )->display_name, $rows[0]['customer'] );
+		$this->assertStringContainsString( 'user-edit.php?user_id=' . $user, $rows[0]['customer_url'] );
 	}
 
 	public function test_a_cart_starts_at_most_thirty_journeys_an_hour_and_a_stranger_cannot_change_one(): void {
@@ -447,19 +526,26 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertSame( array(), $this->journeys() );
 	}
 
-	public function test_the_eraser_removes_a_users_carts_and_the_journeys_reachable_through_them(): void {
+	public function test_the_exporter_and_eraser_cover_a_users_carts_and_the_journeys_linked_to_them(): void {
 		global $wpdb;
 		$this->set_history( true );
-		$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
-		$user   = (int) $admins[0];
+		$user = $this->admin_id();
 		$this->seed_cart( 'dddd000000000001', array( 9001 ), 10.0 );
 		$this->seed_cart( 'dddd000000000002', array( 9002 ), 10.0 );
 		$wpdb->update( carts_table(), array( 'user_id' => $user ), array( 'cart_id' => 'dddd000000000001' ) );
 		$now = current_time( 'mysql', true );
 		$wpdb->insert( journeys_table(), array( 'journey_id' => self::JOURNEY, 'visitor' => self::VISITOR, 'cart_id' => 'dddd000000000001', 'journey' => 'home:1:1', 'steps' => 1, 'started_at' => $now, 'last_seen' => $now ) );
 		$wpdb->insert( journeys_table(), array( 'journey_id' => self::JOURNEY_2, 'visitor' => self::VISITOR, 'cart_id' => 'dddd000000000002', 'journey' => 'home:1:1', 'steps' => 1, 'started_at' => $now, 'last_seen' => $now ) );
+		// Stamped with the user on a guest's cart: the stamp alone makes it theirs.
+		$wpdb->insert( journeys_table(), array( 'journey_id' => self::JOURNEY_3, 'visitor' => self::VISITOR, 'user_id' => $user, 'cart_id' => 'dddd000000000002', 'journey' => 'home:1:1>cart:0:5', 'steps' => 2, 'started_at' => $now, 'last_seen' => $now ) );
 
-		$this->assertSame( 3, erase_user( $user ), 'the cart row, its item, and its journey' );
+		$export = ( new Privacy() )->export( get_userdata( $user )->user_email );
+		$this->assertTrue( $export['done'] );
+		$this->assertSame( array( 'shopsocket_carts' => 1, 'shopsocket_journeys' => 1 ), array_count_values( array_column( $export['data'], 'group_id' ) ) );
+		$this->assertSame( 'shopsocket-journey-' . self::JOURNEY_3, $export['data'][1]['item_id'] );
+		$this->assertSame( 'home:1:1>cart:0:5', $export['data'][1]['data'][0]['value'] );
+
+		$this->assertSame( 4, erase_user( $user ), 'the cart row, its item, its journey, and the journey stamped with the user' );
 		$this->assertNull( $this->stored_cart( 'dddd000000000001' ) );
 		$this->assertNotNull( $this->stored_cart( 'dddd000000000002' ), 'a guest cart is nobody\'s to erase' );
 		$this->assertSame( array( self::JOURNEY_2 ), array_column( $this->journeys(), 'journey_id' ) );

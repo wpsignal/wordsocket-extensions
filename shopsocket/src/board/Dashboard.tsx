@@ -397,8 +397,8 @@ function leftAt(iso: string): string {
 }
 
 /**
- * Carts whose shopper left and is not back, newest first: what they held, the
- * value, when, and the order when one followed. The historical record next to the live
+ * Carts whose shopper left and is not back, newest first: what they held, who
+ * they are when logged in, the value, when, and the order when one followed. The historical record next to the live
  * split above; with history off it empties as sessions expire.
  */
 function AbandonedPanel({ rows, currencySymbol }: { rows: WooAbandonedRow[]; currencySymbol: string }) {
@@ -420,6 +420,7 @@ function AbandonedPanel({ rows, currencySymbol }: { rows: WooAbandonedRow[]; cur
           <thead>
             <tr>
               <th scope="col">{__("Products", "shopsocket")}</th>
+              <th scope="col">{__("Shopper", "shopsocket")}</th>
               <th scope="col" className="shopsocket-live-products__count">{__("Value", "shopsocket")}</th>
               <th scope="col" className="shopsocket-live-products__count">{__("Left", "shopsocket")}</th>
               <th scope="col" className="shopsocket-live-products__count">{__("Order", "shopsocket")}</th>
@@ -429,11 +430,19 @@ function AbandonedPanel({ rows, currencySymbol }: { rows: WooAbandonedRow[]; cur
             {rows.map((row) => {
               const href = row.order_url ? adminUrlOrNull(row.order_url, config.adminUrl) : null;
               const label = row.order_id ? `#${row.order_id}` : "";
+              const profile = row.customer_url ? adminUrlOrNull(row.customer_url, config.adminUrl) : null;
               return (
-                <tr key={row.id} data-cart={row.id} data-journey={row.journey}>
+                <tr key={row.id} data-cart={row.id} data-journey={row.journey} data-user={row.user_id ?? ""}>
                   <th scope="row" title={row.journey}>
                     {row.products.map((id) => `${name(id)}${(row.quantities?.[id] ?? 1) > 1 ? ` \u00d7${row.quantities[id]}` : ""}`).join(", ")}
                   </th>
+                  <td>
+                    {row.customer ? (
+                      profile ? <a href={profile}>{row.customer}</a> : row.customer
+                    ) : (
+                      <span className="shopsocket-abandoned__guest">{__("Guest", "shopsocket")}</span>
+                    )}
+                  </td>
                   <td className="shopsocket-live-products__count">{money(row.value, row.currency || currencySymbol)}</td>
                   <td className="shopsocket-live-products__count" title={row.left_at}>{leftAt(row.left_at)}</td>
                   <td className="shopsocket-live-products__count">{href ? <a href={href}>{label}</a> : label}</td>
@@ -447,13 +456,30 @@ function AbandonedPanel({ rows, currencySymbol }: { rows: WooAbandonedRow[]; cur
   );
 }
 
-/** "Right now": a shopper a rule asked staff to look at, with their cart and where they are. */
+/** "Right now": a shopper a rule asked staff to look at, with their cart, where they are and who they are when logged in. */
 function AlertNotice({ alert, name, onDismiss }: { alert: WooAlertEvent; name: (id: number) => string; onDismiss: () => void }) {
   const names = alert.products.map(name).join(", ");
   return (
     <Notice status="info" className="shopsocket-board__alert" onRemove={onDismiss}>
       <strong>{alert.message || __("A shopper may need a hand", "shopsocket")}</strong>{" "}
-      {alert.step
+      {alert.customer
+        ? alert.step
+          ? sprintf(
+              /* translators: 1: the shopper's name, 2: where they are (a page kind), 3: the cart's products, 4: the cart's value */
+              __("%1$s is on %2$s with %3$s (%4$s).", "shopsocket"),
+              alert.customer,
+              alert.step,
+              names || __("an empty cart", "shopsocket"),
+              money(alert.value, alert.currency),
+            )
+          : sprintf(
+              /* translators: 1: the shopper's name, 2: the cart's products, 3: the cart's value */
+              __("%1$s has %2$s in their cart (%3$s).", "shopsocket"),
+              alert.customer,
+              names || __("nothing", "shopsocket"),
+              money(alert.value, alert.currency),
+            )
+        : alert.step
         ? sprintf(
             /* translators: 1: where the shopper is (a page kind), 2: the cart's products, 3: the cart's value */
             __("On %1$s with %2$s (%3$s).", "shopsocket"),

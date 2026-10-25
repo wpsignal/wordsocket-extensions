@@ -46,6 +46,12 @@ interface WooAbandonedRow extends WooCartRow {
 	order_id: number | null;
 	/** The order's edit screen, built without loading the order; followed only into this site's admin. */
 	order_url: string;
+	/** The shopper's account when they were logged in; absent on a payload from before 0.8. */
+	user_id?: number | null;
+	/** The account's display name, null for a guest. */
+	customer?: string | null;
+	/** The account's profile screen; followed only into this site's admin. */
+	customer_url?: string;
 }
 
 /** The raw dashboard payload from the server (rows + online). */
@@ -161,6 +167,10 @@ interface WooAlertEvent {
 	value: number;
 	currency: string;
 	wants_chat: boolean;
+	/** The shopper's account, 0 for a guest; absent on a frame from before 0.8. */
+	user_id?: number;
+	/** The account's display name, empty for a guest. */
+	customer?: string;
 	/** Unix seconds when it was raised. */
 	at: number;
 }

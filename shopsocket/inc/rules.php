@@ -261,7 +261,7 @@ const FIRING_KINDS = array( 'fired', 'returned', 'dismissed', 'clicked' );
 /**
  * A firing lands on the journey row, when history is on; a journey not yet reported starts its row here, cart permitting.
  *
- * @since 0.8.0 Stores `ms` and `kind`.
+ * @since 0.8.0 Stores `ms` and `kind`; a row it starts carries the shopper's user id.
  *
  * @param array $report `{ visitor, journey_id, rule_id, action, step, user_id, data }`.
  * @return void
@@ -273,7 +273,7 @@ function on_rule_fired( array $report ): void {
 	}
 	$row = $wpdb->get_row( $wpdb->prepare( 'SELECT firings FROM ' . journeys_table() . ' WHERE journey_id = %s', $report['journey_id'] ), ARRAY_A );
 	if ( ! is_array( $row ) ) {
-		if ( ! start_journey( (string) $report['visitor'], (string) $report['journey_id'] ) ) {
+		if ( ! start_journey( (string) $report['visitor'], (string) $report['journey_id'], (int) ( $report['user_id'] ?? 0 ) ) ) {
 			return;
 		}
 		$row = array( 'firings' => null );
@@ -353,6 +353,8 @@ function alert_message( string $rule_id, string $given ): ?string {
 /**
  * `POST /shopsocket/v1/alert`: the Alert action's word to the board, published from PHP on the orders feed with the saved moment's message.
  *
+ * @since 0.8.0 Names a logged-in shopper.
+ *
  * @param \WP_REST_Request $request The request.
  * @return \WP_REST_Response|\WP_Error
  */
@@ -370,12 +372,15 @@ function handle_alert( \WP_REST_Request $request ) {
 	if ( ! rules_rate_ok( 'alert', $cart['id'] ) ) {
 		return new \WP_Error( 'shopsocket_too_many', __( 'Try again in a minute.', 'shopsocket' ), array( 'status' => 429 ) );
 	}
+	$user_id = get_current_user_id();
 	WPS::publish(
 		ORDERS_CHANNEL,
 		'woo.alert',
 		array(
 			'visitor'    => strtolower( (string) $request->get_param( 'v' ) ),
 			'cart_id'    => $cart['id'],
+			'user_id'    => $user_id,
+			'customer'   => customer_names( array( $user_id ) )[ $user_id ] ?? '',
 			'message'    => $message,
 			'step'       => sanitize_key( (string) $request->get_param( 'step' ) ),
 			'products'   => $state['products'],

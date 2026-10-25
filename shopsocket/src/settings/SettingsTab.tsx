@@ -284,7 +284,7 @@ export function SettingsTab() {
                   max={36}
                   label={__("Keep journeys for (months)", "shopsocket")}
                   help={__(
-                    "The pages a shopper opened, as ids and durations, under a random browser id and never under an account.",
+                    "The pages a shopper opened, as ids and durations, under a random browser id, linked to the shopper's account for the visits they were logged in.",
                     "shopsocket",
                   )}
                   value={String(settings.journeys_retention_months)}
