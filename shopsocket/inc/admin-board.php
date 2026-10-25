@@ -272,6 +272,7 @@ function enqueue_settings_panel(): void {
 				'docsUrl'     => 'https://wpsignal.io/extensions/shopsocket',
 				'storefront'  => settings(),
 				'journeysUrl' => rest_url( REST_NS . '/journeys' ),
+				'currency'    => get_woocommerce_currency(),
 				'rulesUrl'    => admin_url( 'admin.php?page=wordsocket&tab=moments' ),
 			),
 			JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT

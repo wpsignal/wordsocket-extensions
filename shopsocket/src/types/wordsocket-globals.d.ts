@@ -182,6 +182,7 @@ interface WPSHistoryFiring {
   at?: string;
   order?: number;
   order_at?: string;
+  value?: number;
 }
 interface WPSHistoryJourney {
   journey: string;
@@ -197,6 +198,8 @@ interface WPSHistoryProvider {
     limit?: number;
   }): Promise<WPSHistoryJourney[]>;
   outcomes?: boolean;
+  /** The ISO 4217 code the values are in (WordSocket 0.31). */
+  currency?: string;
 }
 interface WPSRulesApi {
   condition(

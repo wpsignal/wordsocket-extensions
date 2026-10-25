@@ -30,6 +30,7 @@ if (window.WPS?.rules) {
   if (journeysUrl) {
     window.WPS.rules.history({
       outcomes: true,
+      currency: window.shopSocketSettings?.currency,
       load: (options) =>
         apiFetch<{ journeys: WPSHistoryJourney[] }>({
           url: `${journeysUrl}?days=${options.days ?? 30}&limit=${options.limit ?? 500}`,

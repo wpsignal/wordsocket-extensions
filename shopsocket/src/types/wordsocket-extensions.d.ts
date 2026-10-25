@@ -83,6 +83,8 @@ interface WordSocketExtensionsApi {
 
 /** Localized by inc/admin-board.php for the WordSocket settings screen. */
 interface ShopSocketSettingsConfig {
+	/** The store's ISO 4217 code, for the replay aside's order values (0.8.0). */
+	currency?: string;
 	/** `GET /shopsocket/v1/journeys`, the replay feed for WordSocket's Moments tab (0.8). */
 	journeysUrl?: string;
 	/** `admin.php?page=wordsocket&tab=moments`. */
