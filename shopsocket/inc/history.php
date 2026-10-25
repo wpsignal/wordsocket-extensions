@@ -485,6 +485,7 @@ function report_cart(): ?array {
  */
 function may_start_journey( string $cart_id, string $journey_id ): bool {
 	global $wpdb;
+
 	/*
 	 * A journey not yet on file costs a row, and the ids are the browser's word: a cart starts at most
 	 * NEW_JOURNEYS_PER_HOUR an hour, so a loop of fresh ids cannot fill the table.
@@ -554,12 +555,12 @@ function on_visitor_report( array $report ): void {
 		return;
 	}
 	list( $cart_id, $state ) = $cart;
-	$visitor    = (string) $report['visitor'];
-	$journey_id = (string) $report['journey_id'];
-	$journey    = (string) $report['journey'];
-	$steps      = (int) $report['steps'];
-	$leaving    = (bool) $report['leaving'];
-	$now        = now_sql();
+	$visitor                 = (string) $report['visitor'];
+	$journey_id              = (string) $report['journey_id'];
+	$journey                 = (string) $report['journey'];
+	$steps                   = (int) $report['steps'];
+	$leaving                 = (bool) $report['leaving'];
+	$now                     = now_sql();
 
 	upsert_cart_row( $cart_id, $state, $visitor );
 	// The live copy on the cart row: the newest journey, by step count.
