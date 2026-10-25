@@ -54,7 +54,7 @@ function settings_defaults(): array {
 		// Cart history (0.7): off until the merchant opts in; nothing outlives the session before that.
 		'history_enabled'              => false,
 		'history_retention_days'       => 30,
-		'journeys_retention_months'    => 12,
+		'journeys_retention_months'    => 3,
 	);
 }
 

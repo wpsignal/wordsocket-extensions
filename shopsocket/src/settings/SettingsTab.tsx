@@ -30,7 +30,7 @@ const DEFAULTS: ShopSocketStorefrontSettings = {
   activity_excluded_categories: [],
   history_enabled: false,
   history_retention_days: 30,
-  journeys_retention_months: 12,
+  journeys_retention_months: 3,
 };
 
 type ExclusionKey =
