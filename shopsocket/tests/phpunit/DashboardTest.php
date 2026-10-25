@@ -120,7 +120,7 @@ final class DashboardTest extends ExtensionTestCase {
 			$this->assertSame( 'aaa', $data['carts'][0]['id'] );
 			$this->assertSame( 20.0, $data['carts'][0]['value'] );
 			$this->assertSame( array( 'active_connections' => 12, 'max_connections' => 500 ), $data['online'] );
-			$this->assertSame( array( 'carts', 'abandoned', 'online', 'as_of' ), array_keys( $data ), 'no orders unless the board names a moment' );
+			$this->assertSame( array( 'carts', 'abandoned', 'strip', 'online', 'as_of' ), array_keys( $data ), 'no orders unless the board names a moment' );
 			$this->assertSame( array(), $data['abandoned'], 'nobody has left yet' );
 			$this->assertEqualsWithDelta( time(), $data['as_of'], 5, 'the server clock the board sends back as since' );
 		} finally {
