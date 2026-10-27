@@ -59,13 +59,16 @@ const STAFF_NS = 'woo:staff';
 /** The staff presence channel: the board reads it to tell staff tabs and visits from shoppers'. */
 const STAFF_PRESENCE_CHANNEL = 'woo:staff:live';
 
-/** The WordSocket release this plugin needs: presence, publish grants, the stats route (0.22), the `window.WPS` helpers (0.23), and visitor journeys (0.30). */
-const MIN_WORDSOCKET = '0.30.0';
+/** The WordSocket release this plugin needs: presence, publish grants, the stats route (0.22), the `window.WPS` helpers (0.23), visitor journeys (0.30) and their history (0.31). */
+const MIN_WORDSOCKET = '0.31.0';
 
 /**
  * Whether the active WordSocket is new enough, judged by what this plugin
- * uses rather than a version string: version-2 tokens, the stats route, and
- * the browser API that carries `presence.track()` (API version 4).
+ * uses rather than a version string: version-2 tokens, the stats route, the
+ * browser API that carries `presence.track()` (API version 4), and the
+ * journeys history (`WPS::journeys()`, 0.31).
+ *
+ * @since 0.8.0 Needs `WPS::journeys()`.
  *
  * @return bool
  */
@@ -75,7 +78,8 @@ function wordsocket_ready(): bool {
 		&& \WPSignal\Token::TOKEN_VERSION >= 2
 		&& method_exists( \WPSignal\Publisher::class, 'stats' )
 		&& defined( '\WPSignal\Client::API_VERSION' )
-		&& \WPSignal\Client::API_VERSION >= 4;
+		&& \WPSignal\Client::API_VERSION >= 4
+		&& method_exists( \WPSignal\WPS::class, 'journeys' );
 }
 
 // HPOS compatibility, declared before WooCommerce checks it.

@@ -4,7 +4,6 @@
  * and later, a ShopSocket tab holding the storefront settings.
  */
 import { registerPlugin } from "@wordpress/plugins";
-import apiFetch from "@wordpress/api-fetch";
 import { __ } from "@wordpress/i18n";
 import "./settings.css";
 import ShopSocketLogo from "./ShopSocketLogo";
@@ -20,23 +19,11 @@ if (window.wordsocket?.registerTab && window.wordsocket.useTask) {
 }
 
 /*
- * On WordSocket 0.31 the Moments tab replays a rule over stored journeys: the
- * cart conditions must be known here too, and the journeys come from
- * ShopSocket's archive (history on), with `outcome` for the breakdown.
+ * The Moments tab replays a rule over the journeys WordSocket keeps: the cart
+ * conditions must be known here too, and the cart context rides on each journey.
  */
 if (window.WPS?.rules) {
   registerConditions(window.WPS.rules);
-  const journeysUrl = window.shopSocketSettings?.journeysUrl;
-  if (journeysUrl) {
-    window.WPS.rules.history({
-      outcomes: true,
-      currency: window.shopSocketSettings?.currency,
-      load: (options) =>
-        apiFetch<{ journeys: WPSHistoryJourney[] }>({
-          url: `${journeysUrl}?days=${options.days ?? 30}&limit=${options.limit ?? 500}`,
-        }).then((res) => res.journeys),
-    });
-  }
 }
 
 function Panel() {

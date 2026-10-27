@@ -8,8 +8,6 @@
 use WPSignal\WPS;
 use function WPSignal\Extensions\ShopSocket\cart_id;
 use function WPSignal\Extensions\ShopSocket\journeys_table;
-use function WPSignal\Extensions\ShopSocket\journeys_for_replay;
-use function WPSignal\Extensions\ShopSocket\on_rule_fired;
 use function WPSignal\Extensions\ShopSocket\on_visitor_report;
 use const WPSignal\Extensions\ShopSocket\DEFAULT_RULE_ID;
 use const WPSignal\Extensions\ShopSocket\ORDERS_CHANNEL;
@@ -122,41 +120,8 @@ final class RulesTest extends ExtensionTestCase {
 		$this->assertTrue( $clean[0]['enabled'] );
 	}
 
-	public function test_a_firing_lands_on_the_journey_row_only_with_history_on(): void {
-		global $wpdb;
-		$now = current_time( 'mysql', true );
-		$wpdb->insert( journeys_table(), array( 'journey_id' => self::J, 'visitor' => self::V, 'journey' => 'home:1:1', 'steps' => 1, 'started_at' => $now, 'last_seen' => $now ) );
-		$report = array(
-			'visitor'    => self::V,
-			'journey_id' => self::J,
-			'rule_id'    => DEFAULT_RULE_ID,
-			'action'     => 'show',
-			'step'       => 2,
-			'ms'         => 4500,
-			'user_id'    => 0,
-			'data'       => array(),
-		);
-		on_rule_fired( $report );
-		$this->assertNull( $this->journeys()[0]['firings'], 'history off: nothing is kept' );
 
-		$this->set_history( true );
-		on_rule_fired( $report );
-		on_rule_fired( array_merge( $report, array( 'action' => 'show', 'step' => 3 ) ) );
-		$firings = json_decode( (string) $this->journeys()[0]['firings'], true );
-		$this->assertCount( 2, $firings );
-		$this->assertSame( DEFAULT_RULE_ID, $firings[0]['rule'] );
-		$this->assertSame( 3, $firings[1]['step'] );
-		$this->assertSame( 4500, $firings[0]['ms'], 'how far into the step it fired' );
-		$this->assertSame( 'fired', $firings[0]['kind'], 'a report without a kind is the firing itself' );
-		$this->assertArrayHasKey( 'at', $firings[1] );
-		on_rule_fired( array_merge( $report, array( 'kind' => 'dismissed' ) ) );
-		on_rule_fired( array_merge( $report, array( 'kind' => 'bogus' ) ) );
-		$firings = json_decode( (string) $this->journeys()[0]['firings'], true );
-		$this->assertSame( 'dismissed', $firings[2]['kind'], 'what the shopper did with the prompt lands on the same list' );
-		$this->assertSame( 'fired', $firings[3]['kind'], 'an unknown kind reads as a firing' );
-	}
-
-	public function test_a_firing_before_any_visit_report_starts_the_journey_row_and_the_next_report_fills_it(): void {
+	public function test_a_firing_before_any_visit_report_starts_wordsockets_row_and_the_next_report_puts_the_cart_on_it(): void {
 		$this->set_history( true );
 		$report = array(
 			'visitor'    => self::V,
@@ -164,26 +129,23 @@ final class RulesTest extends ExtensionTestCase {
 			'rule_id'    => DEFAULT_RULE_ID,
 			'action'     => 'show',
 			'step'       => 2,
+			'ms'         => 0,
+			'kind'       => 'fired',
 			'user_id'    => 0,
 			'data'       => array(),
 		);
 
-		on_rule_fired( $report );
-		$this->assertSame( array(), $this->journeys(), 'an empty cart has no journey to land on' );
-
-		$product = $this->make_product( 10 );
-		WC()->cart->add_to_cart( $product->get_id(), 1 );
-		on_rule_fired( $report );
+		WPS::journeys()->on_fired( $report );
 		$rows = $this->journeys();
 		$this->assertCount( 1, $rows, 'the firing starts the row the visit never wrote' );
 		$this->assertSame( '', $rows[0]['journey'] );
-		$this->assertSame( 0, (int) $rows[0]['steps'] );
-		$this->assertSame( cart_id(), $rows[0]['cart_id'] );
-		$this->assertSame( self::V, $rows[0]['visitor'] );
-		$this->assertCount( 1, json_decode( (string) $rows[0]['firings'], true ) );
+		$this->assertNull( $rows[0]['ref'], 'no cart yet' );
 		$started = $rows[0]['started_at'];
 
-		on_visitor_report(
+		$product = $this->make_product( 10 );
+		WC()->cart->add_to_cart( $product->get_id(), 1 );
+		do_action(
+			'wpsignal_visitor_visit',
 			array(
 				'visitor'    => self::V,
 				'journey_id' => self::J,
@@ -197,7 +159,7 @@ final class RulesTest extends ExtensionTestCase {
 		$rows = $this->journeys();
 		$this->assertCount( 1, $rows );
 		$this->assertSame( 3, (int) $rows[0]['steps'], 'the next report fills the journey in' );
-		$this->assertStringStartsWith( 'home:0:1000>', $rows[0]['journey'] );
+		$this->assertSame( cart_id(), $rows[0]['ref'], 'and puts the cart on it' );
 		$this->assertSame( $started, $rows[0]['started_at'], 'and keeps the start the firing set' );
 		$this->assertCount( 1, json_decode( (string) $rows[0]['firings'], true ), 'the firing survives the report' );
 	}
@@ -237,32 +199,22 @@ final class RulesTest extends ExtensionTestCase {
 		$this->assertCount( 1, $this->events_on( ORDERS_CHANNEL, 'woo.alert' ) );
 	}
 
-	public function test_the_journeys_feed_is_for_staff_and_carries_outcomes_and_cart_context(): void {
+	public function test_the_replay_feed_carries_the_cart_context_and_the_store_currency(): void {
 		global $wpdb;
 		$this->set_history( true );
 		$now = current_time( 'mysql', true );
-		$wpdb->insert( journeys_table(), array( 'journey_id' => self::J, 'visitor' => self::V, 'cart_id' => 'abcd000000000001', 'journey' => 'home:1:1000>cart:0:500', 'steps' => 2, 'outcome' => 'converted', 'value' => 42.5, 'order_id' => 7, 'started_at' => $now, 'last_seen' => $now ) );
+		$wpdb->insert( journeys_table(), array( 'journey_id' => self::J, 'visitor' => self::V, 'ref' => 'abcd000000000001', 'journey' => 'home:1:1000>cart:0:500', 'steps' => 2, 'outcome' => 'converted', 'value' => 42.5, 'started_at' => $now, 'last_seen' => $now ) );
 		$wpdb->insert( journeys_table(), array( 'journey_id' => '8d2e3f4a-5b6c-4d7e-9f80-1b2c3d4e5f60', 'visitor' => self::V, 'journey' => 'home:1:1000', 'steps' => 1, 'outcome' => 'left', 'started_at' => $now, 'last_seen' => $now ) );
 
-		wp_set_current_user( 0 );
-		$response = rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/journeys' ) );
-		$this->assertSame( 401, $response->get_status() );
-
-		$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
-		wp_set_current_user( (int) $admins[0] );
-		$response = rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/journeys' ) );
-		$this->assertSame( 200, $response->get_status() );
-		$journeys = $response->get_data()['journeys'];
-		$this->assertCount( 2, $journeys );
-		$with_cart = array_values( array_filter( $journeys, static fn( array $j ): bool => $j['has_cart'] ) )[0];
+		$journeys  = WPS::journeys()->feed( 30, 10 );
+		$with_cart = array_values( array_filter( $journeys, static fn( array $j ): bool => $j['has_ref'] ) )[0];
 		$this->assertSame( 'converted', $with_cart['outcome'] );
 		$this->assertSame( 42.5, $with_cart['value'] );
 		$this->assertSame( 1, $with_cart['context']['cart']['count'] );
 		$this->assertSame( 42.5, $with_cart['context']['cart']['total'] );
-		$this->assertMatchesRegularExpression( '/Z$/', $with_cart['started_at'] );
-
-		$this->set_history( false );
-		$this->assertSame( array(), journeys_for_replay( 30, 10 ), 'history off: no journeys to replay' );
-		wp_set_current_user( 0 );
+		$without = array_values( array_filter( $journeys, static fn( array $j ): bool => ! $j['has_ref'] ) )[0];
+		$this->assertSame( 0, $without['context']['cart']['count'] );
+		$this->assertSame( get_woocommerce_currency(), WPS::journeys()->currency() );
+		$this->assertArrayNotHasKey( '/' . REST_NS . '/journeys', rest_get_server()->get_routes(), 'the own feed route is gone' );
 	}
 }

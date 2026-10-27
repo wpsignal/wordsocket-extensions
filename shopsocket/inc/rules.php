@@ -5,7 +5,7 @@
  * - Conditions about the cart, page kinds for the shop's own pages, and the
  *   action a store wants: a word to the board.
  * - One rule shipped disabled: remind a shopper who hid the tab with a cart.
- * - Firings land on the journey row when history is on; WordSocket keeps none.
+ * - Firings are WordSocket's to keep, on the journey they fired in.
  * - One public route the Alert action posts to, naming the moment: PHP reads
  *   the message from the saved moment, needs the shopper's cart, limits one
  *   alert a minute per cart, and publishes on the orders feed, which only PHP
@@ -252,48 +252,6 @@ add_filter(
 );
 
 /**
- * What a report says happened: the firing, or what the shopper did with the prompt (WordSocket 0.31's kinds).
- *
- * @since 0.8.0
- */
-const FIRING_KINDS = array( 'fired', 'returned', 'dismissed', 'clicked' );
-
-/**
- * A firing lands on the journey row, when history is on; a journey not yet reported starts its row here, cart permitting.
- *
- * @since 0.8.0 Stores `ms` and `kind`; a row it starts carries the shopper's user id.
- *
- * @param array $report `{ visitor, journey_id, rule_id, action, step, user_id, data }`.
- * @return void
- */
-function on_rule_fired( array $report ): void {
-	global $wpdb;
-	if ( ! history_enabled() ) {
-		return;
-	}
-	$row = $wpdb->get_row( $wpdb->prepare( 'SELECT firings FROM ' . journeys_table() . ' WHERE journey_id = %s', $report['journey_id'] ), ARRAY_A );
-	if ( ! is_array( $row ) ) {
-		if ( ! start_journey( (string) $report['visitor'], (string) $report['journey_id'], (int) ( $report['user_id'] ?? 0 ) ) ) {
-			return;
-		}
-		$row = array( 'firings' => null );
-	}
-	$firings   = json_decode( (string) ( $row['firings'] ?? '' ), true );
-	$firings   = is_array( $firings ) ? $firings : array();
-	$kind      = (string) ( $report['kind'] ?? 'fired' );
-	$firings[] = array(
-		'rule'   => (string) $report['rule_id'],
-		'action' => (string) $report['action'],
-		'step'   => (int) $report['step'],
-		'ms'     => max( 0, (int) ( $report['ms'] ?? 0 ) ),
-		'kind'   => in_array( $kind, FIRING_KINDS, true ) ? $kind : 'fired',
-		'at'     => now_sql(),
-	);
-	$wpdb->update( journeys_table(), array( 'firings' => wp_json_encode( array_slice( $firings, -50 ) ) ), array( 'journey_id' => $report['journey_id'] ), array( '%s' ), array( '%s' ) );
-}
-add_action( 'wpsignal_rule_fired', __NAMESPACE__ . '\on_rule_fired' );
-
-/**
  * One request per cart per RULES_RATE_LIMIT for a public route; false when the cart is over the limit.
  *
  * @param string $what    The route's name.
@@ -430,31 +388,6 @@ add_action(
 				),
 				'callback'            => __NAMESPACE__ . '\handle_alert',
 				'permission_callback' => '__return_true',
-			)
-		);
-		register_rest_route(
-			REST_NS,
-			'/journeys',
-			array(
-				'methods'             => 'GET',
-				'args'                => array(
-					'days'  => array(
-						'type'    => 'integer',
-						'default' => 30,
-						'minimum' => 1,
-						'maximum' => 365,
-					),
-					'limit' => array(
-						'type'    => 'integer',
-						'default' => 500,
-						'minimum' => 1,
-						'maximum' => 2000,
-					),
-				),
-				'callback'            => static fn( \WP_REST_Request $request ) => rest_ensure_response(
-					array( 'journeys' => journeys_for_replay( (int) $request->get_param( 'days' ), (int) $request->get_param( 'limit' ) ) )
-				),
-				'permission_callback' => static fn() => current_user_can( STAFF_CAP ),
 			)
 		);
 	}
