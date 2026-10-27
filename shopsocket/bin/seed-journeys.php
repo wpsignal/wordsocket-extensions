@@ -1,7 +1,7 @@
 <?php
 /**
- * Seed 500 shopper journeys (and the carts behind the ones that held something)
- * into ShopSocket's history tables, the way the Phase 61 mock generated its own:
+ * Seed 500 shopper journeys into WordSocket's journeys table, the carts the shoppers held on
+ * them as ShopSocket records them (`data`), the way the Phase 61 mock generated its own:
  * a weighted Markov walk over the shop's page kinds, 28 days, weekday and hour
  * weighted. Deterministic (mt_srand). Every seeded row carries a visitor id
  * starting with "5eed0000-", so one DELETE removes them again.
@@ -13,8 +13,6 @@
 
 // phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL, WordPress.WP.AlternativeFunctions.rand_mt_rand, WordPress.WP.AlternativeFunctions.rand_seeding_mt_srand
 
-use function WPSignal\Extensions\ShopSocket\carts_table;
-use function WPSignal\Extensions\ShopSocket\cart_items_table;
 use function WPSignal\Extensions\ShopSocket\journeys_table;
 
 global $wpdb;
@@ -140,10 +138,10 @@ for ( $n = 0; $n < $count; $n++ ) {
 	$converted = false;
 	$pick_id   = static function ( string $kind ) use ( $products, $terms, $rnd ): int {
 		if ( 'product' === $kind ) {
-			return $products[ (int) floor( $rnd() * count( $products ) ) ];
+			return $products[ (int) floor( $rnd() * count( $products ) ) ] ?? 0;
 		}
 		if ( 'category' === $kind ) {
-			return $terms[ (int) floor( $rnd() * count( $terms ) ) ];
+			return $terms[ (int) floor( $rnd() * count( $terms ) ) ] ?? 0;
 		}
 		return 0;
 	};
@@ -190,7 +188,7 @@ for ( $n = 0; $n < $count; $n++ ) {
 
 	$day     = (int) $weighted( $day_weights );
 	$hour    = (int) $weighted( $hour_weights );
-	$started = strtotime( gmdate( 'Y-m-d', strtotime( "-{$day} days" ) ) . sprintf( ' %02d:%02d:%02d', $hour, mt_rand( 0, 59 ), mt_rand( 0, 59 ) ) );
+	$started = min( time() - 60, strtotime( gmdate( 'Y-m-d', strtotime( "-{$day} days" ) ) . sprintf( ' %02d:%02d:%02d', $hour, mt_rand( 0, 59 ), mt_rand( 0, 59 ) ) ) );
 	$ended   = $started + (int) ( $total_ms / 1000 );
 	$value   = 0.0;
 	foreach ( $held as $pid => $qty ) {
@@ -198,18 +196,32 @@ for ( $n = 0; $n < $count; $n++ ) {
 	}
 	$cart_id = $held ? substr( md5( $visitor ), 0, 16 ) : null;
 	$outcome = $converted ? 'converted' : 'left'; // Nothing seeded is live, so nothing is open.
+	$data    = null;
+	if ( $held ) {
+		$items = array();
+		foreach ( $held as $pid => $qty ) {
+			$items[ (string) $pid ] = $qty;
+		}
+		$data = array(
+			'c' => $currency,
+			'i' => $items,
+		);
+		if ( $converted ) {
+			$data['o'] = 1000 + $n;
+		}
+	}
 
 	$wpdb->insert(
 		journeys_table(),
 		array(
 			'journey_id' => $uuid(),
 			'visitor'    => $visitor,
-			'cart_id'    => $cart_id,
+			'ref'        => $cart_id,
 			'journey'    => $journey,
 			'steps'      => count( $steps ),
 			'outcome'    => $outcome,
 			'value'      => $held ? round( $value, 4 ) : null,
-			'order_id'   => null,
+			'data'       => null === $data ? null : wp_json_encode( $data ),
 			'started_at' => gmdate( 'Y-m-d H:i:s', $started ),
 			'last_seen'  => gmdate( 'Y-m-d H:i:s', $ended ),
 			'ended_at'   => 'open' === $outcome ? null : gmdate( 'Y-m-d H:i:s', $ended ),
@@ -217,33 +229,6 @@ for ( $n = 0; $n < $count; $n++ ) {
 	);
 	++$journeys;
 	if ( $cart_id ) {
-		$wpdb->insert(
-			carts_table(),
-			array(
-				'cart_id'      => $cart_id,
-				'user_id'      => null,
-				'visitor'      => $visitor,
-				'journey_id'   => null,
-				'journey'      => $journey,
-				'currency'     => $currency,
-				'value'        => round( $value, 4 ),
-				'first_seen'   => gmdate( 'Y-m-d H:i:s', $started ),
-				'last_seen'    => gmdate( 'Y-m-d H:i:s', $ended ),
-				'left_at'      => 'open' === $outcome ? null : gmdate( 'Y-m-d H:i:s', $ended ),
-				'converted_at' => $converted ? gmdate( 'Y-m-d H:i:s', $ended ) : null,
-				'order_id'     => null,
-			)
-		);
-		foreach ( $held as $pid => $qty ) {
-			$wpdb->insert(
-				cart_items_table(),
-				array(
-					'cart_id'    => $cart_id,
-					'product_id' => $pid,
-					'quantity'   => $qty,
-				)
-			);
-		}
 		++$carts;
 		if ( $converted ) {
 			++$orders;

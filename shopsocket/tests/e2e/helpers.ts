@@ -1,4 +1,10 @@
-import { expect, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import {
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 import type { RequestUtils } from "@wordpress/e2e-test-utils-playwright";
 import { wp } from "./env";
 
@@ -11,7 +17,9 @@ export async function addToCart(page: Page): Promise<void> {
   await page.locator(".single_add_to_cart_button").first().click();
   await expect(
     page
-      .locator('.woocommerce-message, .wc-block-components-notice-banner.is-success, .single_add_to_cart_button:has-text("in cart")')
+      .locator(
+        '.woocommerce-message, .wc-block-components-notice-banner.is-success, .single_add_to_cart_button:has-text("in cart")',
+      )
       .first(),
   ).toBeVisible({ timeout: 15_000 });
   /*
@@ -20,42 +28,68 @@ export async function addToCart(page: Page): Promise<void> {
    * The cart cookie is WooCommerce's own proof that the server has the item.
    */
   await expect
-    .poll(async () => (await page.context().cookies()).some((c) => c.name === "woocommerce_items_in_cart"), { timeout: 15_000 })
+    .poll(
+      async () =>
+        (await page.context().cookies()).some(
+          (c) => c.name === "woocommerce_items_in_cart",
+        ),
+      { timeout: 15_000 },
+    )
     .toBe(true);
 }
 
 /** Wait until window.WPS reports a connection on the current page. */
 export async function waitForLive(page: Page): Promise<void> {
-  await expect.poll(() => page.evaluate(() => window.WPS?.state.connected ?? false), { timeout: 20_000 }).toBe(true);
+  await expect
+    .poll(() => page.evaluate(() => window.WPS?.state.connected ?? false), {
+      timeout: 20_000,
+    })
+    .toBe(true);
 }
 
 /** A fresh anonymous browser (own cookies and storage): a new shopper, not the logged-in admin. */
-export function visitorContext(browser: Browser, baseURL?: string): Promise<BrowserContext> {
-  return browser.newContext({ baseURL, ignoreHTTPSErrors: true, storageState: undefined });
+export function visitorContext(
+  browser: Browser,
+  baseURL?: string,
+): Promise<BrowserContext> {
+  return browser.newContext({
+    baseURL,
+    ignoreHTTPSErrors: true,
+    storageState: undefined,
+  });
 }
 
 /** The number in a tile or cell (digits and dots only, so "$1,234" reads as 1234), as a poll callback. */
-export const num = (loc: Locator) => async () => Number((await loc.textContent())?.replace(/[^\d.]/g, "") || 0);
+export const num = (loc: Locator) => async () =>
+  Number((await loc.textContent())?.replace(/[^\d.]/g, "") || 0);
 
 /**
- * Forget the cart rows holding `productId`, or every row when no product is
- * given, in the history tables (0.7). The rehearsal site is shared with manual
- * testing, so tests clear only what they created.
+ * Forget the journeys of the carts holding `productId`, or of every cart when
+ * no product is given (WordSocket's table holds them since 0.8). The rehearsal
+ * site is shared with manual testing, so tests clear only what they created.
  */
 export function clearCarts(productId?: number): void {
   const ns = "\\WPSignal\\Extensions\\ShopSocket";
-  const where = productId === undefined ? "1 = 1" : `cart_id IN (SELECT cart_id FROM $items WHERE product_id = ${productId})`;
+  const where =
+    productId === undefined
+      ? "ref IS NOT NULL"
+      : `ref IN (SELECT ref FROM (SELECT ref FROM $journeys WHERE data LIKE '%\\"${productId}\\":%') AS held)`;
   wp(
     "eval",
-    `global $wpdb; $carts = ${ns}\\carts_table(); $items = ${ns}\\cart_items_table(); $journeys = ${ns}\\journeys_table(); ` +
-      `$ids = $wpdb->get_col("SELECT cart_id FROM $carts WHERE ${where}"); ` +
-      `foreach ($ids as $id) { $wpdb->delete($journeys, ['cart_id' => $id]); $wpdb->delete($items, ['cart_id' => $id]); $wpdb->delete($carts, ['cart_id' => $id]); } ` +
+    `global $wpdb; $journeys = ${ns}\\journeys_table(); ` +
+      `$wpdb->query("DELETE FROM $journeys WHERE ${where}"); ` +
       `delete_transient('shopsocket_carts_pub');`,
   );
 }
 
 /** A managed-stock simple product through the WooCommerce REST API. */
-export async function createProduct(requestUtils: RequestUtils, name: string, stock: number, lowStock = 2, imageId?: number) {
+export async function createProduct(
+  requestUtils: RequestUtils,
+  name: string,
+  stock: number,
+  lowStock = 2,
+  imageId?: number,
+) {
   const product = await requestUtils.rest({
     method: "POST",
     path: "/wc/v3/products",
@@ -75,18 +109,34 @@ export async function createProduct(requestUtils: RequestUtils, name: string, st
 }
 
 /** Delete a product for good (no trash) through the WooCommerce REST API. */
-export async function deleteProduct(requestUtils: RequestUtils, id: number): Promise<void> {
-  await requestUtils.rest({ method: "DELETE", path: `/wc/v3/products/${id}`, params: { force: true } });
+export async function deleteProduct(
+  requestUtils: RequestUtils,
+  id: number,
+): Promise<void> {
+  await requestUtils.rest({
+    method: "DELETE",
+    path: `/wc/v3/products/${id}`,
+    params: { force: true },
+  });
 }
 
 /** An order for `quantity` of a product, in `status`, through the WooCommerce REST API. */
-export async function createOrder(requestUtils: RequestUtils, productId: number, quantity: number, status = "processing") {
+export async function createOrder(
+  requestUtils: RequestUtils,
+  productId: number,
+  quantity: number,
+  status = "processing",
+) {
   const order = await requestUtils.rest({
     method: "POST",
     path: "/wc/v3/orders",
     data: {
       status,
-      billing: { first_name: "Grace", last_name: "Hopper", email: "grace@example.com" },
+      billing: {
+        first_name: "Grace",
+        last_name: "Hopper",
+        email: "grace@example.com",
+      },
       line_items: [{ product_id: productId, quantity }],
     },
   });
@@ -95,17 +145,32 @@ export async function createOrder(requestUtils: RequestUtils, productId: number,
 }
 
 /** Delete an order for good (no trash) through the WooCommerce REST API. */
-export async function deleteOrder(requestUtils: RequestUtils, id: number): Promise<void> {
-  await requestUtils.rest({ method: "DELETE", path: `/wc/v3/orders/${id}`, params: { force: true } });
+export async function deleteOrder(
+  requestUtils: RequestUtils,
+  id: number,
+): Promise<void> {
+  await requestUtils.rest({
+    method: "DELETE",
+    path: `/wc/v3/orders/${id}`,
+    params: { force: true },
+  });
 }
 
 /** The id of any image already in the media library, or undefined when there is none. */
-export async function anyImageId(requestUtils: RequestUtils): Promise<number | undefined> {
-  const media = (await requestUtils.rest({ path: "/wp/v2/media", params: { media_type: "image", per_page: 20 } })) as {
+export async function anyImageId(
+  requestUtils: RequestUtils,
+): Promise<number | undefined> {
+  const media = (await requestUtils.rest({
+    path: "/wp/v2/media",
+    params: { media_type: "image", per_page: 20 },
+  })) as {
     id: number;
     slug?: string;
     source_url?: string;
   }[];
   // WooCommerce's own placeholder is an image too, but it has no thumbnail sizes: a fresh site has nothing else.
-  return media.find((m) => !/woocommerce-placeholder/.test(`${m.slug ?? ""} ${m.source_url ?? ""}`))?.id;
+  return media.find(
+    (m) =>
+      !/woocommerce-placeholder/.test(`${m.slug ?? ""} ${m.source_url ?? ""}`),
+  )?.id;
 }

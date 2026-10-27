@@ -130,11 +130,17 @@ export function startViewer(
   }
 
   /**
-   * Pull this shopper's cart id, held products, and this page's live count
-   * from the server. Never on a timer; a call that lands mid-flight queues
-   * exactly one more.
+   * Bring this shopper's cart id, held products, and this page's live count
+   * up to date: the tracker reports the visit again, which lands the cart on
+   * the journey's row and answers with the state, or without one the server
+   * is asked. Never on a timer; a fetch that lands mid-flight queues exactly
+   * one more.
    */
   async function sync(): Promise<void> {
+    if (tracker && typeof tracker.report === "function") {
+      tracker.report();
+      return;
+    }
     if (!config.cartIdUrl) return;
     if (inFlight) {
       dirty = true;
@@ -252,9 +258,9 @@ export function startViewer(
   watchOwnCart();
 
   /*
-   * A recovered connection is a recovery step: the server rebuilds this shopper's
-   * cart row from the sync and the client re-enters presence, so the board
-   * sees them live again without waiting for a cart change.
+   * A recovered connection is a recovery step: the sync lands this shopper's
+   * cart on their journey again and the client re-enters presence, so the
+   * board sees them live again without waiting for a cart change.
    */
   let hasConnected = false;
   window.WPS?.onStateChange((s) => {

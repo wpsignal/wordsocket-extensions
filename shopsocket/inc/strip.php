@@ -1,6 +1,6 @@
 <?php
 /**
- * The board's "This week" strip, read from the history tables.
+ * The board's "This week" strip, read from WordSocket's journeys and the carts they carry.
  *
  * - Carts left behind, recovered orders and checkout conversion over the last seven days, each against the seven before.
  * - The page kind most leavers left from, and their median time there.
@@ -11,11 +11,13 @@
 
 namespace WPSignal\Extensions\ShopSocket;
 
+use WPSignal\WPS;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL, WordPress.DB.PreparedSQLPlaceholders -- The plugin's own tables: names come from the table functions, fragments from prepare(), one placeholder per id.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL, WordPress.DB.PreparedSQLPlaceholders -- WordSocket's journeys table: the name from its class, fragments from prepare(), one placeholder per id.
 
 /**
  * The strip's window, in days.
@@ -46,7 +48,7 @@ const STRIP_LEAVERS = 2000;
 const STRIP_CACHE_TTL = 60;
 
 /**
- * This week's figures for the board, null with history off.
+ * This week's figures for the board, null with history off; `journeys` says whether WordSocket keeps the journeys the leak, the conversion and the recovered orders read.
  *
  * @since 0.8.0
  *
@@ -65,6 +67,7 @@ function week_strip(): ?array {
 	$prev  = gmdate( 'Y-m-d H:i:s', $now - 2 * STRIP_DAYS * DAY_IN_SECONDS );
 	$strip = array(
 		'since'      => datetime_to_rfc3339( $since ),
+		'journeys'   => journeys_available() && WPS::journeys()->enabled(),
 		'left'       => carts_left( $since, $prev ),
 		'recovered'  => recovered_orders( $since, $prev ),
 		'conversion' => checkout_conversion( $since, $prev ),
@@ -76,33 +79,39 @@ function week_strip(): ?array {
 }
 
 /**
- * Carts whose shopper left and that never became an order: this week's count and value, and last week's count.
+ * Carts whose shopper left and that never became an order, by each cart's newest journey: this week's count and value, and last week's count.
  *
- * @since 0.8.0
+ * @since 0.8.0 Read from WordSocket's journeys.
  *
  * @param string $since Start of this week, SQL UTC.
  * @param string $prev  Start of last week, SQL UTC.
  * @return array{count: int, value: float, currency: string, previous: int}
  */
 function carts_left( string $since, string $prev ): array {
-	global $wpdb;
-	$row    = $wpdb->get_row(
-		$wpdb->prepare( 'SELECT COUNT(*) AS n, COALESCE(SUM(value), 0) AS v FROM ' . carts_table() . ' WHERE left_at >= %s AND converted_at IS NULL', $since ),
-		ARRAY_A
-	);
-	$before = (int) $wpdb->get_var(
-		$wpdb->prepare( 'SELECT COUNT(*) FROM ' . carts_table() . ' WHERE left_at >= %s AND left_at < %s AND converted_at IS NULL', $prev, $since )
-	);
+	$count    = 0;
+	$value    = 0.0;
+	$previous = 0;
+	foreach ( cart_journeys_since( $prev ) as $cart ) {
+		if ( 'left' !== $cart['outcome'] || empty( $cart['items'] ) ) {
+			continue;
+		}
+		if ( $cart['ended_at'] >= $since ) {
+			++$count;
+			$value += $cart['value'];
+		} else {
+			++$previous;
+		}
+	}
 	return array(
-		'count'    => (int) ( $row['n'] ?? 0 ),
-		'value'    => round( (float) ( $row['v'] ?? 0 ), 2 ),
+		'count'    => $count,
+		'value'    => round( $value, 2 ),
 		'currency' => get_woocommerce_currency(),
-		'previous' => $before,
+		'previous' => $previous,
 	);
 }
 
 /**
- * Orders a moment was credited with (`attribute_conversion()`): this week's count and value, and last week's count.
+ * Orders a moment was credited with (`WPS::journeys()->credit()`): this week's count and value, and last week's count.
  *
  * @since 0.8.0
  *
@@ -201,7 +210,7 @@ function leak( string $since ): ?array {
 	global $wpdb;
 	$journeys = (array) $wpdb->get_col(
 		$wpdb->prepare(
-			'SELECT journey FROM ' . journeys_table() . ' WHERE started_at >= %s AND outcome = %s AND cart_id IS NOT NULL ORDER BY started_at DESC LIMIT %d',
+			'SELECT journey FROM ' . journeys_table() . ' WHERE started_at >= %s AND outcome = %s AND ref IS NOT NULL ORDER BY started_at DESC LIMIT %d',
 			$since,
 			'left',
 			STRIP_LEAVERS
@@ -238,46 +247,37 @@ function leak( string $since ): ?array {
 /**
  * The products most often in a cart left behind this week, with how many carts converted holding each.
  *
- * @since 0.8.0
+ * @since 0.8.0 Read from WordSocket's journeys.
  *
  * @param string $since Start of this week, SQL UTC.
  * @return array<int, array{id: int, left: int, bought: int}>
  */
 function products_left( string $since ): array {
-	global $wpdb;
-	$items = cart_items_table();
-	$carts = carts_table();
-	$rows  = (array) $wpdb->get_results(
-		$wpdb->prepare(
-			"SELECT i.product_id, COUNT(*) AS n FROM {$items} i JOIN {$carts} c ON c.cart_id = i.cart_id WHERE c.left_at >= %s AND c.converted_at IS NULL GROUP BY i.product_id ORDER BY n DESC, i.product_id ASC LIMIT %d",
-			$since,
-			STRIP_PRODUCTS
-		),
-		ARRAY_A
-	);
-	if ( empty( $rows ) ) {
+	$left   = array();
+	$bought = array();
+	foreach ( cart_journeys_since( $since ) as $cart ) {
+		if ( 'left' !== $cart['outcome'] && 'converted' !== $cart['outcome'] ) {
+			continue;
+		}
+		foreach ( array_keys( $cart['items'] ) as $product_id ) {
+			if ( 'left' === $cart['outcome'] ) {
+				$left[ $product_id ] = ( $left[ $product_id ] ?? 0 ) + 1;
+			} else {
+				$bought[ $product_id ] = ( $bought[ $product_id ] ?? 0 ) + 1;
+			}
+		}
+	}
+	if ( empty( $left ) ) {
 		return array();
 	}
-	$ids     = array_map( static fn( array $row ): int => (int) $row['product_id'], $rows );
-	$holders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
-	$bought  = array_column(
-		(array) $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT i.product_id, COUNT(*) AS n FROM {$items} i JOIN {$carts} c ON c.cart_id = i.cart_id WHERE c.converted_at >= %s AND i.product_id IN ({$holders}) GROUP BY i.product_id",
-				$since,
-				...$ids
-			),
-			ARRAY_A
-		),
-		'n',
-		'product_id'
-	);
-	return array_map(
-		static fn( array $row ): array => array(
-			'id'     => (int) $row['product_id'],
-			'left'   => (int) $row['n'],
-			'bought' => (int) ( $bought[ $row['product_id'] ] ?? 0 ),
-		),
-		$rows
-	);
+	uksort( $left, static fn( int $a, int $b ): int => ( $left[ $b ] <=> $left[ $a ] ) ?: ( $a <=> $b ) );
+	$out = array();
+	foreach ( array_slice( $left, 0, STRIP_PRODUCTS, true ) as $product_id => $n ) {
+		$out[] = array(
+			'id'     => $product_id,
+			'left'   => $n,
+			'bought' => (int) ( $bought[ $product_id ] ?? 0 ),
+		);
+	}
+	return $out;
 }

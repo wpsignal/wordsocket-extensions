@@ -2,7 +2,13 @@ import "./env";
 import { expect, test } from "@wordpress/e2e-test-utils-playwright";
 import { WP_ROOT, wp } from "./env";
 import { spawn } from "node:child_process";
-import { addToCart, createProduct, deleteProduct, visitorContext, waitForLive } from "./helpers";
+import {
+  addToCart,
+  createProduct,
+  deleteProduct,
+  visitorContext,
+  waitForLive,
+} from "./helpers";
 
 /**
  * The storefront settings (0.5): the ShopSocket tab on WordSocket's settings
@@ -16,13 +22,34 @@ const OPTION = "shopsocket_storefront";
 function shopperSession(productId: number, holdSeconds: number): Promise<void> {
   const script = `add_filter( 'shopsocket_activity_throttle', '__return_zero' ); WC()->cart->add_to_cart( ${productId}, 1 ); sleep( ${holdSeconds} ); WC()->cart->empty_cart();`;
   return new Promise((resolve, reject) => {
-    const child = spawn("php", ["-d", "error_reporting=0", "-d", "memory_limit=512M", "/opt/homebrew/bin/wp", `--path=${WP_ROOT}`, "eval", script], { stdio: "ignore" });
-    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`shopper session exited with ${code}`))));
+    const child = spawn(
+      "php",
+      [
+        "-d",
+        "error_reporting=0",
+        "-d",
+        "memory_limit=512M",
+        "/opt/homebrew/bin/wp",
+        `--path=${WP_ROOT}`,
+        "eval",
+        script,
+      ],
+      { stdio: "ignore" },
+    );
+    child.on("exit", (code) =>
+      code === 0
+        ? resolve()
+        : reject(new Error(`shopper session exited with ${code}`)),
+    );
     child.on("error", reject);
   });
 }
 
-function setProductChoice(productId: number, feature: "in_carts" | "activity", value: "on" | "off" | ""): void {
+function setProductChoice(
+  productId: number,
+  feature: "in_carts" | "activity",
+  value: "on" | "off" | "",
+): void {
   const key = `_shopsocket_${feature}`;
   if (value === "") {
     wp("post", "meta", "delete", String(productId), key);
@@ -31,54 +58,85 @@ function setProductChoice(productId: number, feature: "in_carts" | "activity", v
   }
 }
 
+/** WordSocket's History holds the carts (0.8), so the counter and the board need it on. */
+const HISTORY = "wpsignal_history_enabled";
+let historyBefore = "";
+
 test.describe("Storefront settings", () => {
+  test.beforeAll(() => {
+    try {
+      historyBefore = wp("option", "get", HISTORY);
+    } catch {
+      historyBefore = ""; // the option does not exist: a site on its defaults
+    }
+    wp("option", "update", HISTORY, "1");
+  });
+  test.afterAll(() => {
+    if (historyBefore) wp("option", "update", HISTORY, historyBefore);
+    else wp("option", "delete", HISTORY);
+  });
   test.afterEach(() => {
     wp("option", "delete", OPTION);
   });
 
-  test("the ShopSocket tab saves the site-wide switches and reloads them", async ({ admin, page }) => {
+  test("the ShopSocket tab saves the site-wide switches and reloads them", async ({
+    admin,
+    page,
+  }) => {
     await admin.visitAdminPage("admin.php", "page=wordsocket&tab=shopsocket");
-    await expect(page.getByRole("tab", { name: "ShopSocket" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: "ShopSocket" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
 
     // The cards start collapsed, and a collapsed card's controls are hidden to the role queries.
     const openCards = async () => {
-      for (const title of ["In-cart count", "Added-to-cart notification", "History"]) {
-        await page.locator(".shopsocket-tab").getByRole("button", { name: title }).click();
+      for (const title of [
+        "In-cart count",
+        "Added-to-cart notification",
+        "Cart history",
+      ]) {
+        await page
+          .locator(".shopsocket-tab")
+          .getByRole("button", { name: title })
+          .click();
       }
     };
     await openCards();
 
-    // The three site-wide toggles, in order: the in-cart count, the notification, then cart history (off by default).
+    // The two site-wide toggles, in order: the in-cart count, then the notification; cart history has no switch here (WordSocket's History holds the carts).
     // Found by position, since their labels change with their state.
     const toggles = () => page.locator(".shopsocket-tab").getByRole("checkbox");
-    await expect(toggles()).toHaveCount(3);
+    await expect(toggles()).toHaveCount(2);
     await expect(toggles().nth(0)).toBeChecked();
     await expect(toggles().nth(1)).toBeChecked();
-    await expect(toggles().nth(2)).not.toBeChecked();
-    await expect(page.getByLabel("Keep carts for (days)")).toHaveCount(0);
+    await expect(
+      page
+        .locator(".shopsocket-tab")
+        .getByRole("link", { name: "Journeys tab" }),
+    ).toBeVisible();
 
     await toggles().nth(0).uncheck();
-    // History on shows its two retentions; change one.
-    await toggles().nth(2).check();
-    await page.getByLabel("Keep carts for (days)").fill("45");
     await page.getByRole("button", { name: "Save changes" }).click();
-    await expect(page.locator(".components-snackbar").getByText("Settings saved.")).toBeVisible();
+    await expect(
+      page.locator(".components-snackbar").getByText("Settings saved."),
+    ).toBeVisible();
 
     await page.reload();
     await openCards();
-    await expect(toggles()).toHaveCount(3);
+    await expect(toggles()).toHaveCount(2);
     await expect(toggles().nth(0)).not.toBeChecked();
     await expect(toggles().nth(1)).toBeChecked();
-    await expect(toggles().nth(2)).toBeChecked();
-    await expect(page.getByLabel("Keep carts for (days)")).toHaveValue("45");
     const saved = JSON.parse(wp("option", "get", OPTION, "--format=json"));
     expect(saved.in_carts_enabled).toBe(false);
-    expect(saved.history_enabled).toBe(true);
-    expect(saved.history_retention_days).toBe(45);
-    expect(saved.journeys_retention_months).toBe(12);
+    expect(saved).not.toHaveProperty("history_enabled");
   });
 
-  test("a product set to Off shows no count and raises no toast, even for a shopper who holds it", async ({ browser, baseURL, requestUtils }) => {
+  test("a product set to Off shows no count and raises no toast, even for a shopper who holds it", async ({
+    browser,
+    baseURL,
+    requestUtils,
+  }) => {
     const product = await createProduct(requestUtils, "E2E Quiet Widget", 8);
     setProductChoice(product.id, "in_carts", "off");
     setProductChoice(product.id, "activity", "off");
@@ -87,7 +145,10 @@ test.describe("Storefront settings", () => {
     try {
       await page.goto(product.permalink);
       await waitForLive(page);
-      await expect(page.locator(".shopsocket-in-carts"), "the counter is not rendered at all").toHaveCount(0);
+      await expect(
+        page.locator(".shopsocket-in-carts"),
+        "the counter is not rendered at all",
+      ).toHaveCount(0);
 
       // The viewer holds it, so a toast would normally follow another shopper's add.
       await addToCart(page);
@@ -101,24 +162,64 @@ test.describe("Storefront settings", () => {
     }
   });
 
-  test("a category excluded for both features hides them, and a product set to On brings them back", async ({ browser, baseURL, requestUtils }) => {
+  test("a category excluded for both features hides them, and a product set to On brings them back", async ({
+    browser,
+    baseURL,
+    requestUtils,
+  }) => {
     const product = await createProduct(requestUtils, "E2E Category Widget", 8);
-    const termId = Number(wp("term", "create", "product_cat", `E2E Quiet ${Date.now()}`, "--porcelain"));
-    wp("post", "term", "set", String(product.id), "product_cat", String(termId), "--by=id");
-    wp("option", "update", OPTION, JSON.stringify({ in_carts_enabled: true, activity_enabled: true, in_carts_excluded_categories: [termId], activity_excluded_categories: [termId] }), "--format=json");
+    const termId = Number(
+      wp(
+        "term",
+        "create",
+        "product_cat",
+        `E2E Quiet ${Date.now()}`,
+        "--porcelain",
+      ),
+    );
+    wp(
+      "post",
+      "term",
+      "set",
+      String(product.id),
+      "product_cat",
+      String(termId),
+      "--by=id",
+    );
+    wp(
+      "option",
+      "update",
+      OPTION,
+      JSON.stringify({
+        in_carts_enabled: true,
+        activity_enabled: true,
+        in_carts_excluded_categories: [termId],
+        activity_excluded_categories: [termId],
+      }),
+      "--format=json",
+    );
     const visitor = await visitorContext(browser, baseURL);
     const page = await visitor.newPage();
     try {
       await page.goto(product.permalink);
-      await expect(page.locator(".shopsocket-in-carts"), "excluded by category").toHaveCount(0);
+      await expect(
+        page.locator(".shopsocket-in-carts"),
+        "excluded by category",
+      ).toHaveCount(0);
 
       setProductChoice(product.id, "in_carts", "on");
       await page.reload();
       await waitForLive(page);
       const counter = page.locator(".shopsocket-in-carts");
-      await expect(counter, "the product's own On beats the category").toHaveCount(1);
+      await expect(
+        counter,
+        "the product's own On beats the category",
+      ).toHaveCount(1);
       const shopper = shopperSession(product.id, 5);
-      await expect(counter).toContainText("1 shopper has this in their cart right now", { timeout: 15_000 });
+      await expect(counter).toContainText(
+        "1 shopper has this in their cart right now",
+        { timeout: 15_000 },
+      );
       await shopper;
     } finally {
       await visitor.close();

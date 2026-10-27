@@ -9,7 +9,7 @@ import { useProductNames } from "./useProductNames";
 
 type Config = Pick<
   ShopSocketBoardConfig,
-  "productsUrl" | "nonce" | "historyUrl"
+  "productsUrl" | "nonce" | "journeysUrl"
 >;
 
 /** "+3 vs last week", "same as last week"; `unit` follows the number. */
@@ -49,8 +49,18 @@ function placeOf(kind: string): string {
   return places[kind] ?? __("a page", "shopsocket");
 }
 
+/** WordSocket's Journeys tab with the network on this week's leavers: outcome left, through the leak's page, least 2 per edge. */
+function leaversUrl(base: string, kind: string): string {
+  const url = new URL(base, window.location.origin);
+  url.searchParams.set("outcome", "left");
+  url.searchParams.set("through", kind);
+  url.searchParams.set("min", "2");
+  return url.toString();
+}
+
 /**
- * The strip, or one line pointing at the History settings when history is off.
+ * The strip, or one line pointing at WordSocket's Journeys tab while its History is off; the leak sentence
+ * links into that tab.
  *
  * @since 0.8.0
  */
@@ -66,8 +76,11 @@ export function WeekStrip({
   if (!strip) {
     return (
       <p className="shopsocket-week__off">
-        {__("Turn on cart history to see this week's figures.", "shopsocket")}{" "}
-        <a href={config.historyUrl}>{__("History settings", "shopsocket")}</a>
+        {__(
+          "Turn on WordSocket's History to see this week's figures.",
+          "shopsocket",
+        )}{" "}
+        <a href={config.journeysUrl}>{__("Journeys tab", "shopsocket")}</a>
       </p>
     );
   }
@@ -136,6 +149,15 @@ export function WeekStrip({
           </span>
         </div>
       </div>
+      {strip.journeys === false && (
+        <p className="shopsocket-week__off">
+          {__(
+            "Switch on WordSocket's History for the leak, the conversion and the recovered orders.",
+            "shopsocket",
+          )}{" "}
+          <a href={config.journeysUrl}>{__("Journeys tab", "shopsocket")}</a>
+        </p>
+      )}
       {leak && (
         <p className="shopsocket-week__leak">
           {sprintf(
@@ -148,6 +170,11 @@ export function WeekStrip({
             duration(leak.median_ms),
             leak.count,
             Math.round((100 * leak.count) / Math.max(1, leak.leavers)),
+          )}{" "}
+          {config.journeysUrl && (
+            <a href={leaversUrl(config.journeysUrl, leak.kind)}>
+              {__("See them", "shopsocket")}
+            </a>
           )}
         </p>
       )}

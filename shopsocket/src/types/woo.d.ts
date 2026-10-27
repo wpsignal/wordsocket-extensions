@@ -7,8 +7,8 @@ interface ShopSocketBoardConfig {
 	productsUrl: string;
 	/** The wp-admin base; an order link is only followed when it points there. */
 	adminUrl: string;
-	/** The ShopSocket settings tab, where cart history is switched on. */
-	historyUrl: string;
+	/** WordSocket's Journeys tab, which the leak sentence links into with its filters (0.8). */
+	journeysUrl: string;
 	nonce: string;
 	/** The channel each event is trusted from (inc/channels.php). */
 	channels: { orders: string; stock: string; presence: string; staff: string; connections: string };
@@ -21,7 +21,7 @@ interface ShopSocketBoardConfig {
 	currencySymbol: string;
 }
 
-/** One cart row from the server (inc/carts.php `cart_rows()`). */
+/** One live cart from the server (inc/carts.php `cart_rows()`, an open journey carrying a cart). */
 interface WooCartRow {
 	/** `cart_id()`: 16 hex of SHA-256 over the user id or the guest session id. */
 	id: string;
@@ -35,9 +35,9 @@ interface WooCartRow {
 	currency: string;
 }
 
-/** A cart whose shopper left (inc/history.php `abandoned_rows()`), newest leave first. */
+/** A cart whose shopper left (inc/history.php `abandoned_rows()`, its newest left journey), newest leave first. */
 interface WooAbandonedRow extends WooCartRow {
-	/** The shopper's journey, `kind:id:ms` steps joined by `>`; empty with history off. */
+	/** The journey the cart was left in, `kind:id:ms` steps joined by `>`. */
 	journey: string;
 	/** When the shopper left, RFC 3339 UTC. */
 	left_at: string;
@@ -73,6 +73,8 @@ interface WooDashboardData {
 interface WooWeekStrip {
 	/** Start of the window, RFC 3339 UTC. */
 	since: string;
+	/** Whether WordSocket keeps the journeys the leak, the conversion and the recovered orders read (0.8). */
+	journeys: boolean;
 	/** Carts whose shopper left and that never became an order. */
 	left: { count: number; value: number; currency: string; previous: number };
 	/** Orders credited to a moment that fired. */

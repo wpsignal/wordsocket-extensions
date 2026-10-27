@@ -76,7 +76,7 @@ Inside those encrypted events:
 
 What WPSignal does see, because it needs it to deliver messages: channel names, how many browsers are connected, and an anonymous id for each shopper's browser and cart. None of it is personal.
 
-**What stays on your site.** With cart history off (the default), ShopSocket remembers an open cart only for the length of its WooCommerce session, as it always has. With it on, each cart stays in your own database for the number of days you choose (what it held, its value, when the shopper left and whether it became an order, linked to the shopper's account when they were logged in), and the pages shoppers opened are kept as journeys, for the number of months you choose, under a random browser id, linked to the shopper's account for the visits they were logged in. Nothing of this leaves your site; WordPress's privacy tools can export and erase a customer's rows.
+**What stays on your site.** ShopSocket keeps no table of its own. While WordSocket's History is on (its Journeys tab), each visit WordSocket keeps carries the cart it was made with: what it held, its value and the order it became, in your own database, for the months set there, linked to the shopper's account when they were logged in. With it off, nothing is kept beyond the WooCommerce session, and the board, the counters and this week's figures have nothing to show.
 
 * [Terms of Service](https://wpsignal.io/terms)
 * [Privacy Policy](https://wpsignal.io/privacy)
@@ -126,7 +126,7 @@ Developers: `shopsocket_storefront`, `shopsocket_in_carts_enabled`, `shopsocket_
 
 = What does cart history keep? =
 
-Nothing beyond the session until you switch it on (ShopSocket tab, "Cart history"). On, it keeps each cart's products, value, when its shopper left and whether it became an order for the days you set, and the pages shoppers opened as anonymous journeys for the months you set. The board then lists recently abandoned carts. Everything stays in your own database.
+Nothing of its own: carts ride on WordSocket's journeys. Switch on History on WordSocket's Journeys tab and every visit is kept there with the cart it was made with (its products, value, when the shopper left and the order it became) for the months you set. The board then lists recently abandoned carts and this week's figures, the counters count the carts, and WordPress's privacy tools export and erase it all with the journeys.
 
 = Can it nudge a shopper? =
 
@@ -154,7 +154,7 @@ Anyone who can manage WooCommerce.
 * Faster pages on WordSocket 0.31: the shopper's cart state comes back in the visit report WordSocket already sends, so a page load makes one request instead of two; the cart-id route still serves cart changes and reconnects. A visitor without a cart makes none at all, since there is nothing to record for them yet.
 * New: on WordSocket 0.31, the Moments tab shows what each moment has done over your stored journeys, orders included, beside the builder.
 * New: the journeys of logged-in shoppers are linked to their account, so the Recently abandoned table and a staff alert name the customer with a link to their profile; WordPress's privacy tools export and erase those journeys with the carts. The `shopsocket_cart_left` hook tells other plugins when a cart is first left behind, with its items and its customer, so your email plugin can send the reminder.
-* Journeys are kept for 3 months by default (12 before; a saved setting is unchanged), and on WordSocket 0.31 moving between pages no longer counts as leaving, so "left" means the shopper really went.
+* Carts are WordSocket's journeys now: switch on History on its Journeys tab and every visit is kept there with the cart it was made with, so that tab's visuals show orders a day, carts left behind a day and where carted shoppers leave from, and the board's leak sentence links straight into them. ShopSocket keeps no table of its own any more: the cart tables, the days setting and its own privacy exporter are gone (the carts go out and away with WordSocket's journeys), the "in carts" counter counts the carts History keeps and so needs it on, and the shopper's cart reaches their journey through WordSocket's own visit report, one request a page.
 * New: the board opens with this week's figures when history is on: carts left behind and what they hold, orders recovered after a moment fired, checkout conversion, where shoppers with a cart leave from and how long they stay there first, and the products most often left behind.
 * With history on, an order is credited to the moments that fired for that cart in the past week, even when the shopper came back later in a new visit, and each firing records how far into its page it happened, whether the shopper came back to the tab, dismissed the prompt or clicked something inside it.
 * The History settings warn when your site has no persistent object cache, since with history on every page a shopper with a cart opens writes to the database; Redis or Memcached is recommended on a busy store.
@@ -164,7 +164,7 @@ Anyone who can manage WooCommerce.
 * New: the board lists recently abandoned carts, and says how many shoppers and carts are "away" (every tab hidden) rather than gone
 * New: a WooCommerce privacy exporter and eraser for the history, and the tables are removed on uninstall
 * Changed: cart rows live in tables of their own instead of a transient, so two shoppers adding at the same moment no longer overwrite each other
-* Requires WordSocket 0.30, whose visitor tracking carries the journeys
+* Requires WordSocket 0.30, whose visitor tracking carries the journeys (0.31 since ShopSocket 0.8, which keeps them)
 
 = 0.6.0 =
 * New: the board's Storefront Customers and Open Tabs figures say how many of them are your own staff
@@ -215,10 +215,10 @@ Anyone who can manage WooCommerce.
 == Upgrade Notice ==
 
 = 0.8.0 =
-Shopper moments need WordSocket 0.31; on 0.30 nothing changes. The one shipped moment is off until you switch it on.
+Needs WordSocket 0.31. ShopSocket's cart tables are dropped on update: carts now live on WordSocket's journeys, so switch on History on WordSocket's Journeys tab to keep carts, see the board's figures and count carts on product pages.
 
 = 0.7.0 =
-Needs WordSocket 0.30. Cart history is off by default; switch it on under the ShopSocket tab when you want carts and journeys kept.
+Needs WordSocket 0.31. Cart history is off by default; switch it on under the ShopSocket tab when you want carts kept, and WordSocket's History on its Journeys tab for the journeys.
 
 = 0.6.0 =
 The ShopSocket settings tab now needs WordSocket 0.29; the board and storefront are unaffected.

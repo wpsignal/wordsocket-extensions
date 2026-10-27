@@ -43,7 +43,7 @@ const FEATURE_FILTER = array(
  * Defaults: everything on, nothing excluded, which is what every site had
  * before the settings existed.
  *
- * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[], history_enabled: bool, history_retention_days: int, journeys_retention_months: int}
+ * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[]}
  */
 function settings_defaults(): array {
 	return array(
@@ -51,27 +51,7 @@ function settings_defaults(): array {
 		'activity_enabled'             => true,
 		'in_carts_excluded_categories' => array(),
 		'activity_excluded_categories' => array(),
-		// Cart history (0.7): off until the merchant opts in; nothing outlives the session before that.
-		'history_enabled'              => false,
-		'history_retention_days'       => 30,
-		'journeys_retention_months'    => 3,
 	);
-}
-
-/**
- * An integer setting clamped to its range, with the default for a missing value.
- *
- * @param mixed $value    Whatever was saved.
- * @param int   $fallback The default.
- * @param int   $min      Lowest allowed.
- * @param int   $max      Highest allowed.
- * @return int
- */
-function clamp_setting( $value, int $fallback, int $min, int $max ): int {
-	if ( ! is_numeric( $value ) ) {
-		return $fallback;
-	}
-	return max( $min, min( $max, (int) $value ) );
 }
 
 /**
@@ -95,7 +75,7 @@ function sanitize_term_ids( $value ): array {
  * Coerce whatever was saved into the option's shape.
  *
  * @param mixed $value The value being saved or read.
- * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[], history_enabled: bool, history_retention_days: int, journeys_retention_months: int}
+ * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[]}
  */
 function sanitize_settings( $value ): array {
 	$defaults = settings_defaults();
@@ -107,16 +87,13 @@ function sanitize_settings( $value ): array {
 		'activity_enabled'             => (bool) ( $value['activity_enabled'] ?? $defaults['activity_enabled'] ),
 		'in_carts_excluded_categories' => sanitize_term_ids( $value['in_carts_excluded_categories'] ?? $legacy ),
 		'activity_excluded_categories' => sanitize_term_ids( $value['activity_excluded_categories'] ?? $legacy ),
-		'history_enabled'              => (bool) ( $value['history_enabled'] ?? $defaults['history_enabled'] ),
-		'history_retention_days'       => clamp_setting( $value['history_retention_days'] ?? null, $defaults['history_retention_days'], 1, 365 ),
-		'journeys_retention_months'    => clamp_setting( $value['journeys_retention_months'] ?? null, $defaults['journeys_retention_months'], 1, 36 ),
 	);
 }
 
 /**
  * The saved settings, sanitized, with defaults for anything missing.
  *
- * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[], history_enabled: bool, history_retention_days: int, journeys_retention_months: int}
+ * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[]}
  */
 function settings(): array {
 	return sanitize_settings( get_option( SETTINGS_OPTION, array() ) );
@@ -147,17 +124,6 @@ add_action(
 							'activity_excluded_categories' => array(
 								'type'  => 'array',
 								'items' => array( 'type' => 'integer' ),
-							),
-							'history_enabled'              => array( 'type' => 'boolean' ),
-							'history_retention_days'       => array(
-								'type'    => 'integer',
-								'minimum' => 1,
-								'maximum' => 365,
-							),
-							'journeys_retention_months'    => array(
-								'type'    => 'integer',
-								'minimum' => 1,
-								'maximum' => 36,
 							),
 						),
 					),

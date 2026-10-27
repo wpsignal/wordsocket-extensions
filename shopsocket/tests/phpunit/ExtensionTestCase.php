@@ -15,6 +15,7 @@ abstract class ExtensionTestCase extends TestCase {
 		// The storefront settings: the site this suite runs on is also a demo
 		// store, and a switch left off there must not change what a test sees.
 		'shopsocket_storefront',
+		'wpsignal_history_enabled',
 	);
 
 	private const MISSING = '__missing__';
@@ -44,6 +45,7 @@ abstract class ExtensionTestCase extends TestCase {
 		update_option( 'wpsignal_site_secret', 'phpunitsecret' );
 		update_option( 'wpsignal_jwt_secret', 'phpunitjwt' );
 		delete_option( 'shopsocket_storefront' );
+		delete_option( 'wpsignal_history_enabled' );
 		unset( $_SERVER['HTTPS'] );
 		$this->published   = array();
 		$this->clear_carts();
@@ -126,63 +128,51 @@ abstract class ExtensionTestCase extends TestCase {
 		);
 	}
 
-	/** Remove all cart state (the three history tables and the publish hash) so each test starts from an empty store. */
+	/** Remove all cart state (WordSocket's journeys and the publish hash) so each test starts from an empty store. */
 	protected function clear_carts(): void {
 		global $wpdb;
-		foreach ( array( \WPSignal\Extensions\ShopSocket\journeys_table(), \WPSignal\Extensions\ShopSocket\cart_items_table(), \WPSignal\Extensions\ShopSocket\carts_table() ) as $table ) {
-			$wpdb->query( "DELETE FROM {$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		}
+		$wpdb->query( 'DELETE FROM ' . \WPSignal\Extensions\ShopSocket\journeys_table() ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		delete_transient( 'shopsocket_carts_pub' );
 		\WPSignal\Extensions\ShopSocket\invalidate_cart_caches();
 	}
 
-	/** Seed one cart row directly, bypassing the WooCommerce cart; one unit of each product unless `$quantities` says otherwise. */
-	protected function seed_cart( string $id, array $products, float $value, array $quantities = array() ): void {
+	/**
+	 * Seed one cart as a journey carrying it, bypassing the WooCommerce cart: open by default, or `left` / `converted` `$ended_ago` seconds ago; one unit of each product unless `$quantities` says otherwise. Returns the journey id.
+	 */
+	protected function seed_cart( string $id, array $products, float $value, array $quantities = array(), string $outcome = 'open', int $ended_ago = 0, int $user_id = 0, string $journey = 'home:1:1000>product:9001:2000' ): string {
 		global $wpdb;
-		$now = current_time( 'mysql', true );
-		$wpdb->replace(
-			\WPSignal\Extensions\ShopSocket\carts_table(),
-			array(
-				'cart_id'    => $id,
-				'currency'   => get_woocommerce_currency(),
-				'value'      => $value,
-				'first_seen' => $now,
-				'last_seen'  => $now,
-			)
-		);
-		$wpdb->delete( \WPSignal\Extensions\ShopSocket\cart_items_table(), array( 'cart_id' => $id ) );
+		$items = array();
 		foreach ( array_map( 'intval', $products ) as $product_id ) {
-			$wpdb->insert(
-				\WPSignal\Extensions\ShopSocket\cart_items_table(),
-				array(
-					'cart_id'    => $id,
-					'product_id' => $product_id,
-					'quantity'   => max( 1, (int) ( $quantities[ $product_id ] ?? 1 ) ),
-				)
-			);
+			$items[ (string) $product_id ] = max( 1, (int) ( $quantities[ $product_id ] ?? 1 ) );
 		}
-		\WPSignal\Extensions\ShopSocket\invalidate_cart_caches();
-	}
-
-	/** Switch cart history on or off for the rest of the test. */
-	protected function set_history( bool $enabled, int $days = 30, int $months = 12 ): void {
-		update_option(
-			'shopsocket_storefront',
-			array_merge(
-				\WPSignal\Extensions\ShopSocket\settings(),
-				array(
-					'history_enabled'           => $enabled,
-					'history_retention_days'    => $days,
-					'journeys_retention_months' => $months,
-				)
+		$at         = gmdate( 'Y-m-d H:i:s', time() - $ended_ago );
+		$journey_id = wp_generate_uuid4();
+		$wpdb->insert(
+			\WPSignal\Extensions\ShopSocket\journeys_table(),
+			array(
+				'journey_id' => $journey_id,
+				'visitor'    => '5eed0000-' . substr( md5( $id . $journey_id ), 0, 4 ) . '-4000-8000-' . substr( md5( $id ), 0, 12 ),
+				'user_id'    => $user_id > 0 ? $user_id : null,
+				'ref'        => $id,
+				'journey'    => $journey,
+				'steps'      => substr_count( $journey, '>' ) + 1,
+				'outcome'    => $outcome,
+				'value'      => $value,
+				'data'       => wp_json_encode( array( 'c' => get_woocommerce_currency(), 'i' => $items ) ),
+				'started_at' => $at,
+				'last_seen'  => $at,
+				'ended_at'   => 'open' === $outcome ? null : $at,
 			)
 		);
+		\WPSignal\Extensions\ShopSocket\invalidate_cart_caches();
+		return $journey_id;
 	}
 
-	/** One cart row as stored, or null. */
-	protected function stored_cart( string $id ): ?array {
-		return \WPSignal\Extensions\ShopSocket\cart_row( $id );
+	/** Switch WordSocket's journey history on or off for the rest of the test; it holds the carts. */
+	protected function set_history( bool $enabled ): void {
+		update_option( 'wpsignal_history_enabled', $enabled );
 	}
+
 
 	/** Every journey row, oldest first. */
 	protected function journeys(): array {

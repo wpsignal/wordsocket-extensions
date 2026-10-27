@@ -226,6 +226,7 @@ final class TriggersTest extends ExtensionTestCase {
 	}
 
 	public function test_adding_to_the_cart_publishes_anonymous_activity_once_per_throttle_window(): void {
+		$this->set_history( true );
 		$product = $this->make_product( 10 );
 		delete_transient( 'shopsocket_act_' . $product->get_id() );
 		WC()->cart->empty_cart();
@@ -280,6 +281,7 @@ final class TriggersTest extends ExtensionTestCase {
 	}
 
 	public function test_in_carts_counts_holders_and_removals_publish_the_new_count(): void {
+		$this->set_history( true );
 		$product = $this->make_product( 10 );
 		$id      = $product->get_id();
 		delete_transient( 'shopsocket_act_' . $id );

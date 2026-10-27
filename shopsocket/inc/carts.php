@@ -1,9 +1,9 @@
 <?php
 /**
- * Cart rows: what each shopper has in their cart, keyed by `cart_id()`, in the tables `inc/history.php` creates.
+ * Live carts: what each shopper has in their cart, read from WordSocket's open journeys by `cart_id()`.
  *
- * - Contents and lifecycle stamps only; the dashboard decides live or abandoned from presence.
- * - A row is written from the shopper's own request and, with history off, lasts their session.
+ * - Contents only; the dashboard decides live or abandoned from presence.
+ * - The journey row is written by WordSocket from the shopper's reports; the cart hooks here only publish.
  *
  * @package WPSignal\Extensions\ShopSocket
  */
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL, WordPress.DB.PreparedSQLPlaceholders -- The plugin's own tables: names come from the table functions, fragments from prepare(), one placeholder per id.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL, WordPress.DB.PreparedSQLPlaceholders -- WordSocket's journeys table: the name from its class, fragments from prepare(), one placeholder per id.
 
 /** The hash of the last `woo.carts` publish, so staff only hear about a change. */
 const CARTS_PUB_HASH = 'shopsocket_carts_pub';
@@ -76,92 +76,65 @@ function current_cart_state(): ?array {
 }
 
 /**
- * Upsert the requester's row from their cart, or drop it when the cart is empty.
+ * Every open cart for the dashboard, from each cart's newest journey within the session lifetime, unless that journey converted: `{ id, products, quantities, value, currency }`. The dashboard decides live or abandoned from presence.
  *
- * @param string $id      Cart id (see `cart_id()`).
- * @param bool   $restart Whether this is an add to cart, which starts a converted row over as a new cart.
- * @return void
- */
-function record_cart( string $id, bool $restart = false ): void {
-	if ( '' === $id ) {
-		return;
-	}
-	$state = current_cart_state();
-	if ( null === $state ) {
-		forget_cart( $id );
-		return;
-	}
-	upsert_cart_row( $id, $state, '', $restart );
-	publish_carts_changed();
-}
-
-/**
- * Forget the requester's cart (checkout or an emptied cart). With history on,
- * a converted row stays as the record of its order.
- *
- * @param string $id Cart id.
- * @return void
- */
-function forget_cart( string $id ): void {
-	if ( '' === $id ) {
-		return;
-	}
-	$row = cart_row( $id );
-	if ( null === $row ) {
-		return;
-	}
-	if ( history_enabled() && null !== $row['converted_at'] ) {
-		return;
-	}
-	if ( delete_cart_row( $id ) ) {
-		publish_carts_changed();
-	}
-}
-
-/**
- * Every open cart for the dashboard: `{ id, products, quantities, value, currency }`.
+ * @since 0.8.0 Read from WordSocket's journeys.
  *
  * @return array<int, array{id: string, products: int[], quantities: array<int, int>, value: float, currency: string}>
  */
 function cart_rows(): array {
 	global $wpdb;
 	$cutoff = gmdate( 'Y-m-d H:i:s', time() - cart_lifetime() );
-	$carts  = (array) $wpdb->get_results( $wpdb->prepare( 'SELECT cart_id, value, currency FROM ' . carts_table() . ' WHERE converted_at IS NULL AND last_seen >= %s ORDER BY last_seen DESC', $cutoff ), ARRAY_A );
-	$items  = cart_items( array_map( static fn( array $row ): string => (string) $row['cart_id'], $carts ) );
-	$rows   = array();
-	foreach ( $carts as $cart ) {
-		$id         = (string) $cart['cart_id'];
-		$quantities = $items[ $id ] ?? array();
-		if ( empty( $quantities ) ) {
+	$rows   = (array) $wpdb->get_results(
+		$wpdb->prepare(
+			'SELECT ref, value, data, outcome, last_seen FROM ' . journeys_table() . ' WHERE ref IS NOT NULL AND data IS NOT NULL AND last_seen >= %s ORDER BY last_seen DESC',
+			$cutoff
+		),
+		ARRAY_A
+	);
+	$by_ref = array();
+	foreach ( $rows as $row ) {
+		$by_ref[ (string) $row['ref'] ][] = $row;
+	}
+	$out = array();
+	foreach ( $by_ref as $id => $journeys ) {
+		$newest = $journeys[0];
+		// A cart that became an order is closed, however its leave and its order are ordered within the same second.
+		$converted = array_filter( $journeys, static fn( array $row ): bool => 'converted' === $row['outcome'] && $row['last_seen'] >= $newest['last_seen'] );
+		$quantities = items_of( $newest['data'] );
+		if ( empty( $quantities ) || ! empty( $converted ) || ( 'open' !== $newest['outcome'] && 'left' !== $newest['outcome'] ) ) {
 			continue;
 		}
-		$rows[] = array(
+		$row = $newest;
+		$out[ $id ] = array(
 			'id'         => $id,
 			'products'   => array_keys( $quantities ),
 			'quantities' => $quantities,
-			'value'      => round( (float) $cart['value'], 2 ),
-			'currency'   => (string) $cart['currency'],
+			'value'      => round( (float) ( $row['value'] ?? 0 ), 2 ),
+			'currency'   => (string) ( data_field( $row['data'], 'c' ) ?? get_woocommerce_currency() ),
 		);
 	}
-	return $rows;
+	return array_values( $out );
 }
 
 /**
- * Shoppers holding the product (any variation), present or not: WP has no view of presence.
+ * Shoppers holding the product (any variation) in an open cart, present or not, leaving out the cart named by `$exclude_ref` so a hook can count itself in or out before its own report lands.
  *
- * @param int $product_id Parent product ID.
+ * @since 0.8.0 Read from WordSocket's journeys; takes `$exclude_ref`.
+ *
+ * @param int    $product_id  Parent product ID.
+ * @param string $exclude_ref A cart id not to count, '' for none.
  * @return int
  */
-function count_in_carts( int $product_id ): int {
+function count_in_carts( int $product_id, string $exclude_ref = '' ): int {
 	global $wpdb;
 
 	/*
 	 * Cached for a minute under the write generation: a product page may ask for
-	 * several products, and every write to the tables starts a new generation,
-	 * so a count is never stale after a change and never older than a minute
-	 * otherwise (a session expiring is the only change that is not a write).
+	 * several products, and every cart change starts a new generation, so a count
+	 * is never stale after a change and never older than a minute otherwise.
 	 */
-	$key    = 'in_carts_' . cache_generation() . '_' . $product_id;
+	$key    = 'in_carts_' . cache_generation() . '_' . $product_id . '_' . $exclude_ref;
 	$cached = wp_cache_get( $key, CACHE_GROUP );
 	if ( false !== $cached ) {
 		return (int) $cached;
@@ -169,9 +142,10 @@ function count_in_carts( int $product_id ): int {
 	$cutoff = gmdate( 'Y-m-d H:i:s', time() - cart_lifetime() );
 	$count  = (int) $wpdb->get_var(
 		$wpdb->prepare(
-			'SELECT COUNT(*) FROM ' . cart_items_table() . ' i INNER JOIN ' . carts_table() . ' c ON c.cart_id = i.cart_id WHERE i.product_id = %d AND c.converted_at IS NULL AND c.last_seen >= %s',
-			$product_id,
-			$cutoff
+			'SELECT COUNT(DISTINCT ref) FROM ' . journeys_table() . " WHERE outcome IN ('open', 'left') AND ref IS NOT NULL AND last_seen >= %s AND data LIKE %s AND ref <> %s",
+			$cutoff,
+			'%' . $wpdb->esc_like( '"' . $product_id . '":' ) . '%',
+			$exclude_ref
 		)
 	);
 	wp_cache_set( $key, $count, CACHE_GROUP, MINUTE_IN_SECONDS );
@@ -206,21 +180,11 @@ function cart_item_parent_id( array $item ): int {
 	return (int) ( $item['product_id'] ?? 0 );
 }
 
-// An add in the shopper's own request: recapture their cart row, and a converted row starts over.
-add_action(
-	'woocommerce_add_to_cart',
-	static function (): void {
-		record_cart( cart_id(), true );
-	},
-	5
-);
-
-// A line removed: recapture the row, then tell product pages the new count.
+// A line removed: tell product pages the new count; the shopper's next report updates their row.
 add_action(
 	'woocommerce_cart_item_removed',
 	static function ( $cart_item_key, WC_Cart $cart ): void {
 		$item = $cart->removed_cart_contents[ $cart_item_key ] ?? null;
-		record_cart( cart_id() );
 		if ( is_array( $item ) ) {
 			publish_cart_removed( cart_item_parent_id( $item ), (int) ( $item['variation_id'] ?? 0 ) );
 		}
@@ -229,18 +193,9 @@ add_action(
 	2
 );
 
-// A quantity change: the row's value moves even when its product set does not.
-add_action(
-	'woocommerce_cart_item_set_quantity',
-	static function (): void {
-		record_cart( cart_id() );
-	},
-	20
-);
-
 /*
- * An emptied cart (checkout or clear): forget the cart first, so this shopper
- * is not counted, then tell each product page the new count.
+ * An emptied cart (checkout or clear): tell each product page the new count,
+ * this shopper counted out.
  */
 add_action(
 	'woocommerce_before_cart_emptied',
@@ -255,9 +210,8 @@ add_action(
 				$parents[ $parent ] = (int) ( $item['variation_id'] ?? 0 );
 			}
 		}
-		forget_cart( cart_id() );
 		foreach ( $parents as $parent => $variation_id ) {
-			publish_cart_removed( $parent, $variation_id );
+			publish_cart_removed( $parent, $variation_id, false );
 		}
 	}
 );
@@ -267,21 +221,26 @@ add_action(
  * the remover's anonymous cart id, so their own pages know the item left
  * their cart (the count alone cannot say whose cart changed).
  *
- * @param int $product_id   Parent product ID.
- * @param int $variation_id Variation that was in the cart, 0 for simple products.
+ * @since 0.8.0 Counts this cart from its real contents, since its row updates on the next report.
+ *
+ * @param int  $product_id   Parent product ID.
+ * @param int  $variation_id Variation that was in the cart, 0 for simple products.
+ * @param bool $self         Whether this cart may still hold the product (another variation or line); false for an emptied cart.
  * @return void
  */
-function publish_cart_removed( int $product_id, int $variation_id ): void {
+function publish_cart_removed( int $product_id, int $variation_id, bool $self = true ): void {
 	if ( ! $product_id || ! in_carts_enabled( $product_id ) ) {
 		return;
 	}
+	$state = $self ? current_cart_state() : null;
+	$held  = null !== $state && isset( $state['quantities'][ $product_id ] ) ? 1 : 0;
 	WPS::publish(
 		ACTIVITY_CHANNEL,
 		'woo.cart.removed',
 		array(
 			'product_id'   => $product_id,
 			'variation_id' => $variation_id,
-			'in_carts'     => count_in_carts( $product_id ),
+			'in_carts'     => count_in_carts( $product_id, cart_id() ) + $held,
 			'actor'        => cart_id(),
 		)
 	);

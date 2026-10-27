@@ -94,7 +94,7 @@ function order_statuses(): array {
 /**
  * Render the dashboard screen and enqueue its bundle.
  *
- * @since 0.8.0 Adds `historyUrl` to the board config.
+ * @since 0.8.0 Adds `journeysUrl` to the board config.
  *
  * @return void
  */
@@ -144,7 +144,7 @@ function render_dashboard(): void {
 				'dashboardUrl'   => rest_url( REST_NS . '/dashboard' ),
 				'productsUrl'    => rest_url( REST_NS . '/products' ),
 				'adminUrl'       => admin_url(),
-				'historyUrl'     => admin_url( 'admin.php?page=wordsocket&tab=shopsocket' ),
+				'journeysUrl'    => admin_url( 'admin.php?page=wordsocket&tab=journeys' ),
 				'nonce'          => wp_create_nonce( 'wp_rest' ),
 				'orders'         => board_orders(),
 				'statuses'       => order_statuses(),
@@ -271,9 +271,8 @@ function enqueue_settings_panel(): void {
 				'boardUrl'    => admin_url( 'admin.php?page=' . SLUG ),
 				'docsUrl'     => 'https://wpsignal.io/extensions/shopsocket',
 				'storefront'  => settings(),
-				'journeysUrl' => rest_url( REST_NS . '/journeys' ),
-				'currency'    => get_woocommerce_currency(),
 				'rulesUrl'    => admin_url( 'admin.php?page=wordsocket&tab=moments' ),
+				'journeysUrl' => admin_url( 'admin.php?page=wordsocket&tab=journeys' ),
 			),
 			JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
 		) . ';',

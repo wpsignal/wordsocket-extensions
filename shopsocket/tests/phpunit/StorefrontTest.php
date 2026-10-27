@@ -3,6 +3,7 @@
  * Storefront: stock and counter markup, the cart-id endpoint, the import guard.
  */
 
+use function WPSignal\Extensions\ShopSocket\cart_id;
 use function WPSignal\Extensions\ShopSocket\cart_rows;
 use function WPSignal\Extensions\ShopSocket\in_carts_html;
 use function WPSignal\Extensions\ShopSocket\journey_product;
@@ -134,26 +135,21 @@ final class StorefrontTest extends ExtensionTestCase {
 		}
 	}
 
-	public function test_cart_id_rebuilds_the_shoppers_row_from_their_cart(): void {
+	public function test_cart_id_answers_the_shoppers_state_and_writes_nothing(): void {
 		$product = $this->make_product( 5 );
 		WC()->cart->empty_cart();
 		WC()->cart->add_to_cart( $product->get_id(), 2 );
 		$this->clear_carts();
-		$this->assertSame( array(), cart_rows(), 'the row store was lost' );
-
 		try {
 			$_COOKIE['wp_woocommerce_session_phpunit'] = 'present';
 			wp_set_current_user( 0 );
 			$response = rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/cart-id' ) );
 			$this->assertSame( 200, $response->get_status() );
-			$rows = cart_rows();
-			$this->assertCount( 1, $rows, 'asking for the cart id wrote the row back' );
-			$this->assertSame( array( $product->get_id() ), $rows[0]['products'] );
-			$this->assertSame( array( $product->get_id() => 2 ), $rows[0]['quantities'] );
-			$this->assertSame( $rows[0]['id'], $response->get_data()['id'] );
-			$this->assertEquals( (object) array( $product->get_id() => 2 ), $response->get_data()['quantities'], 'the shopper learns how many they hold' );
-			// For the rules' cart context (0.8): the total, the currency, and the items by name.
+			$this->assertSame( array(), cart_rows(), 'the route writes nothing: the report does' );
 			$data = $response->get_data();
+			$this->assertSame( cart_id(), $data['id'] );
+			$this->assertEquals( (object) array( $product->get_id() => 2 ), $data['quantities'], 'the shopper learns how many they hold' );
+			// For the rules' cart context (0.8): the total, the currency, and the items by name.
 			$this->assertSame( 19.98, $data['total'] );
 			$this->assertSame( get_woocommerce_currency(), $data['currency'] );
 			$this->assertSame( array( 'id' => $product->get_id(), 'name' => 'PHPUnit Widget', 'qty' => 2, 'categories' => $data['items'][0]['categories'] ), $data['items'][0] );
@@ -164,6 +160,7 @@ final class StorefrontTest extends ExtensionTestCase {
 	}
 
 	public function test_the_live_stock_block_renders_the_availability_units_left_and_counter(): void {
+		$this->set_history( true );
 		$product = $this->make_product( 5 );
 		$this->seed_cart( 'a', array( $product->get_id() ), 5.0 );
 
@@ -230,6 +227,7 @@ final class StorefrontTest extends ExtensionTestCase {
 	}
 
 	public function test_the_visit_report_answers_with_the_shoppers_state_and_the_pages_live_count(): void {
+		$this->set_history( true );
 		$product = $this->make_product( 5 );
 		WC()->cart->empty_cart();
 		WC()->cart->add_to_cart( $product->get_id(), 2 );
@@ -250,7 +248,7 @@ final class StorefrontTest extends ExtensionTestCase {
 			$data = $response->get_data();
 			$this->assertTrue( $data['ok'] );
 			$mine = $data['shopsocket'];
-			$this->assertSame( cart_rows()[0]['id'], $mine['id'], 'the row was written back and the shopper learns its id' );
+			$this->assertSame( cart_rows()[0]['id'], $mine['id'], 'WordSocket wrote the journey with the cart on it and the shopper learns its id' );
 			$this->assertEquals( (object) array( $product->get_id() => 2 ), $mine['quantities'] );
 			$this->assertSame( 19.98, $mine['total'] );
 			$this->assertSame( 'PHPUnit Widget', $mine['items'][0]['name'] );

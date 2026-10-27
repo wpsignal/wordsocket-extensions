@@ -287,15 +287,15 @@ function storefront_page(): string {
 
 /**
  * Whether the in-cart counter is shown, for a product or for the site as a
- * whole. Settings, categories and the product's own choice are combined in
- * `feature_enabled()` (inc/settings.php); the `shopsocket_in_carts_enabled`
- * filter still runs last.
+ * whole. Needs WordSocket's History, which holds the carts; settings, categories
+ * and the product's own choice are combined in `feature_enabled()`
+ * (inc/settings.php); the `shopsocket_in_carts_enabled` filter still runs last.
  *
  * @param int $product_id Product or variation ID, 0 for the site-wide switch.
  * @return bool
  */
 function in_carts_enabled( int $product_id = 0 ): bool {
-	return feature_enabled( FEATURE_IN_CARTS, $product_id );
+	return history_enabled() && feature_enabled( FEATURE_IN_CARTS, $product_id );
 }
 
 /**
@@ -482,13 +482,6 @@ function viewer_state( int $product = 0 ): array {
 		wc_load_cart();
 	}
 
-	/*
-	 * The row store is a cache of live carts, so every load and every
-	 * reconnect writes this shopper's row back from the real cart: a
-	 * row lost to cache eviction or a cleared transient returns the
-	 * moment its shopper is on the site again.
-	 */
-	record_cart( cart_id() );
 	$state    = current_cart_state();
 	$response = array(
 		'id'         => cart_id(),

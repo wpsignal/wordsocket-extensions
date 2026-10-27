@@ -245,6 +245,8 @@ interface WPSPresenceTracker {
   journey(): string;
   /** Replace the plugin's fields; presence is announced again at once. */
   update(state: Record<string, unknown>): void;
+  /** Send the visit report again for the current journey (0.31), so a cart change reaches its row at once; `onVisit` handlers hear the answer. */
+  report?(): void;
   onChange(handler: (journey: string, journeyId: string) => void): () => void;
   /** What WordPress answered each visit report (0.31), the latest replayed to a late subscriber; null when none is coming. Absent on 0.30. */
   onVisit?(

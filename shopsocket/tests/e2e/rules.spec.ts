@@ -138,9 +138,9 @@ test.describe("Rules", () => {
     await page.getByRole("tab", { name: "ShopSocket" }).click();
     const tab = page.locator(".shopsocket-tab");
     const link = tab.getByRole("link", { name: "Moments tab" });
-    // The link sits in the History card, which may start collapsed.
+    // The link sits in the Cart history card, which may start collapsed.
     if ((await link.count()) === 0)
-      await tab.getByText("History", { exact: true }).click();
+      await tab.getByText("Cart history", { exact: true }).click();
     await expect(link).toHaveAttribute("href", /tab=moments$/);
     await expect(tab.getByText("Recovery", { exact: true })).toHaveCount(0);
   });

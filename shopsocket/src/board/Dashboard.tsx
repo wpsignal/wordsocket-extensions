@@ -25,7 +25,7 @@ const config: ShopSocketBoardConfig = window.shopSocket ?? {
   dashboardUrl: "",
   productsUrl: "",
   adminUrl: "",
-  historyUrl: "",
+  journeysUrl: "",
   nonce: "",
   orders: [],
   statuses: [],

@@ -1,27 +1,75 @@
 import { wp } from "./env";
 import { expect, test } from "@wordpress/e2e-test-utils-playwright";
-import { addToCart, clearCarts, createOrder, createProduct, deleteOrder, deleteProduct, num, visitorContext, waitForLive } from "./helpers";
+import {
+  addToCart,
+  clearCarts,
+  createOrder,
+  createProduct,
+  deleteOrder,
+  deleteProduct,
+  num,
+  visitorContext,
+  waitForLive,
+} from "./helpers";
 
 const PAGE = "page=shopsocket";
 
+/** WordSocket's History holds the carts (0.8), so the board has nothing to show without it. */
+const HISTORY = "wpsignal_history_enabled";
+let historyBefore = "";
+
 test.describe("ShopSocket dashboard", () => {
-  test("the extension has a card on WordSocket's Extensions tab", async ({ admin, page }) => {
+  test.beforeAll(() => {
+    try {
+      historyBefore = wp("option", "get", HISTORY);
+    } catch {
+      historyBefore = ""; // the option does not exist: a site on its defaults
+    }
+    wp("option", "update", HISTORY, "1");
+  });
+  test.afterAll(() => {
+    if (historyBefore) wp("option", "update", HISTORY, historyBefore);
+    else wp("option", "delete", HISTORY);
+  });
+  test("the extension has a card on WordSocket's Extensions tab", async ({
+    admin,
+    page,
+  }) => {
     await admin.visitAdminPage("admin.php", "page=wordsocket&tab=extensions");
-    const card = page.locator('.wpsignal-extension[data-extension="shopsocket"]');
+    const card = page.locator(
+      '.wpsignal-extension[data-extension="shopsocket"]',
+    );
     await expect(card).toBeVisible();
-    await expect(card.getByRole("heading", { name: "ShopSocket" })).toBeVisible();
-    await expect(card.getByRole("link", { name: "View ShopSocket" })).toHaveAttribute("href", /page=shopsocket$/);
+    await expect(
+      card.getByRole("heading", { name: "ShopSocket" }),
+    ).toBeVisible();
+    await expect(
+      card.getByRole("link", { name: "View ShopSocket" }),
+    ).toHaveAttribute("href", /page=shopsocket$/);
     // The site is connected to the rehearsal relay, so the card goes live.
-    await expect(card.locator(".shopsocket-settings__status")).toContainText("Live", { timeout: 20_000 });
+    await expect(card.locator(".shopsocket-settings__status")).toContainText(
+      "Live",
+      { timeout: 20_000 },
+    );
   });
 
-  test("live and abandoned follow the shopper's connection", async ({ admin, page, browser, baseURL, requestUtils }) => {
+  test("live and abandoned follow the shopper's connection", async ({
+    admin,
+    page,
+    browser,
+    baseURL,
+    requestUtils,
+  }) => {
     await admin.visitAdminPage("admin.php", PAGE);
-    await expect(page.getByRole("heading", { name: "ShopSocket", level: 1 })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "ShopSocket", level: 1 }),
+    ).toBeVisible();
     await waitForLive(page);
     await expect(page.locator(".shopsocket-conn")).toHaveText("Live");
 
-    const onlineTile = page.locator(".shopsocket-tile.is-connections .shopsocket-tile__value");
+    const onlineTile = page.locator(
+      ".shopsocket-tile.is-connections .shopsocket-tile__value",
+    );
     await expect(onlineTile).toHaveText(/^\d+$/);
     const rows = page.locator(".shopsocket-carts tbody tr");
     await expect(rows).toHaveCount(3);
@@ -48,18 +96,32 @@ test.describe("ShopSocket dashboard", () => {
       await addToCart(shop);
 
       // The cart is live, with its revenue, and nothing new is abandoned.
-      await expect.poll(num(liveShoppers), { timeout: 15_000 }).toBeGreaterThanOrEqual(live0 + 1);
-      await expect.poll(num(liveRevenue), { timeout: 10_000 }).toBeGreaterThan(revenue0);
-      await expect.poll(num(abandonedShoppers), { timeout: 5_000 }).toBe(abandoned0);
+      await expect
+        .poll(num(liveShoppers), { timeout: 15_000 })
+        .toBeGreaterThanOrEqual(live0 + 1);
+      await expect
+        .poll(num(liveRevenue), { timeout: 10_000 })
+        .toBeGreaterThan(revenue0);
+      await expect
+        .poll(num(abandonedShoppers), { timeout: 5_000 })
+        .toBe(abandoned0);
       const liveWithShopper = await num(liveShoppers)();
 
       /*
        * The product itself is listed under live products, linking to its edit
        * screen. Asserted by name: this test created it, nobody else holds it.
        */
-      const liveLink = page.locator(".shopsocket-live-products a", { hasText: "E2E Cart Widget" });
-      await expect(liveLink).toHaveAttribute("href", new RegExp(`post\\.php\\?post=${product.id}&action=edit$`), { timeout: 15_000 });
-      const liveCells = liveLink.locator("xpath=ancestor::tr[1]").locator(".shopsocket-live-products__count");
+      const liveLink = page.locator(".shopsocket-live-products a", {
+        hasText: "E2E Cart Widget",
+      });
+      await expect(liveLink).toHaveAttribute(
+        "href",
+        new RegExp(`post\\.php\\?post=${product.id}&action=edit$`),
+        { timeout: 15_000 },
+      );
+      const liveCells = liveLink
+        .locator("xpath=ancestor::tr[1]")
+        .locator(".shopsocket-live-products__count");
       await expect(liveCells).toHaveText(["1", "1"]);
 
       // A second unit of the same product: still one cart, two units.
@@ -82,7 +144,10 @@ test.describe("ShopSocket dashboard", () => {
       await shop.goto("/");
       await sampling;
       await waitForLive(shop);
-      expect(Math.min(...samples), `live shoppers dipped while browsing: ${samples.join(",")}`).toBeGreaterThanOrEqual(liveWithShopper);
+      expect(
+        Math.min(...samples),
+        `live shoppers dipped while browsing: ${samples.join(",")}`,
+      ).toBeGreaterThanOrEqual(liveWithShopper);
       await expect(liveLink).toBeVisible();
 
       /*
@@ -91,8 +156,12 @@ test.describe("ShopSocket dashboard", () => {
        * moves to abandoned. No beacon and no server-side timeout.
        */
       await shop.close();
-      await expect.poll(num(abandonedShoppers), { timeout: 20_000 }).toBeGreaterThanOrEqual(abandoned0 + 1);
-      await expect.poll(num(liveShoppers), { timeout: 20_000 }).toBeLessThanOrEqual(liveWithShopper - 1);
+      await expect
+        .poll(num(abandonedShoppers), { timeout: 20_000 })
+        .toBeGreaterThanOrEqual(abandoned0 + 1);
+      await expect
+        .poll(num(liveShoppers), { timeout: 20_000 })
+        .toBeLessThanOrEqual(liveWithShopper - 1);
       await expect(liveLink).toHaveCount(0, { timeout: 20_000 });
 
       /*
@@ -102,8 +171,12 @@ test.describe("ShopSocket dashboard", () => {
       const reopened = await visitor.newPage();
       await reopened.goto(product.permalink);
       await waitForLive(reopened);
-      await expect.poll(num(liveShoppers), { timeout: 10_000 }).toBeGreaterThanOrEqual(liveWithShopper);
-      await expect.poll(num(abandonedShoppers), { timeout: 10_000 }).toBe(abandoned0);
+      await expect
+        .poll(num(liveShoppers), { timeout: 10_000 })
+        .toBeGreaterThanOrEqual(liveWithShopper);
+      await expect
+        .poll(num(abandonedShoppers), { timeout: 10_000 })
+        .toBe(abandoned0);
       await expect(liveLink).toBeVisible({ timeout: 10_000 });
 
       /*
@@ -112,7 +185,9 @@ test.describe("ShopSocket dashboard", () => {
        */
       clearCarts(product.id);
       // The board re-reads its rows when the tab comes back into view; no need to wait for its poll.
-      await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+      await page.evaluate(() =>
+        document.dispatchEvent(new Event("visibilitychange")),
+      );
       await expect(liveLink).toHaveCount(0, { timeout: 10_000 });
       await reopened.reload();
       await waitForLive(reopened);
@@ -124,7 +199,11 @@ test.describe("ShopSocket dashboard", () => {
     }
   });
 
-  test("a logged-in shopper's own cart shows live, not abandoned", async ({ admin, page, requestUtils }) => {
+  test("a logged-in shopper's own cart shows live, not abandoned", async ({
+    admin,
+    page,
+    requestUtils,
+  }) => {
     const product = await createProduct(requestUtils, "E2E LoggedIn Cart", 20);
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
@@ -142,8 +221,12 @@ test.describe("ShopSocket dashboard", () => {
       await addToCart(shop);
 
       // The logged-in shopper's own cart is live, and nothing new is abandoned.
-      await expect.poll(num(liveShoppers), { timeout: 15_000 }).toBeGreaterThanOrEqual(live0 + 1);
-      await expect.poll(num(abandonedShoppers), { timeout: 5_000 }).toBe(abandoned0);
+      await expect
+        .poll(num(liveShoppers), { timeout: 15_000 })
+        .toBeGreaterThanOrEqual(live0 + 1);
+      await expect
+        .poll(num(abandonedShoppers), { timeout: 5_000 })
+        .toBe(abandoned0);
     } finally {
       await shop.close();
       clearCarts(product.id);
@@ -151,11 +234,18 @@ test.describe("ShopSocket dashboard", () => {
     }
   });
 
-  test("users online counts distinct visitors and dedupes a shopper's tabs", async ({ admin, page, browser, baseURL }) => {
+  test("users online counts distinct visitors and dedupes a shopper's tabs", async ({
+    admin,
+    page,
+    browser,
+    baseURL,
+  }) => {
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
 
-    const usersTile = page.locator(".shopsocket-tile.is-users .shopsocket-tile__value");
+    const usersTile = page.locator(
+      ".shopsocket-tile.is-users .shopsocket-tile__value",
+    );
     // The users-online tile as a number, as a poll callback.
     const users = async () => Number((await usersTile.textContent()) || 0);
     const users0 = await users();
@@ -174,7 +264,9 @@ test.describe("ShopSocket dashboard", () => {
       await tab2.goto("/shop/");
       await waitForLive(tab2);
       await page.waitForTimeout(2500);
-      expect(await users(), "a shopper's second tab is not a new user").toBe(withShopper);
+      expect(await users(), "a shopper's second tab is not a new user").toBe(
+        withShopper,
+      );
 
       // A different browser is a different visitor id: one more user.
       const other = await visitorContext(browser, baseURL);
@@ -192,25 +284,44 @@ test.describe("ShopSocket dashboard", () => {
     }
   });
 
-  test("a new order lands on the board and status changes update it in place", async ({ admin, page, requestUtils }) => {
+  test("a new order lands on the board and status changes update it in place", async ({
+    admin,
+    page,
+    requestUtils,
+  }) => {
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
 
     const product = await createProduct(requestUtils, "E2E Board Widget", 10);
     const order = await createOrder(requestUtils, product.id, 2);
     try {
-      const row = page.getByRole("row").filter({ has: page.locator(`[data-order-id="${order.id}"]`) });
+      const row = page
+        .getByRole("row")
+        .filter({ has: page.locator(`[data-order-id="${order.id}"]`) });
       await expect(row).toBeVisible({ timeout: 15_000 });
       await expect(row).toContainText("Grace H.");
       await expect(row.locator(".shopsocket-status")).toHaveText("Processing");
-      await expect(page.locator("[data-order-id]").first()).toHaveAttribute("data-order-id", String(order.id));
+      await expect(page.locator("[data-order-id]").first()).toHaveAttribute(
+        "data-order-id",
+        String(order.id),
+      );
 
-      await requestUtils.rest({ method: "PUT", path: `/wc/v3/orders/${order.id}`, data: { status: "completed" } });
-      await expect(row.locator(".shopsocket-status")).toHaveText("Completed", { timeout: 15_000 });
+      await requestUtils.rest({
+        method: "PUT",
+        path: `/wc/v3/orders/${order.id}`,
+        data: { status: "completed" },
+      });
+      await expect(row.locator(".shopsocket-status")).toHaveText("Completed", {
+        timeout: 15_000,
+      });
 
       // DataViews: the search box narrows the board to the customer.
-      await page.getByRole("searchbox", { name: "Search orders" }).fill("Grace");
-      await expect(page.getByRole("row").filter({ has: page.locator("[data-order-id]") })).toHaveCount(1);
+      await page
+        .getByRole("searchbox", { name: "Search orders" })
+        .fill("Grace");
+      await expect(
+        page.getByRole("row").filter({ has: page.locator("[data-order-id]") }),
+      ).toHaveCount(1);
     } finally {
       await deleteOrder(requestUtils, order.id);
       await deleteProduct(requestUtils, product.id);
@@ -225,7 +336,11 @@ test.describe("ShopSocket dashboard", () => {
    * refreshes are cut off while the order is placed, which is the same silence
    * from where the board sits; then the refreshes are let through again.
    */
-  test("an order the board never heard about appears on its next refresh", async ({ admin, page, requestUtils }) => {
+  test("an order the board never heard about appears on its next refresh", async ({
+    admin,
+    page,
+    requestUtils,
+  }) => {
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
 
@@ -250,27 +365,40 @@ test.describe("ShopSocket dashboard", () => {
       );
       expect(orderId).toBeGreaterThan(0);
 
-      const row = page.getByRole("row").filter({ has: page.locator(`[data-order-id="${orderId}"]`) });
+      const row = page
+        .getByRole("row")
+        .filter({ has: page.locator(`[data-order-id="${orderId}"]`) });
       // No event reached the board and it cannot refresh, so nothing shows.
-      await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+      await page.evaluate(() =>
+        document.dispatchEvent(new Event("visibilitychange")),
+      );
       await page.waitForTimeout(3_000);
       await expect(row).toHaveCount(0);
 
       // Back in touch: coming back to the tab refreshes at once, as a reconnect and the 30 second poll do.
       await page.unroute(refreshes);
-      await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+      await page.evaluate(() =>
+        document.dispatchEvent(new Event("visibilitychange")),
+      );
       await expect(row).toBeVisible({ timeout: 15_000 });
       await expect(row).toContainText("Missed O.");
       await expect(row.locator(".shopsocket-status")).toHaveText("Processing");
-      await expect(page.locator("[data-order-id]").first()).toHaveAttribute("data-order-id", String(orderId));
+      await expect(page.locator("[data-order-id]").first()).toHaveAttribute(
+        "data-order-id",
+        String(orderId),
+      );
 
       // A status change the board also never heard is picked up the same way, in place.
       wp(
         "eval",
         `add_filter( 'pre_http_request', static fn() => new WP_Error( 'offline', 'relay unreachable' ) ); wc_get_order( ${orderId} )->update_status( 'completed' );`,
       );
-      await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-      await expect(row.locator(".shopsocket-status")).toHaveText("Completed", { timeout: 15_000 });
+      await page.evaluate(() =>
+        document.dispatchEvent(new Event("visibilitychange")),
+      );
+      await expect(row.locator(".shopsocket-status")).toHaveText("Completed", {
+        timeout: 15_000,
+      });
       await expect(page.locator(`[data-order-id="${orderId}"]`)).toHaveCount(1);
     } finally {
       await page.unroute(refreshes).catch(() => {});
@@ -279,17 +407,32 @@ test.describe("ShopSocket dashboard", () => {
     }
   });
 
-  test("selling out a product raises the stock strip", async ({ admin, page, requestUtils }) => {
+  test("selling out a product raises the stock strip", async ({
+    admin,
+    page,
+    requestUtils,
+  }) => {
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
-    const product = await createProduct(requestUtils, "E2E Scarce Widget", 2, 2);
+    const product = await createProduct(
+      requestUtils,
+      "E2E Scarce Widget",
+      2,
+      2,
+    );
     const order = await createOrder(requestUtils, product.id, 2);
     try {
       const strip = page.locator(".shopsocket-board__stock");
-      await expect(strip).toContainText("E2E Scarce Widget is out of stock", { timeout: 15_000 });
+      await expect(strip).toContainText("E2E Scarce Widget is out of stock", {
+        timeout: 15_000,
+      });
 
       // A restock clears it: stock changes are public events staff also receive.
-      await requestUtils.rest({ method: "PUT", path: `/wc/v3/products/${product.id}`, data: { stock_quantity: 5 } });
+      await requestUtils.rest({
+        method: "PUT",
+        path: `/wc/v3/products/${product.id}`,
+        data: { stock_quantity: 5 },
+      });
       await expect(strip).toHaveCount(0, { timeout: 15_000 });
     } finally {
       await deleteOrder(requestUtils, order.id);
@@ -298,21 +441,15 @@ test.describe("ShopSocket dashboard", () => {
   });
 
   // Cart history (0.7): the Away column, the abandoned panel, and the order on a row.
-  test("a hidden tab moves the cart to the Away column, a closed tab lands in the abandoned panel, and an order shows on its row", async ({ admin, page, browser, baseURL, requestUtils }) => {
+  test("a hidden tab moves the cart to the Away column, a closed tab lands in the abandoned panel, and an order shows on its row", async ({
+    admin,
+    page,
+    browser,
+    baseURL,
+    requestUtils,
+  }) => {
     // Three waits of up to the grace plus a checkout: well past the default 30 s.
     test.setTimeout(120_000);
-    /*
-     * History on: with it off, WooCommerce emptying the cart at checkout deletes
-     * the row (what earlier versions did), so a left cart could never show its order.
-     */
-    const option = "shopsocket_storefront";
-    let before = "";
-    try {
-      before = wp("option", "get", option, "--format=json");
-    } catch {
-      before = ""; // the option does not exist: a site on its defaults
-    }
-    wp("option", "update", option, JSON.stringify({ history_enabled: true }), "--format=json");
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
     const rows = page.locator(".shopsocket-carts tbody tr");
@@ -330,20 +467,38 @@ test.describe("ShopSocket dashboard", () => {
       await shop.goto(product.permalink);
       await waitForLive(shop);
       await addToCart(shop);
-      await expect(page.locator(".shopsocket-live-products a", { hasText: "E2E History Widget" })).toBeVisible({ timeout: 15_000 });
+      await expect(
+        page.locator(".shopsocket-live-products a", {
+          hasText: "E2E History Widget",
+        }),
+      ).toBeVisible({ timeout: 15_000 });
 
       // Hidden: the journey's last step is `away`, and the cart moves from the Live column to Away.
       const liveWithShopper = await num(liveShoppers)();
       await shop.evaluate(() => {
-        Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
-        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+        Object.defineProperty(document, "hidden", {
+          configurable: true,
+          get: () => true,
+        });
+        Object.defineProperty(document, "visibilityState", {
+          configurable: true,
+          get: () => "hidden",
+        });
         document.dispatchEvent(new Event("visibilitychange"));
       });
       await expect.poll(num(awayShoppers), { timeout: 15_000 }).toBe(away0 + 1);
-      await expect.poll(num(liveShoppers), { timeout: 15_000 }).toBe(liveWithShopper - 1);
+      await expect
+        .poll(num(liveShoppers), { timeout: 15_000 })
+        .toBe(liveWithShopper - 1);
       await shop.evaluate(() => {
-        Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
-        Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+        Object.defineProperty(document, "hidden", {
+          configurable: true,
+          get: () => false,
+        });
+        Object.defineProperty(document, "visibilityState", {
+          configurable: true,
+          get: () => "visible",
+        });
         document.dispatchEvent(new Event("visibilitychange"));
       });
       await expect.poll(num(awayShoppers), { timeout: 15_000 }).toBe(away0);
@@ -351,32 +506,44 @@ test.describe("ShopSocket dashboard", () => {
       // Closed: the leave stamps the row, and after the grace the panel lists the cart.
       await shop.close();
       await expect(row).toBeVisible({ timeout: 45_000 });
-      // The cells after the product column: value, when they left, the order (none yet).
+      // The cells after the product column: the shopper, the value, when they left, the order (none yet).
       await expect(row.locator("td").nth(1)).not.toBeEmpty();
-      await expect(row.locator("td").nth(2)).toBeEmpty();
+      await expect(row.locator("td").nth(3)).toBeEmpty();
 
       // The shopper comes back and checks out: the row shows the order.
       const back = await visitor.newPage();
       await back.goto("/checkout/");
-      await back.getByLabel(/first name/i).first().fill("Grace");
-      await back.getByLabel(/last name/i).first().fill("Hopper");
-      await back.getByLabel(/^address$/i).first().fill("1 Main St");
+      await back
+        .getByLabel(/first name/i)
+        .first()
+        .fill("Grace");
+      await back
+        .getByLabel(/last name/i)
+        .first()
+        .fill("Hopper");
+      await back
+        .getByLabel(/^address$/i)
+        .first()
+        .fill("1 Main St");
       await back.getByLabel(/city/i).first().fill("Arlington");
-      await back.getByLabel(/postcode|zip/i).first().fill("22201");
+      await back
+        .getByLabel(/postcode|zip/i)
+        .first()
+        .fill("22201");
       await back.getByLabel(/email/i).first().fill("grace@example.com");
       await back.getByRole("button", { name: /place order/i }).click();
       await expect(back).toHaveURL(/order-received/, { timeout: 30_000 });
       orderId = Number(back.url().match(/order-received\/(\d+)/)?.[1] ?? 0);
       await back.close();
-      await expect(row.locator("td").nth(2).locator("a")).toHaveText(/^#\d+/, { timeout: 45_000 });
+      await expect(row.locator("td").nth(3).locator("a")).toHaveText(/^#\d+/, {
+        timeout: 45_000,
+      });
     } finally {
       await visitor.close();
       clearCarts(product.id);
       // The order too, or the next run's "Grace" search finds more than one.
       if (orderId) await deleteOrder(requestUtils, orderId);
       await deleteProduct(requestUtils, product.id);
-      if (before) wp("option", "update", option, before, "--format=json");
-      else wp("option", "delete", option);
     }
   });
 });
