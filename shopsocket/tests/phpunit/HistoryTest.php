@@ -40,7 +40,13 @@ final class HistoryTest extends ExtensionTestCase {
 
 	/** An existing administrator's id, the user every logged-in case runs as. */
 	private function admin_id(): int {
-		$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
+		$admins = get_users(
+			array(
+				'role'   => 'administrator',
+				'number' => 1,
+				'fields' => 'ID',
+			)
+		);
 		return (int) $admins[0];
 	}
 
@@ -97,7 +103,18 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertSame( 1, count_in_carts( 9001, 'eeee000000000001' ), 'a cart named is left out' );
 		$this->assertSame( 0, count_in_carts( 9009 ), 'counted once, then cached' );
 		// A write behind the plugin's back is invisible until a write through it bumps the generation.
-		$wpdb->update( journeys_table(), array( 'data' => wp_json_encode( array( 'c' => 'USD', 'i' => array( '9009' => 1 ) ) ) ), array( 'ref' => 'eeee000000000001' ) );
+		$wpdb->update(
+			journeys_table(),
+			array(
+				'data' => wp_json_encode(
+					array(
+						'c' => 'USD',
+						'i' => array( '9009' => 1 ),
+					)
+				),
+			),
+			array( 'ref' => 'eeee000000000001' )
+		);
 		$this->assertSame( 0, count_in_carts( 9009 ), 'served from the cache' );
 		\WPSignal\Extensions\ShopSocket\invalidate_cart_caches();
 		$this->assertSame( 1, count_in_carts( 9009 ) );
@@ -120,7 +137,14 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertSame( self::JOURNEY, $row['journey_id'] );
 		$this->assertSame( $id, $row['ref'], 'the cart rides on WordSocket\'s row as its ref' );
 		$this->assertSame( 19.98, (float) $row['value'] );
-		$this->assertSame( array( 'c' => get_woocommerce_currency(), 'i' => array( (string) $product->get_id() => 2 ) ), $this->data_of( $row ), 'its items and currency as data' );
+		$this->assertSame(
+			array(
+				'c' => get_woocommerce_currency(),
+				'i' => array( (string) $product->get_id() => 2 ),
+			),
+			$this->data_of( $row ),
+			'its items and currency as data'
+		);
 		$rows = cart_rows();
 		$this->assertCount( 1, $rows );
 		$this->assertSame( $id, $rows[0]['id'] );
@@ -246,7 +270,7 @@ final class HistoryTest extends ExtensionTestCase {
 		// Both checkouts hand their order to the same listener.
 		$this->assertNotFalse( has_action( 'woocommerce_checkout_order_created', 'WPSignal\Extensions\ShopSocket\on_order_created' ) );
 		$this->assertNotFalse( has_action( 'woocommerce_store_api_checkout_order_processed', 'WPSignal\Extensions\ShopSocket\on_order_created' ) );
-		$order = $this->make_order( $product );
+		$order           = $this->make_order( $product );
 		$this->published = array();
 		on_order_created( $order );
 		$by_id = array_column( $this->journeys(), null, 'journey_id' );
@@ -359,27 +383,150 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->seed_cart( 'aaaa000000000004', array( 9001 ), 50.0, array(), 'converted', 0, 0, 'cart:0:1000>checkout:0:20000>thanks:0:1' );
 		$this->seed_cart( 'aaaa000000000005', array( 9002 ), 10.0, array(), 'left', 10 * DAY_IN_SECONDS );
 		foreach ( array( array( 'af405b6c-7d8e-4f90-b1a2-3d4e5f607182', $now ), array( 'c1627d8e-9f00-4b12-d3c4-5f6071829304', $early ) ) as list( $jid, $started ) ) {
-			$wpdb->insert( journeys_table(), array( 'journey_id' => $jid, 'visitor' => self::VISITOR, 'journey' => 'cart:0:1000>checkout:0:20000', 'steps' => 2, 'outcome' => 'left', 'started_at' => $started, 'last_seen' => $started, 'ended_at' => $started ) );
+			$wpdb->insert(
+				journeys_table(),
+				array(
+					'journey_id' => $jid,
+					'visitor'    => self::VISITOR,
+					'journey'    => 'cart:0:1000>checkout:0:20000',
+					'steps'      => 2,
+					'outcome'    => 'left',
+					'started_at' => $started,
+					'last_seen'  => $started,
+					'ended_at'   => $started,
+				)
+			);
 		}
 		// One moment credited with this week's order, another with an order from last week.
 		$wpdb->update(
 			journeys_table(),
-			array( 'firings' => wp_json_encode( array( array( 'rule' => 'r1', 'action' => 'show', 'step' => 0, 'ms' => 1, 'at' => $now, 'order' => 77, 'order_at' => $now, 'value' => 50.0 ), array( 'rule' => 'r1', 'action' => 'show', 'step' => 0, 'ms' => 1, 'at' => $early, 'order' => 66, 'order_at' => $early, 'value' => 20.0 ) ) ) ),
+			array(
+				'firings' => wp_json_encode(
+					array(
+						array(
+							'rule'     => 'r1',
+							'action'   => 'show',
+							'step'     => 0,
+							'ms'       => 1,
+							'at'       => $now,
+							'order'    => 77,
+							'order_at' => $now,
+							'value'    => 50.0,
+						),
+						array(
+							'rule'     => 'r1',
+							'action'   => 'show',
+							'step'     => 0,
+							'ms'       => 1,
+							'at'       => $early,
+							'order'    => 66,
+							'order_at' => $early,
+							'value'    => 20.0,
+						),
+					)
+				),
+			),
 			array( 'ref' => 'aaaa000000000001' )
 		);
 		wp_cache_delete( 'week_strip', 'shopsocket' );
 		$strip = week_strip();
 		$this->assertTrue( $strip['journeys'] );
-		$this->assertSame( array( 'count' => 3, 'value' => 30.0, 'currency' => get_woocommerce_currency(), 'previous' => 1 ), $strip['left'] );
-		$this->assertSame( array( 'count' => 1, 'value' => 50.0, 'previous' => 1 ), $strip['recovered'] );
-		$this->assertSame( array( 'reached' => 2, 'orders' => 1, 'percent' => 50, 'previous_percent' => 0 ), $strip['conversion'] );
-		$this->assertSame( array( 'kind' => 'cart', 'count' => 2, 'leavers' => 3, 'median_ms' => 39000 ), $strip['leak'], 'the last step that is not away, median of the two cart leavers' );
-		$this->assertSame( array( array( 'id' => 9001, 'left' => 2, 'bought' => 1 ), array( 'id' => 9002, 'left' => 1, 'bought' => 0 ), array( 'id' => 9003, 'left' => 1, 'bought' => 0 ) ), $strip['products'] );
+		$this->assertCount( 14, $strip['trend_days'] );
+		$this->assertSame( gmdate( 'Y-m-d' ), $strip['trend_days'][13], 'UTC days, today last' );
+		// Fourteen days, oldest first: ten days ago is the fourth, today the last.
+		$series = static fn( int $early, int $today ): array => array_replace(
+			array_fill( 0, 14, 0 ),
+			array(
+				3  => $early,
+				13 => $today,
+			)
+		);
+		$this->assertSame(
+			array(
+				'count'    => 3,
+				'value'    => 30.0,
+				'currency' => get_woocommerce_currency(),
+				'previous' => 1,
+				'days'     => $series( 1, 3 ),
+			),
+			$strip['left']
+		);
+		$this->assertSame(
+			array(
+				'count'    => 1,
+				'value'    => 50.0,
+				'previous' => 1,
+				'days'     => $series( 1, 1 ),
+			),
+			$strip['recovered']
+		);
+		$this->assertSame(
+			array(
+				'reached'          => 2,
+				'orders'           => 1,
+				'percent'          => 50,
+				'previous_percent' => 0,
+				'days'             => $series( 0, 50 ),
+			),
+			$strip['conversion']
+		);
+		$this->assertSame(
+			array(
+				'kind'      => 'cart',
+				'count'     => 2,
+				'leavers'   => 3,
+				'median_ms' => 39000,
+			),
+			$strip['leak'],
+			'the last step that is not away, median of the two cart leavers'
+		);
+		$this->assertSame(
+			array(
+				array(
+					'id'     => 9001,
+					'left'   => 2,
+					'bought' => 1,
+				),
+				array(
+					'id'     => 9002,
+					'left'   => 1,
+					'bought' => 0,
+				),
+				array(
+					'id'     => 9003,
+					'left'   => 1,
+					'bought' => 0,
+				),
+			),
+			$strip['products']
+		);
 		$this->assertSame( $strip, week_strip(), 'served from the cache' );
 	}
 
 	public function test_woocommerce_pages_are_named_as_journey_steps(): void {
-		$this->assertSame( array( 'kind' => 'category', 'id' => 26 ), page_step( array( 'kind' => 'product_cat', 'id' => 26 ) ) );
-		$this->assertSame( array( 'kind' => 'product', 'id' => 9 ), page_step( array( 'kind' => 'product', 'id' => 9 ) ) );
+		$this->assertSame(
+			array(
+				'kind' => 'category',
+				'id'   => 26,
+			),
+			page_step(
+				array(
+					'kind' => 'product_cat',
+					'id'   => 26,
+				)
+			)
+		);
+		$this->assertSame(
+			array(
+				'kind' => 'product',
+				'id'   => 9,
+			),
+			page_step(
+				array(
+					'kind' => 'product',
+					'id'   => 9,
+				)
+			)
+		);
 	}
 }

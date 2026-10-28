@@ -2,7 +2,7 @@
 /**
  * The board's "This week" strip, read from WordSocket's journeys and the carts they carry.
  *
- * - Carts left behind, recovered orders and checkout conversion over the last seven days, each against the seven before.
+ * - Carts left behind, recovered orders and checkout conversion over the last seven days, each against the seven before and as a day-by-day series over both weeks.
  * - The page kind most leavers left from, and their median time there.
  * - The products most often left in a cart, with how many carts bought them.
  *
@@ -25,6 +25,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @since 0.8.0
  */
 const STRIP_DAYS = 7;
+
+/**
+ * Days each figure's series covers: this week and the one before.
+ *
+ * @since 0.8.0
+ */
+const STRIP_TREND_DAYS = 2 * STRIP_DAYS;
 
 /**
  * Products the strip lists.
@@ -64,13 +71,15 @@ function week_strip(): ?array {
 	}
 	$now   = time();
 	$since = gmdate( 'Y-m-d H:i:s', $now - STRIP_DAYS * DAY_IN_SECONDS );
-	$prev  = gmdate( 'Y-m-d H:i:s', $now - 2 * STRIP_DAYS * DAY_IN_SECONDS );
+	$prev  = gmdate( 'Y-m-d H:i:s', $now - STRIP_TREND_DAYS * DAY_IN_SECONDS );
+	$dates = strip_dates( $now );
 	$strip = array(
 		'since'      => datetime_to_rfc3339( $since ),
 		'journeys'   => journeys_available() && WPS::journeys()->enabled(),
-		'left'       => carts_left( $since, $prev ),
-		'recovered'  => recovered_orders( $since, $prev ),
-		'conversion' => checkout_conversion( $since, $prev ),
+		'trend_days' => $dates,
+		'left'       => carts_left( $since, $prev, $dates ),
+		'recovered'  => recovered_orders( $since, $prev, $dates ),
+		'conversion' => checkout_conversion( $since, $prev, $dates ),
 		'leak'       => leak( $since ),
 		'products'   => products_left( $since ),
 	);
@@ -83,18 +92,22 @@ function week_strip(): ?array {
  *
  * @since 0.8.0 Read from WordSocket's journeys.
  *
- * @param string $since Start of this week, SQL UTC.
- * @param string $prev  Start of last week, SQL UTC.
- * @return array{count: int, value: float, currency: string, previous: int}
+ * @param string   $since Start of this week, SQL UTC.
+ * @param string   $prev  Start of last week, SQL UTC.
+ * @param string[] $dates The series' UTC days, oldest first.
+ * @return array{count: int, value: float, currency: string, previous: int, days: int[]}
  */
-function carts_left( string $since, string $prev ): array {
+function carts_left( string $since, string $prev, array $dates ): array {
 	$count    = 0;
 	$value    = 0.0;
 	$previous = 0;
+	$by_day   = array();
 	foreach ( cart_journeys_since( $prev ) as $cart ) {
 		if ( 'left' !== $cart['outcome'] || empty( $cart['items'] ) ) {
 			continue;
 		}
+		$day            = substr( $cart['ended_at'], 0, 10 );
+		$by_day[ $day ] = ( $by_day[ $day ] ?? 0 ) + 1;
 		if ( $cart['ended_at'] >= $since ) {
 			++$count;
 			$value += $cart['value'];
@@ -107,7 +120,37 @@ function carts_left( string $since, string $prev ): array {
 		'value'    => round( $value, 2 ),
 		'currency' => get_woocommerce_currency(),
 		'previous' => $previous,
+		'days'     => day_series( $by_day, $dates ),
 	);
+}
+
+/**
+ * The last STRIP_TREND_DAYS UTC days as `Y-m-d`, oldest first, today last.
+ *
+ * @since 0.8.0
+ *
+ * @param int $now Unix time.
+ * @return string[]
+ */
+function strip_dates( int $now ): array {
+	$dates = array();
+	for ( $d = STRIP_TREND_DAYS - 1; $d >= 0; $d-- ) {
+		$dates[] = gmdate( 'Y-m-d', $now - $d * DAY_IN_SECONDS );
+	}
+	return $dates;
+}
+
+/**
+ * Counts keyed by `Y-m-d` as one value per day of `$dates`.
+ *
+ * @since 0.8.0
+ *
+ * @param array<string, int> $by_day Count per day.
+ * @param string[]           $dates  The days, oldest first.
+ * @return int[]
+ */
+function day_series( array $by_day, array $dates ): array {
+	return array_map( static fn( string $day ): int => (int) ( $by_day[ $day ] ?? 0 ), $dates );
 }
 
 /**
@@ -115,15 +158,19 @@ function carts_left( string $since, string $prev ): array {
  *
  * @since 0.8.0
  *
- * @param string $since Start of this week, SQL UTC.
- * @param string $prev  Start of last week, SQL UTC.
- * @return array{count: int, value: float, previous: int}
+ * @param string   $since Start of this week, SQL UTC.
+ * @param string   $prev  Start of last week, SQL UTC.
+ * @param string[] $dates The series' UTC days, oldest first.
+ * @return array{count: int, value: float, previous: int, days: int[]}
  */
-function recovered_orders( string $since, string $prev ): array {
+function recovered_orders( string $since, string $prev, array $dates ): array {
 	global $wpdb;
-	$rows     = (array) $wpdb->get_col( $wpdb->prepare( 'SELECT firings FROM ' . journeys_table() . ' WHERE firings LIKE %s', '%"order_at"%' ) );
+	// A credited firing is at most the attribution window before its order, and a journey starts before its firings.
+	$floor    = gmdate( 'Y-m-d H:i:s', (int) strtotime( $prev . ' UTC' ) - attribution_window() );
+	$rows     = (array) $wpdb->get_col( $wpdb->prepare( 'SELECT firings FROM ' . journeys_table() . ' WHERE started_at >= %s AND firings LIKE %s', $floor, '%"order_at"%' ) );
 	$orders   = array();
 	$previous = array();
+	$days     = array();
 	foreach ( $rows as $json ) {
 		$firings = json_decode( (string) $json, true );
 		if ( ! is_array( $firings ) ) {
@@ -139,63 +186,81 @@ function recovered_orders( string $since, string $prev ): array {
 			} elseif ( $at >= $prev ) {
 				$previous[ (int) $firing['order'] ] = true;
 			}
+			if ( $at >= $prev ) {
+				$days[ (int) $firing['order'] ] = substr( $at, 0, 10 );
+			}
 		}
 	}
 	return array(
 		'count'    => count( $orders ),
 		'value'    => round( array_sum( $orders ), 2 ),
 		'previous' => count( $previous ),
+		'days'     => day_series( array_count_values( $days ), $dates ),
 	);
 }
 
 /**
- * Orders against journeys that reached checkout, this week and last.
+ * Orders against journeys that reached checkout, this week and last, and the percentage per day.
  *
  * @since 0.8.0
  *
- * @param string $since Start of this week, SQL UTC.
- * @param string $prev  Start of last week, SQL UTC.
- * @return array{reached: int, orders: int, percent: int, previous_percent: int}
+ * @param string   $since Start of this week, SQL UTC.
+ * @param string   $prev  Start of last week, SQL UTC.
+ * @param string[] $dates The series' UTC days, oldest first.
+ * @return array{reached: int, orders: int, percent: int, previous_percent: int, days: int[]}
  */
-function checkout_conversion( string $since, string $prev ): array {
-	$now    = conversion_between( $since, '9999-12-31 23:59:59' );
-	$before = conversion_between( $prev, $since );
-	return array(
-		'reached'          => $now['reached'],
-		'orders'           => $now['orders'],
-		'percent'          => $now['percent'],
-		'previous_percent' => $before['percent'],
-	);
-}
-
-/**
- * Journeys started in a window that reached checkout, those that converted, and the second as a percentage of the first.
- *
- * @since 0.8.0
- *
- * @param string $from Window start, SQL UTC.
- * @param string $to   Window end, SQL UTC.
- * @return array{reached: int, orders: int, percent: int}
- */
-function conversion_between( string $from, string $to ): array {
+function checkout_conversion( string $since, string $prev, array $dates ): array {
 	global $wpdb;
-	$row     = $wpdb->get_row(
+	$weeks  = (array) $wpdb->get_row(
 		$wpdb->prepare(
-			'SELECT SUM(journey LIKE %s) AS reached_n, SUM(outcome = %s) AS converted_n FROM ' . journeys_table() . ' WHERE started_at >= %s AND started_at < %s',
+			'SELECT SUM(started_at >= %s AND journey LIKE %s) AS reached_n, SUM(started_at >= %s AND outcome = %s) AS converted_n, SUM(started_at < %s AND journey LIKE %s) AS reached_before, SUM(started_at < %s AND outcome = %s) AS converted_before FROM ' . journeys_table() . ' WHERE started_at >= %s',
+			$since,
 			'%checkout:%',
+			$since,
 			'converted',
-			$from,
-			$to
+			$since,
+			'%checkout:%',
+			$since,
+			'converted',
+			$prev
 		),
 		ARRAY_A
 	);
-	$reached = (int) ( $row['reached_n'] ?? 0 );
-	$orders  = (int) ( $row['converted_n'] ?? 0 );
-	return array(
-		'reached' => $reached,
-		'orders'  => $orders,
-		'percent' => $reached > 0 ? min( 100, (int) round( 100 * $orders / $reached ) ) : 0,
+	$rows   = (array) $wpdb->get_results(
+		$wpdb->prepare(
+			'SELECT DATE(started_at) AS day, SUM(journey LIKE %s) AS reached_n, SUM(outcome = %s) AS converted_n FROM ' . journeys_table() . ' WHERE started_at >= %s GROUP BY day',
+			'%checkout:%',
+			'converted',
+			$prev
+		),
+		ARRAY_A
 	);
+	$by_day = array();
+	foreach ( $rows as $row ) {
+		$by_day[ (string) $row['day'] ] = percent_of( (int) ( $row['converted_n'] ?? 0 ), (int) ( $row['reached_n'] ?? 0 ) );
+	}
+	$reached = (int) ( $weeks['reached_n'] ?? 0 );
+	$orders  = (int) ( $weeks['converted_n'] ?? 0 );
+	return array(
+		'reached'          => $reached,
+		'orders'           => $orders,
+		'percent'          => percent_of( $orders, $reached ),
+		'previous_percent' => percent_of( (int) ( $weeks['converted_before'] ?? 0 ), (int) ( $weeks['reached_before'] ?? 0 ) ),
+		'days'             => day_series( $by_day, $dates ),
+	);
+}
+
+/**
+ * Orders as a whole percentage of the journeys that reached checkout, 0 of none, 100 at most.
+ *
+ * @since 0.8.0
+ *
+ * @param int $orders  Journeys that converted.
+ * @param int $reached Journeys that reached checkout.
+ * @return int
+ */
+function percent_of( int $orders, int $reached ): int {
+	return $reached > 0 ? min( 100, (int) round( 100 * $orders / $reached ) ) : 0;
 }
 
 /**

@@ -75,12 +75,14 @@ interface WooWeekStrip {
 	since: string;
 	/** Whether WordSocket keeps the journeys the leak, the conversion and the recovered orders read (0.8). */
 	journeys: boolean;
-	/** Carts whose shopper left and that never became an order. */
-	left: { count: number; value: number; currency: string; previous: number };
-	/** Orders credited to a moment that fired. */
-	recovered: { count: number; value: number; previous: number };
-	/** Orders against journeys that reached checkout, as a percentage. */
-	conversion: { reached: number; orders: number; percent: number; previous_percent: number };
+	/** The UTC days each figure's `days` series covers, `Y-m-d`, oldest first, today last. */
+	trend_days: string[];
+	/** Carts whose shopper left and that never became an order; `days` is the count per day over two weeks, today last. */
+	left: { count: number; value: number; currency: string; previous: number; days: number[] };
+	/** Orders credited to a moment that fired, with the count per day over two weeks. */
+	recovered: { count: number; value: number; previous: number; days: number[] };
+	/** Orders against journeys that reached checkout, as a percentage, with the percentage per day over two weeks. */
+	conversion: { reached: number; orders: number; percent: number; previous_percent: number; days: number[] };
 	/** Where most carted leavers left from; null when nobody left. */
 	leak: { kind: string; count: number; leavers: number; median_ms: number } | null;
 	/** The products most often in a left cart, with how many carts bought each. */

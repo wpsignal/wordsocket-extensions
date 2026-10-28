@@ -216,14 +216,7 @@ function mark_converted( string $id, int $order_id, float $total ): void {
 		return;
 	}
 	WPS::journeys()->end_by_ref( $id, 'converted', $total, array( 'o' => $order_id ) );
-	/**
-	 * Filters how long after a moment fired an order still counts as its doing, in seconds.
-	 *
-	 * @since 0.8.0
-	 *
-	 * @param int $window Default seven days.
-	 */
-	WPS::journeys()->credit( $id, $order_id, $total, max( 0, (int) apply_filters( 'shopsocket_attribution_window', 7 * DAY_IN_SECONDS ) ) );
+	WPS::journeys()->credit( $id, $order_id, $total, attribution_window() );
 	invalidate_cart_caches();
 	publish_carts_changed();
 }
@@ -606,4 +599,22 @@ function order_edit_url( int $order_id ): string {
  */
 function datetime_to_rfc3339( string $datetime ): string {
 	return str_replace( ' ', 'T', $datetime ) . 'Z';
+}
+
+/**
+ * How long after a moment fired an order still counts as its doing, in seconds.
+ *
+ * @since 0.8.0
+ *
+ * @return int
+ */
+function attribution_window(): int {
+	/**
+	 * Filters how long after a moment fired an order still counts as its doing, in seconds.
+	 *
+	 * @since 0.8.0
+	 *
+	 * @param int $window Default seven days.
+	 */
+	return max( 0, (int) apply_filters( 'shopsocket_attribution_window', 7 * DAY_IN_SECONDS ) );
 }
