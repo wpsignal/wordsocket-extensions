@@ -8,6 +8,7 @@ import {
   deleteOrder,
   deleteProduct,
   num,
+  stat,
   visitorContext,
   waitForLive,
 } from "./helpers";
@@ -67,15 +68,12 @@ test.describe("ShopSocket dashboard", () => {
     await waitForLive(page);
     await expect(page.locator(".shopsocket-conn")).toHaveText("Live");
 
-    const onlineTile = page.locator(
-      ".shopsocket-tile.is-connections .shopsocket-tile__value",
-    );
+    const onlineTile = stat(page, "connections");
     await expect(onlineTile).toHaveText(/^\d+$/);
-    const rows = page.locator(".shopsocket-carts tbody tr");
-    await expect(rows).toHaveCount(3);
-    const liveShoppers = rows.nth(0).locator("td.is-live");
-    const abandonedShoppers = rows.nth(0).locator("td.is-abandoned");
-    const liveRevenue = rows.nth(2).locator("td.is-live");
+    await expect(page.locator(".shopsocket-stat.is-live")).toBeVisible();
+    const liveShoppers = stat(page, "live");
+    const abandonedShoppers = stat(page, "abandoned");
+    const liveRevenue = stat(page, "live", "money");
 
     // Other browsers may share the rehearsal stack, so assert deltas.
     const live0 = await num(liveShoppers)();
@@ -121,7 +119,7 @@ test.describe("ShopSocket dashboard", () => {
       );
       const liveCells = liveLink
         .locator("xpath=ancestor::tr[1]")
-        .locator(".shopsocket-live-products__count");
+        .locator(".shopsocket-table__num");
       await expect(liveCells).toHaveText(["1", "1"]);
 
       // A second unit of the same product: still one cart, two units.
@@ -207,9 +205,8 @@ test.describe("ShopSocket dashboard", () => {
     const product = await createProduct(requestUtils, "E2E LoggedIn Cart", 20);
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
-    const rows = page.locator(".shopsocket-carts tbody tr");
-    const liveShoppers = rows.nth(0).locator("td.is-live");
-    const abandonedShoppers = rows.nth(0).locator("td.is-abandoned");
+    const liveShoppers = stat(page, "live");
+    const abandonedShoppers = stat(page, "abandoned");
     const live0 = await num(liveShoppers)();
     const abandoned0 = await num(abandonedShoppers)();
 
@@ -243,9 +240,7 @@ test.describe("ShopSocket dashboard", () => {
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
 
-    const usersTile = page.locator(
-      ".shopsocket-tile.is-users .shopsocket-tile__value",
-    );
+    const usersTile = stat(page, "users");
     // The users-online tile as a number, as a poll callback.
     const users = async () => Number((await usersTile.textContent()) || 0);
     const users0 = await users();
@@ -452,9 +447,8 @@ test.describe("ShopSocket dashboard", () => {
     test.setTimeout(120_000);
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
-    const rows = page.locator(".shopsocket-carts tbody tr");
-    const liveShoppers = rows.nth(0).locator("td.is-live");
-    const awayShoppers = rows.nth(0).locator("td.is-away");
+    const liveShoppers = stat(page, "live");
+    const awayShoppers = stat(page, "away");
     const away0 = await num(awayShoppers)();
     const product = await createProduct(requestUtils, "E2E History Widget", 20);
     const panel = page.locator(".shopsocket-abandoned");
@@ -506,9 +500,9 @@ test.describe("ShopSocket dashboard", () => {
       // Closed: the leave stamps the row, and after the grace the panel lists the cart.
       await shop.close();
       await expect(row).toBeVisible({ timeout: 45_000 });
-      // The cells after the product column: the shopper, the value, when they left, the order (none yet).
-      await expect(row.locator("td").nth(1)).not.toBeEmpty();
-      await expect(row.locator("td").nth(3)).toBeEmpty();
+      // The cells: the cart, the shopper, the value, when they left, the order (none yet).
+      await expect(row.locator("td").nth(2)).not.toBeEmpty();
+      await expect(row.locator("td").nth(4)).toBeEmpty();
 
       // The shopper comes back and checks out: the row shows the order.
       const back = await visitor.newPage();
@@ -535,7 +529,7 @@ test.describe("ShopSocket dashboard", () => {
       await expect(back).toHaveURL(/order-received/, { timeout: 30_000 });
       orderId = Number(back.url().match(/order-received\/(\d+)/)?.[1] ?? 0);
       await back.close();
-      await expect(row.locator("td").nth(3).locator("a")).toHaveText(/^#\d+/, {
+      await expect(row.locator("td").nth(4).locator("a")).toHaveText(/^#\d+/, {
         timeout: 45_000,
       });
     } finally {

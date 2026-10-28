@@ -230,7 +230,7 @@ export function LiveOrders({
       isItemClickable={() => true}
       onClickItem={open}
       empty={
-        <p className="shopsocket-board__empty">
+        <p className="shopsocket-muted">
           {rows.length === 0
             ? __(
                 "No orders yet. New orders appear here the moment they are placed.",

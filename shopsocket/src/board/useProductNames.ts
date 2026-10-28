@@ -4,6 +4,7 @@
  * once per page per id; a product that no longer exists is remembered as null
  * so it is never asked for again.
  */
+import { __, sprintf } from "@wordpress/i18n";
 import { useEffect, useMemo, useRef, useState } from "@wordpress/element";
 import apiFetch from "@wordpress/api-fetch";
 
@@ -11,6 +12,22 @@ const DEBOUNCE_MS = 300;
 const BATCH = 100;
 
 type Config = Pick<ShopSocketBoardConfig, "productsUrl" | "nonce">;
+
+/**
+ * What a product cell says: the name, "Product #N (removed)" for a ref of null, "#N" while unknown.
+ *
+ * @since 0.8.0
+ */
+export function productLabel(
+  ref: WooProductRef | null | undefined,
+  id: number,
+): string {
+  if (ref) return ref.name;
+  /* translators: %d: product id */
+  return ref === null
+    ? sprintf(__("Product #%d (removed)", "shopsocket"), id)
+    : `#${id}`;
+}
 
 /** A lookup from product id to its ref, null when removed, undefined while unknown. */
 export function useProductNames(ids: number[], config: Config) {
@@ -20,12 +37,17 @@ export function useProductNames(ids: number[], config: Config) {
   const [version, setVersion] = useState(0);
   const key = ids.join(",");
 
-  useEffect(() => () => {
-    mounted.current = false;
-  }, []);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
 
   useEffect(() => {
-    const missing = ids.filter((id) => !cache.current.has(id) && !pending.current.has(id)).slice(0, BATCH);
+    const missing = ids
+      .filter((id) => !cache.current.has(id) && !pending.current.has(id))
+      .slice(0, BATCH);
     if (missing.length === 0 || !config.productsUrl) return undefined;
     missing.forEach((id) => pending.current.add(id));
     let fired = false;

@@ -3,7 +3,7 @@ import { expect, test } from "@wordpress/e2e-test-utils-playwright";
 import { execSync, spawn, type ChildProcess } from "node:child_process";
 import { request } from "@playwright/test";
 import { WP_ROOT, WPS_API_URL, WPS_E2E_EMAIL, WPS_E2E_PASSWORD } from "./env";
-import { addToCart, clearCarts, createProduct, deleteProduct, num, visitorContext, waitForLive } from "./helpers";
+import { addToCart, clearCarts, createProduct, deleteProduct, num, stat, visitorContext, waitForLive } from "./helpers";
 
 const PAGE = "page=shopsocket";
 
@@ -74,8 +74,8 @@ test.describe("Relay restart", () => {
        */
       await page.reload();
       await waitForLive(page);
-      const abandonedShoppers = page.locator(".shopsocket-carts tbody tr").nth(0).locator("td.is-abandoned");
-      const liveShoppers = page.locator(".shopsocket-carts tbody tr").nth(0).locator("td.is-live");
+      const abandonedShoppers = stat(page, "abandoned");
+      const liveShoppers = stat(page, "live");
       const shopperTransportBefore = await transportOf(shop)();
       await addToCart(shop);
       await expect(liveLink, `live again after adding (shopper was on ${shopperTransportBefore})`).toBeVisible({ timeout: 60_000 });

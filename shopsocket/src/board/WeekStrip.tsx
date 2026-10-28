@@ -4,13 +4,18 @@
  */
 import { __, _n, sprintf } from "@wordpress/i18n";
 import { useMemo } from "@wordpress/element";
+import { Link, Text } from "@wordpress/ui";
 import { money } from "./format";
 import { useProductNames } from "./useProductNames";
+import { BoardTable, Section, Stat, productColumn, type Column } from "./ui";
 
 type Config = Pick<
   ShopSocketBoardConfig,
-  "productsUrl" | "nonce" | "journeysUrl"
+  "productsUrl" | "nonce" | "journeysUrl" | "adminUrl"
 >;
+
+/** A row's id as its table key. */
+const byId = (row: { id: number }) => String(row.id);
 
 /** "+3 vs last week", "same as last week"; `unit` follows the number. */
 function delta(now: number, before: number, unit = ""): string {
@@ -59,8 +64,8 @@ function leaversUrl(base: string, kind: string): string {
 }
 
 /**
- * The strip, or one line pointing at WordSocket's Journeys tab while its History is off; the leak sentence
- * links into that tab.
+ * The "This week" card, or one line pointing at WordSocket's Journeys tab while its History is off; the
+ * leak sentence links into that tab.
  *
  * @since 0.8.0
  */
@@ -73,97 +78,120 @@ export function WeekStrip({
 }) {
   const ids = useMemo(() => (strip?.products ?? []).map((p) => p.id), [strip]);
   const product = useProductNames(ids, config);
+  const columns = useMemo<Column<WooWeekStrip["products"][number]>[]>(
+    () => [
+      productColumn(product, config.adminUrl),
+      {
+        id: "left",
+        label: __("Left in carts", "shopsocket"),
+        value: (row) => row.left,
+        numeric: true,
+      },
+      {
+        id: "bought",
+        label: __("Bought", "shopsocket"),
+        value: (row) => row.bought,
+        numeric: true,
+      },
+    ],
+    [product, config.adminUrl],
+  );
+  const historyOff = (
+    <Text variant="body-sm" className="shopsocket-muted" render={<p />}>
+      {__(
+        "Turn on History in WordSocket to see how this week compares with last week.",
+        "shopsocket",
+      )}{" "}
+      <Link href={config.journeysUrl}>{__("Open Journeys", "shopsocket")}</Link>
+    </Text>
+  );
   if (!strip) {
     return (
-      <p className="shopsocket-week__off">
-        {__(
-          "Turn on WordSocket's History to see this week's figures.",
-          "shopsocket",
-        )}{" "}
-        <a href={config.journeysUrl}>{__("Journeys tab", "shopsocket")}</a>
-      </p>
+      <Section title={__("This week", "shopsocket")}>{historyOff}</Section>
     );
   }
   const { left, recovered, conversion, leak, products } = strip;
-  const tone = (good: boolean) => (good ? " is-good" : " is-bad");
+  /* translators: %d: carts on one day */
+  const carts = (v: number) =>
+    sprintf(_n("%d cart", "%d carts", v, "shopsocket"), v);
+  /* translators: %d: orders on one day */
+  const orders = (v: number) =>
+    sprintf(_n("%d order", "%d orders", v, "shopsocket"), v);
   return (
-    <section
-      className="shopsocket-week"
-      aria-labelledby="shopsocket-week-heading"
-    >
-      <h2 id="shopsocket-week-heading">{__("This week", "shopsocket")}</h2>
-      <div className="shopsocket-week__tiles">
-        <div className="shopsocket-tile is-left">
-          <span className="shopsocket-tile__value">{String(left.count)}</span>
-          <span className="shopsocket-tile__label">
-            {__("Carts left behind", "shopsocket")}
-          </span>
-          <span
-            className={`shopsocket-tile__detail${tone(left.count <= left.previous)}`}
-          >
-            {sprintf(
-              /* translators: 1: the change against last week, 2: the value of those carts */
-              __("%1$s, %2$s in them", "shopsocket"),
-              delta(left.count, left.previous),
-              money(left.value, left.currency),
-            )}
-          </span>
-        </div>
-        <div className="shopsocket-tile is-recovered">
-          <span className="shopsocket-tile__value">
-            {String(recovered.count)}
-          </span>
-          <span className="shopsocket-tile__label">
-            {__("Recovered orders", "shopsocket")}
-          </span>
-          <span
-            className={`shopsocket-tile__detail${tone(recovered.count >= recovered.previous)}`}
-          >
-            {sprintf(
-              /* translators: 1: the value of the recovered orders, 2: the change against last week */
-              __("%1$s after a moment fired, %2$s", "shopsocket"),
-              money(recovered.value, left.currency),
-              delta(recovered.count, recovered.previous),
-            )}
-          </span>
-        </div>
-        <div className="shopsocket-tile is-conversion">
-          <span className="shopsocket-tile__value">{`${conversion.percent}%`}</span>
-          <span className="shopsocket-tile__label">
-            {__("Checkout conversion", "shopsocket")}
-          </span>
-          <span
-            className={`shopsocket-tile__detail${tone(conversion.percent >= conversion.previous_percent)}`}
-          >
-            {sprintf(
-              /* translators: 1: orders, 2: journeys that reached checkout, 3: the change against last week in points */
-              __("%1$d of %2$d who reached checkout, %3$s", "shopsocket"),
-              conversion.orders,
-              conversion.reached,
-              delta(
-                conversion.percent,
-                conversion.previous_percent,
-                __(" pts", "shopsocket"),
-              ),
-            )}
-          </span>
-        </div>
-      </div>
-      {strip.journeys === false && (
-        <p className="shopsocket-week__off">
-          {__(
-            "Switch on WordSocket's History for the leak, the conversion and the recovered orders.",
-            "shopsocket",
-          )}{" "}
-          <a href={config.journeysUrl}>{__("Journeys tab", "shopsocket")}</a>
-        </p>
+    <Section
+      title={__("This week", "shopsocket")}
+      lede={__(
+        "Carts, recovered sales and checkouts over the last seven days, compared with the week before.",
+        "shopsocket",
       )}
+    >
+      <div className="shopsocket-stats">
+        <Stat
+          name="left"
+          value={String(left.count)}
+          label={__("Carts left behind", "shopsocket")}
+          compare={{ now: left.count, before: left.previous, goodWhen: "down" }}
+          days={left.days}
+          dates={strip.trend_days}
+          dayLabel={carts}
+          detail={sprintf(
+            /* translators: 1: the change against last week, 2: the value of those carts */
+            __("%1$s, %2$s in them", "shopsocket"),
+            delta(left.count, left.previous),
+            money(left.value, left.currency),
+          )}
+        />
+        <Stat
+          name="recovered"
+          value={String(recovered.count)}
+          label={__("Recovered orders", "shopsocket")}
+          compare={{
+            now: recovered.count,
+            before: recovered.previous,
+            goodWhen: "up",
+          }}
+          days={recovered.days}
+          dates={strip.trend_days}
+          dayLabel={orders}
+          detail={sprintf(
+            /* translators: 1: the value of the recovered orders, 2: the change against last week */
+            __("%1$s in orders after a moment, %2$s", "shopsocket"),
+            money(recovered.value, left.currency),
+            delta(recovered.count, recovered.previous),
+          )}
+        />
+        <Stat
+          name="conversion"
+          value={`${conversion.percent}%`}
+          label={__("Checkout conversion", "shopsocket")}
+          compare={{
+            now: conversion.percent,
+            before: conversion.previous_percent,
+            goodWhen: "up",
+          }}
+          days={conversion.days}
+          dates={strip.trend_days}
+          dayLabel={(v) => `${v}%`}
+          detail={sprintf(
+            /* translators: 1: orders, 2: shoppers who reached checkout, 3: the change against last week in points */
+            __("%1$d of %2$d who reached checkout, %3$s", "shopsocket"),
+            conversion.orders,
+            conversion.reached,
+            delta(
+              conversion.percent,
+              conversion.previous_percent,
+              __(" pts", "shopsocket"),
+            ),
+          )}
+        />
+      </div>
+      {strip.journeys === false && historyOff}
       {leak && (
-        <p className="shopsocket-week__leak">
+        <Text variant="body-md" render={<p />} className="shopsocket-leak">
           {sprintf(
-            /* translators: 1: where most leavers left from, 2: the median time there, 3: how many, 4: their share of everyone who left */
+            /* translators: 1: where most leavers left from, 2: the typical time there, 3: how many, 4: their share of everyone who left */
             __(
-              "Most shoppers who leave with a cart do so from %1$s, after a median %2$s there: %3$d this week, %4$d%% of everyone who left.",
+              "Most shoppers who leave with a cart do so from %1$s, usually after %2$s there: %3$d this week, %4$d%% of everyone who left.",
               "shopsocket",
             ),
             placeOf(leak.kind),
@@ -172,61 +200,22 @@ export function WeekStrip({
             Math.round((100 * leak.count) / Math.max(1, leak.leavers)),
           )}{" "}
           {config.journeysUrl && (
-            <a href={leaversUrl(config.journeysUrl, leak.kind)}>
-              {__("See them", "shopsocket")}
-            </a>
+            <Link href={leaversUrl(config.journeysUrl, leak.kind)}>
+              {__("See their journeys", "shopsocket")}
+            </Link>
           )}
-        </p>
+        </Text>
       )}
-      <div className="shopsocket-live-products shopsocket-week__products">
-        <h2>{__("Products most often left in a cart", "shopsocket")}</h2>
-        {products.length === 0 ? (
-          <p className="shopsocket-board__empty">
-            {__("No cart was left behind this week.", "shopsocket")}
-          </p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">{__("Product", "shopsocket")}</th>
-                <th scope="col" className="shopsocket-live-products__count">
-                  {__("Left in carts", "shopsocket")}
-                </th>
-                <th scope="col" className="shopsocket-live-products__count">
-                  {__("Bought", "shopsocket")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((row) => {
-                const ref = product(row.id);
-                const label =
-                  ref?.name ??
-                  (ref === null
-                    ? sprintf(__("Product #%d (removed)", "shopsocket"), row.id)
-                    : `#${row.id}`);
-                return (
-                  <tr key={row.id}>
-                    <th scope="row">
-                      {ref?.edit_url ? (
-                        <a href={ref.edit_url}>{label}</a>
-                      ) : (
-                        label
-                      )}
-                    </th>
-                    <td className="shopsocket-live-products__count">
-                      {String(row.left)}
-                    </td>
-                    <td className="shopsocket-live-products__count">
-                      {String(row.bought)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </section>
+      <Text variant="heading-md" render={<h3 />} className="shopsocket-subhead">
+        {__("Products most often left in a cart", "shopsocket")}
+      </Text>
+      <BoardTable
+        className="shopsocket-left-products"
+        rows={products}
+        rowId={byId}
+        empty={__("No cart was left behind this week.", "shopsocket")}
+        columns={columns}
+      />
+    </Section>
   );
 }

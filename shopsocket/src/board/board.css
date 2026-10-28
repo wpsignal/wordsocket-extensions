@@ -1,218 +1,164 @@
+/*
+ * The board, in the look of WordSocket's settings tabs:
+ * - every block is a `@wordpress/ui` card, laid out on the theme's spacing and colour tokens;
+ * - figures are stat tiles on the weak neutral surface;
+ * - tables are DataViews, numbers in tabular figures.
+ */
+
 .shopsocket-board {
-
-  h2 {
-    font-size: 1.1em;
-    margin: 24px 0 8px;
-  }
-}
-
-.shopsocket-board__header {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-block: 8px 16px;
+  flex-direction: column;
+  gap: var(--wpds-dimension-gap-lg, 16px);
 }
 
 .shopsocket-board__controls {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--wpds-dimension-gap-lg, 16px);
   justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.shopsocket-muted {
+  color: var(--wpds-color-foreground-content-neutral-weak, #757575);
+}
+
+.shopsocket-section {
   width: 100%;
-}
+  transition: opacity 0.3s;
 
-.shopsocket-board__empty {
-  color: #50575e;
-  font-size: 14px;
-}
-
-/* This week: three tiles in a row, the leak sentence, the products table */
-
-.shopsocket-week {
-  margin-bottom: 16px;
-
-  h2 {
-    margin-top: 0;
+  &.is-stale {
+    opacity: 0.6;
   }
 }
 
-.shopsocket-week__tiles {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 12px;
+.shopsocket-subhead {
+  margin: var(--wpds-dimension-gap-sm, 8px) 0 0;
 }
 
-.shopsocket-week__leak {
-  margin: 0 0 12px;
-  font-size: 14px;
+.shopsocket-leak {
+  margin: 0;
   max-width: 72ch;
 }
 
-.shopsocket-week__off {
-  margin: 0 0 16px;
-  color: #50575e;
-  font-size: 14px;
+/* Stat tiles: as many to a row as fit, one column on a phone. */
+
+.shopsocket-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: var(--wpds-dimension-gap-md, 12px);
 }
 
-.shopsocket-tile__detail.is-good {
-  color: #00800a;
-}
-
-.shopsocket-tile__detail.is-bad {
-  color: #d63638;
-}
-
-/* Tiles, the left column of the summary grid */
-
-.shopsocket-tiles {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.shopsocket-tile {
+.shopsocket-stat {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 16px 20px;
-  background: #fff;
-  border: 1px solid #c3c4c7;
-  border-radius: 4px;
-  box-shadow: 0 1px 1px rgb(0 0 0 / 0.04);
+  padding: var(--wpds-dimension-gap-md, 12px) var(--wpds-dimension-gap-lg, 16px);
+  background: var(--wpds-color-background-surface-neutral-weak, #f6f7f7);
+  border-radius: var(--wpds-border-radius-lg, 8px);
 }
 
-.shopsocket-tile__value {
-  font-size: 32px;
-  font-weight: 600;
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
-}
-
-.shopsocket-tile__label {
-  font-size: 14px;
+.shopsocket-stat__label {
   font-weight: 500;
 }
 
-.shopsocket-tile__detail {
-  font-size: 12px;
-  color: #646970;
+/* The arrow by the label: a small tinted square, green for a change for the better, red for the worse. */
+.shopsocket-stat__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--wpds-border-radius-xs, 2px);
+  font-size: 11px;
+  line-height: 1;
+
+  &.is-good {
+    background: var(--wpds-color-background-surface-success-weak, #e6f4ea);
+    color: var(--wpds-color-foreground-content-success, #1e6f33);
+  }
+
+  &.is-bad {
+    background: var(--wpds-color-background-surface-error-weak, #fbe9e9);
+    color: var(--wpds-color-foreground-content-error, #a12a2a);
+  }
 }
 
-/* Live orders */
+/* The sparkline: full width, a fixed height, strokes unscaled. */
+.shopsocket-spark {
+  display: block;
+  width: 100%;
+  height: 28px;
+  margin-top: var(--wpds-dimension-gap-xs, 4px);
+  overflow: visible;
 
-.shopsocket-board__stock {
-  margin-bottom: 16px;
+  path {
+    fill: none;
+    stroke-width: 1.5px;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .shopsocket-spark__before {
+    stroke: var(--wpds-color-foreground-content-neutral-weak, #757575);
+    opacity: 0.5;
+  }
+
+  .shopsocket-spark__now {
+    stroke: var(--wp-admin-theme-color, #3858e9);
+  }
+
+  .shopsocket-spark__end {
+    stroke: var(--wp-admin-theme-color, #3858e9);
+    stroke-width: 6px;
+  }
+
+  .shopsocket-spark__hit {
+    fill: transparent;
+  }
 }
+
+.shopsocket-stat__detail {
+  &.is-good {
+    color: var(--wpds-color-foreground-content-success-weak, #00800a);
+  }
+
+  &.is-bad {
+    color: var(--wpds-color-foreground-content-error-weak, #d63638);
+  }
+}
+
+/* Tables: numbers in tabular figures. */
+
+.shopsocket-table {
+  overflow-x: auto;
+}
+
+.shopsocket-table__num,
+.shopsocket-stat__money,
+.shopsocket-order__time,
+.shopsocket-order__total {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Live orders: the DataViews table with the customer under the order number. */
 
 .shopsocket-board__orders {
-  background: #fff;
-  border: 1px solid #dcdcde;
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
-  padding: 20px 24px 12px;
-
   /* The toolbar wraps on a phone rather than squeezing the search box. */
   .dataviews__view-actions {
     flex-wrap: wrap;
   }
 
-  .dataviews-view-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  /* Column headings: quiet labels, the same colour whether or not they sort. */
-  .dataviews-view-table thead th {
-    color: #757575;
-    letter-spacing: 0.04em;
-    border-bottom: 1px solid #e0e0e0;
-    padding-block: 12px;
-  }
-
-  .dataviews-view-table thead th .components-button,
-  .dataviews-view-table thead th .components-button:not(:hover) {
-    color: #757575;
-    font-size: inherit;
-    letter-spacing: inherit;
-  }
-
-  .dataviews-view-table thead th .components-button:hover {
-    color: #1e1e1e;
-  }
-
-  /* The first column is the order and customer: head it from the left, like its cells. */
-  .dataviews-view-table thead th:first-child,
-  .dataviews-view-table thead th:first-child .components-button {
-    text-align: left;
-    justify-content: flex-start;
-  }
-
-  .dataviews-view-table thead th,
-  .dataviews-view-table tbody td,
-  .dataviews-view-table tbody th {
-    padding-inline: 12px;
-  }
-
-  .dataviews-view-table tr > :first-child {
-    padding-left: 4px;
-  }
-
-  .dataviews-view-table tr > :last-child {
-    padding-right: 4px;
-  }
-
-  .dataviews-view-table tbody tr {
-    border-bottom: 1px solid #f0f0f1;
-    transition: background-color 0.15s;
-  }
-
-  .dataviews-view-table tbody tr:last-child {
-    border-bottom: 0;
-  }
-
-  .dataviews-view-table tbody tr:hover {
-    background: #f6f7f7;
-  }
-
-  .dataviews-view-table tbody td,
-  .dataviews-view-table tbody th {
-    padding-block: 14px;
-    vertical-align: middle;
-    font-size: 14px;
-  }
-
-  /* The customer sits under the order number. */
-  .dataviews-view-table__primary-column-content .dataviews-title-field {
-    font-size: 15px;
-  }
-
   .dataviews-view-table__primary-column-content > :not(:first-child),
   .dataviews-view-table__primary-column-content .dataviews-view-table__cell-content-wrapper:not(:first-child) {
-    color: #646970;
-    font-size: 13px;
-    margin-top: 2px;
+    color: var(--wpds-color-foreground-content-neutral-weak, #757575);
   }
 }
 
-.shopsocket-board__orders-head {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 12px;
-
-  h2 {
-    margin: 0;
-    font-size: 16px;
-  }
-}
-
-.shopsocket-board__orders-count {
-  font-size: 13px;
-  color: #757575;
-  font-variant-numeric: tabular-nums;
+.shopsocket-board__stock,
+.shopsocket-board__alert {
+  margin: 0;
 }
 
 .shopsocket-order {
@@ -228,11 +174,10 @@
 .shopsocket-order__time,
 .shopsocket-order__total {
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 
 .shopsocket-order__time {
-  color: #646970;
+  color: var(--wpds-color-foreground-content-neutral-weak, #757575);
 }
 
 .shopsocket-order__total {
@@ -289,8 +234,8 @@
   gap: 6px;
   padding: 3px 10px;
   border-radius: 999px;
-  background: #f0f0f1;
-  color: #3c434a;
+  background: var(--wpds-color-background-surface-neutral-weak, #f0f0f1);
+  color: var(--wpds-color-foreground-content-neutral, #3c434a);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.4;
@@ -306,26 +251,26 @@
   }
 
   &.status-processing {
-    background: #e6f4ea;
-    color: #1e6f33;
+    background: var(--wpds-color-background-surface-success-weak, #e6f4ea);
+    color: var(--wpds-color-foreground-content-success, #1e6f33);
   }
 
   &.status-completed {
-    background: #e7eef5;
-    color: #2c4a66;
+    background: var(--wpds-color-background-surface-info-weak, #e7eef5);
+    color: var(--wpds-color-foreground-content-info, #2c4a66);
   }
 
   &.status-on-hold,
   &.status-pending {
-    background: #fcf1dc;
-    color: #8a5a00;
+    background: var(--wpds-color-background-surface-warning-weak, #fcf1dc);
+    color: var(--wpds-color-foreground-content-warning, #8a5a00);
   }
 
   &.status-cancelled,
   &.status-failed,
   &.status-refunded {
-    background: #fbe9e9;
-    color: #a12a2a;
+    background: var(--wpds-color-background-surface-error-weak, #fbe9e9);
+    color: var(--wpds-color-foreground-content-error, #a12a2a);
   }
 }
 
@@ -357,193 +302,16 @@ body.shopsocket-fullscreen {
     padding: 24px;
     font-size: 18px;
   }
-
-  .shopsocket-tile__value {
-    font-size: 48px;
-  }
-
-  .shopsocket-board__orders,
-  .shopsocket-live-products {
-    font-size: 18px;
-  }
-}
-
-/* Carts panel: live vs abandoned */
-
-.shopsocket-summary {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.6fr);
-  gap: 16px;
-  margin-bottom: 16px;
-  transition: opacity 0.3s;
-
-  &.is-stale {
-    opacity: 0.6;
-  }
-}
-
-.shopsocket-carts {
-  background: #fff;
-  border: 1px solid #c3c4c7;
-  border-radius: 4px;
-  box-shadow: 0 1px 1px rgb(0 0 0 / 0.04);
-  padding: 8px 4px;
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  th,
-  td {
-    padding: 8px 16px;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-
-  thead th {
-    font-size: 13px;
-    border-bottom: 1px solid #dcdcde;
-  }
-
-  thead th:first-child,
-  tbody th {
-    text-align: left;
-    font-weight: 500;
-  }
-
-  tbody th {
-    color: #8c8f94;
-    font-size: 13px;
-  }
-
-  tbody td {
-    font-size: 18px;
-    font-weight: 600;
-  }
-
-  td.is-away {
-    color: #996800;
-  }
-
-  td.is-abandoned {
-    color: #8c8f94;
-  }
-}
-
-.shopsocket-carts__hint {
-  display: block;
-  font-size: 11px;
-  font-weight: 400;
-  color: #8c8f94;
-}
-
-/* Products in live carts */
-
-.shopsocket-live-products {
-  background: #fff;
-  border: 1px solid #c3c4c7;
-  border-radius: 4px;
-  box-shadow: 0 1px 1px rgb(0 0 0 / 0.04);
-  padding: 8px 4px;
-  margin-bottom: 16px;
-
-  h2 {
-    font-size: 13px;
-    font-weight: 500;
-    margin: 4px 16px 8px;
-  }
-
-  .shopsocket-board__empty {
-    color: #8c8f94;
-    padding: 0 16px 8px;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  th,
-  td {
-    padding: 6px 16px;
-    text-align: left;
-  }
-
-  thead th {
-    font-size: 13px;
-    color: #646970;
-    border-bottom: 1px solid #dcdcde;
-  }
-
-  tbody th {
-    font-weight: 500;
-  }
-
-  a {
-    font-weight: 600;
-    text-decoration: none;
-  }
-
-  .shopsocket-live-products__count {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  tbody .shopsocket-live-products__count {
-    font-weight: 600;
-  }
-}
-
-/* Recently abandoned: the live-products table, with wrapping product lists. */
-
-.shopsocket-abandoned tbody th {
-  font-weight: 400;
-  max-width: 48ch;
-}
-
-.shopsocket-abandoned__guest {
-  color: #50575e;
 }
 
 @media (max-width: 782px) {
-  .shopsocket-summary,
-  .shopsocket-week__tiles {
-    grid-template-columns: 1fr;
-  }
-
-  .shopsocket-board__orders {
-    padding: 16px 12px 8px;
-    border-radius: 6px;
-  }
-
   .shopsocket-board__orders .dataviews-view-table tbody td,
   .shopsocket-board__orders .dataviews-view-table tbody th {
     padding-block: 12px;
-  }
-
-  .shopsocket-board__orders .dataviews-view-table thead th,
-  .shopsocket-board__orders .dataviews-view-table tbody td,
-  .shopsocket-board__orders .dataviews-view-table tbody th {
-    padding-inline: 8px;
-  }
-
-  .shopsocket-board__orders .dataviews-view-table tr > :first-child {
-    padding-left: 2px;
-  }
-
-  .shopsocket-board__orders .dataviews-view-table tr > :last-child {
-    padding-right: 2px;
   }
 
   .shopsocket-status {
     padding: 2px 8px;
     font-size: 11px;
   }
-}
-
-/* A staff alert from a rule, above the tiles. */
-.shopsocket-board__alert {
-  margin: 0 0 16px;
 }

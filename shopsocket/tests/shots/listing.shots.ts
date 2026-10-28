@@ -13,7 +13,7 @@ import { resolve } from "node:path";
 import { expect, test } from "@wordpress/e2e-test-utils-playwright";
 import type { BrowserContext, Page } from "@playwright/test";
 import { wp } from "../e2e/env";
-import { addToCart, deleteOrder, deleteProduct, num, visitorContext, waitForLive } from "../e2e/helpers";
+import { addToCart, deleteOrder, deleteProduct, num, stat, visitorContext, waitForLive } from "../e2e/helpers";
 
 const ASSETS = resolve(__dirname, "../../wporg-assets");
 
@@ -57,8 +57,8 @@ const CHROME = `
  */
 const FREE_PLAN_CONNECTIONS = "50";
 async function showFreePlanLimit(page: Page): Promise<void> {
-  await page.locator(".shopsocket-tile.is-connections .shopsocket-tile__detail").evaluate((el, limit) => {
-    el.textContent = (el.textContent ?? "").replace(/\/\d+/, `/${limit}`);
+  await stat(page, "connections", "detail").evaluate((el, limit) => {
+    el.textContent = (el.textContent ?? "").replace(/ of \d+ on/, ` of ${limit} on`);
   }, FREE_PLAN_CONNECTIONS);
 }
 
@@ -103,7 +103,7 @@ test("stage the listing screenshots", async ({ admin, page, browser, baseURL, re
     await expect(page.getByRole("heading", { name: "ShopSocket", level: 1 })).toBeVisible();
     await waitForLive(page);
     await expect(page.locator(".shopsocket-conn")).toHaveText("Live");
-    await expect(page.locator(".shopsocket-tile.is-connections .shopsocket-tile__value")).toHaveText(/^\d+$/);
+    await expect(stat(page, "connections")).toHaveText(/^\d+$/);
 
     // 1: the board before the first shopper arrives.
     await page.setViewportSize({ width: 1280, height: 980 });
@@ -159,9 +159,8 @@ test("stage the listing screenshots", async ({ admin, page, browser, baseURL, re
     await admin.visitAdminPage("admin.php", "page=shopsocket");
     await page.addStyleTag({ content: CHROME });
     await waitForLive(page);
-    const rows = page.locator(".shopsocket-carts tbody tr");
-    await expect.poll(num(rows.nth(0).locator("td.is-live")), { timeout: 30_000 }).toBe(LIVE_CARTS.filter((c) => c.length).length);
-    await expect.poll(num(rows.nth(0).locator("td.is-abandoned")), { timeout: 30_000 }).toBe(ABANDONED_CARTS.length);
+    await expect.poll(num(stat(page, "live")), { timeout: 30_000 }).toBe(LIVE_CARTS.filter((c) => c.length).length);
+    await expect.poll(num(stat(page, "abandoned")), { timeout: 30_000 }).toBe(ABANDONED_CARTS.length);
     await expect(page.locator(".shopsocket-live-products a").first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(`${ORDERS[0].first} ${ORDERS[0].last.charAt(0)}.`)).toBeVisible();
     await page.waitForTimeout(1_500);

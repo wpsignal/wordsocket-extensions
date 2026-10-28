@@ -59,6 +59,13 @@ export function visitorContext(
   });
 }
 
+/** A part of the board's stat tile `name` (`is-<name>`): its value, its detail line or its money figure. */
+export const stat = (
+  page: Page,
+  name: string,
+  part: "value" | "detail" | "money" = "value",
+) => page.locator(`.shopsocket-stat.is-${name} .shopsocket-stat__${part}`);
+
 /** The number in a tile or cell (digits and dots only, so "$1,234" reads as 1234), as a poll callback. */
 export const num = (loc: Locator) => async () =>
   Number((await loc.textContent())?.replace(/[^\d.]/g, "") || 0);
