@@ -10,7 +10,10 @@ export function adminUrlOrNull(url: string, adminUrl: string): string | null {
   try {
     const target = new URL(url, window.location.origin);
     const admin = new URL(adminUrl, window.location.origin);
-    return target.origin === admin.origin && target.pathname.startsWith(admin.pathname) ? target.href : null;
+    return target.origin === admin.origin &&
+      target.pathname.startsWith(admin.pathname)
+      ? target.href
+      : null;
   } catch {
     return null;
   }

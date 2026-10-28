@@ -19,7 +19,10 @@ const PRESENCE_EVENT = "wps.presence";
  */
 const LEAVE_GRACE_MS = 6_000;
 
-type Config = Pick<ShopSocketBoardConfig, "dashboardUrl" | "nonce" | "snapshot" | "channels">;
+type Config = Pick<
+  ShopSocketBoardConfig,
+  "dashboardUrl" | "nonce" | "snapshot" | "channels"
+>;
 
 /*
  * Cross the cart rows with presence into three segments: live (a visible tab),
@@ -31,9 +34,24 @@ function splitCarts(
   present: Set<string>,
   awayIds: Set<string>,
 ): Pick<WooDashboardSnapshot, "carts" | "liveProducts"> {
-  const live = { shoppers: 0, products: new Set<number>(), revenue: 0, currency: "" };
-  const away = { shoppers: 0, products: new Set<number>(), revenue: 0, currency: "" };
-  const abandoned = { shoppers: 0, products: new Set<number>(), revenue: 0, currency: "" };
+  const live = {
+    shoppers: 0,
+    products: new Set<number>(),
+    revenue: 0,
+    currency: "",
+  };
+  const away = {
+    shoppers: 0,
+    products: new Set<number>(),
+    revenue: 0,
+    currency: "",
+  };
+  const abandoned = {
+    shoppers: 0,
+    products: new Set<number>(),
+    revenue: 0,
+    currency: "",
+  };
   const liveCounts = new Map<number, { carts: number; units: number }>();
   for (const row of rows) {
     const isLive = present.has(row.id);
@@ -59,7 +77,11 @@ function splitCarts(
     currency: s.currency,
   });
   return {
-    carts: { live: finish(live), away: finish(away), abandoned: finish(abandoned) },
+    carts: {
+      live: finish(live),
+      away: finish(away),
+      abandoned: finish(abandoned),
+    },
     liveProducts: [...liveCounts].map(([id, count]) => ({ id, ...count })),
   };
 }
@@ -69,16 +91,27 @@ function splitCarts(
  * is back, and a live or away cart again) and the leave is older than the
  * grace, so a navigation never flashes a cart through the panel.
  */
-function recentlyAbandoned(rows: WooAbandonedRow[], present: Set<string>, now: number): WooAbandonedRow[] {
-  return rows.filter((row) => !present.has(row.id) && now - Date.parse(row.left_at) >= LEAVE_GRACE_MS);
+function recentlyAbandoned(
+  rows: WooAbandonedRow[],
+  present: Set<string>,
+  now: number,
+): WooAbandonedRow[] {
+  return rows.filter(
+    (row) =>
+      !present.has(row.id) && now - Date.parse(row.left_at) >= LEAVE_GRACE_MS,
+  );
 }
 
 /** Called with the orders a refresh found changed: the orders, when the request left, and the `since` it asked for. */
-type OnOrders = (orders: WooOrderEvent[], startedAt: number, since: number) => void;
+type OnOrders = (
+  orders: WooOrderEvent[],
+  startedAt: number,
+  since: number,
+) => void;
 
-/** 
- * The board's tile figures, and whether the last fetch of them failed. 
- * 
+/**
+ * The board's tile figures, and whether the last fetch of them failed.
+ *
  * @param config - The board configuration.
  * @param onOrders - A callback to call with the orders that changed since the last refresh.
  */
@@ -86,19 +119,30 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
   const onOrdersRef = useRef(onOrders);
   onOrdersRef.current = onOrders;
   const [rows, setRows] = useState<WooCartRow[]>(config.snapshot.carts);
-  const [abandoned, setAbandoned] = useState<WooAbandonedRow[]>(config.snapshot.abandoned ?? []);
+  const [abandoned, setAbandoned] = useState<WooAbandonedRow[]>(
+    config.snapshot.abandoned ?? [],
+  );
   const [awayUsers, setAwayUsers] = useState(0);
   const [awayIds, setAwayIds] = useState<Set<string>>(() => new Set());
   // Re-evaluated when the youngest leave crosses the grace, so a row appears without a refresh.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const pending = abandoned.map((row) => Date.parse(row.left_at) + LEAVE_GRACE_MS - Date.now()).filter((ms) => ms > 0);
+    const pending = abandoned
+      .map((row) => Date.parse(row.left_at) + LEAVE_GRACE_MS - Date.now())
+      .filter((ms) => ms > 0);
     if (pending.length === 0) return undefined;
-    const timer = setTimeout(() => setNow(Date.now()), Math.min(...pending) + 50);
+    const timer = setTimeout(
+      () => setNow(Date.now()),
+      Math.min(...pending) + 50,
+    );
     return () => clearTimeout(timer);
   }, [abandoned, now]);
-  const [online, setOnline] = useState<WooDashboardData["online"]>(config.snapshot.online);
-  const [strip, setStrip] = useState<WooWeekStrip | null>(config.snapshot.strip ?? null);
+  const [online, setOnline] = useState<WooDashboardData["online"]>(
+    config.snapshot.online,
+  );
+  const [strip, setStrip] = useState<WooWeekStrip | null>(
+    config.snapshot.strip ?? null,
+  );
   const [present, setPresent] = useState<Set<string>>(() => new Set());
   const [usersOnline, setUsersOnline] = useState(0);
   const [staffShare, setStaffShare] = useState({ users: 0, tabs: 0 });
@@ -157,7 +201,8 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
           else setOnline(fresh.online);
           setStale(false);
           if (fresh.as_of !== undefined) since = fresh.as_of;
-          if (asked !== undefined && fresh.orders?.length) onOrdersRef.current?.(fresh.orders, startedAt, asked);
+          if (asked !== undefined && fresh.orders?.length)
+            onOrdersRef.current?.(fresh.orders, startedAt, asked);
         }
       } catch {
         if (alive) setStale(true);
@@ -187,17 +232,17 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
      * and storefront page a staff member has open.
      */
     /*
- * A shopper's presence state: `v` and `b` are the visitor and cart ids, `j`
- * the journey WordSocket's tracker keeps (0.30), whose last step is `away`
- * while the tab is hidden.
- */
-type Member = { v?: string; b?: string | null; j?: string };
+     * A shopper's presence state: `v` and `b` are the visitor and cart ids, `j`
+     * the journey WordSocket's tracker keeps (0.30), whose last step is `away`
+     * while the tab is hidden.
+     */
+    type Member = { v?: string; b?: string | null; j?: string };
 
-/** Whether a member's tab is hidden: the journey's last step is `away`. */
-function isAway(m: Member): boolean {
-  const last = (m.j ?? "").split(">").pop() ?? "";
-  return last.startsWith("away:");
-}
+    /** Whether a member's tab is hidden: the journey's last step is `away`. */
+    function isAway(m: Member): boolean {
+      const last = (m.j ?? "").split(">").pop() ?? "";
+      return last.startsWith("away:");
+    }
     type PresenceFrame = {
       action?: string;
       id?: string;
@@ -221,7 +266,9 @@ function isAway(m: Member): boolean {
           pendingLeaves.forEach((timer) => clearTimeout(timer));
           pendingLeaves.clear();
           members.clear();
-          (p.members ?? []).forEach((m) => m.id && members.set(m.id, m.state ?? {}));
+          (p.members ?? []).forEach(
+            (m) => m.id && members.set(m.id, m.state ?? {}),
+          );
         } else if (p.action === "join" && p.id) {
           cancelLeave(p.id);
           members.set(p.id, p.state ?? {});
@@ -303,7 +350,10 @@ function isAway(m: Member): boolean {
       offs.push(
         wps.on(CARTS_EVENT, (data, channel) => {
           if (!wps.onChannel(channel, config.channels.orders)) return;
-          const payload = data as { carts?: WooCartRow[]; abandoned?: WooAbandonedRow[] };
+          const payload = data as {
+            carts?: WooCartRow[];
+            abandoned?: WooAbandonedRow[];
+          };
           if (Array.isArray(payload.carts)) {
             setRows(payload.carts);
             setStale(false);
@@ -322,7 +372,9 @@ function isAway(m: Member): boolean {
         }),
       );
       // The first-paint snapshot predates the dashboard's own connection: reconcile once up.
-      offs.push(wps.onStateChange((s) => s.connected && schedule(AFTER_EVENT_MS)));
+      offs.push(
+        wps.onStateChange((s) => s.connected && schedule(AFTER_EVENT_MS)),
+      );
     }
 
     // Refresh at once when the tab comes back into view.
@@ -340,7 +392,12 @@ function isAway(m: Member): boolean {
       offs.forEach((off) => off());
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [config.dashboardUrl, config.nonce, config.channels, config.snapshot.as_of]);
+  }, [
+    config.dashboardUrl,
+    config.nonce,
+    config.channels,
+    config.snapshot.as_of,
+  ]);
 
   const snapshot = useMemo<WooDashboardSnapshot>(
     () => ({
@@ -352,7 +409,18 @@ function isAway(m: Member): boolean {
       online,
       strip,
     }),
-    [rows, present, awayIds, usersOnline, staffShare, awayUsers, abandoned, now, online, strip],
+    [
+      rows,
+      present,
+      awayIds,
+      usersOnline,
+      staffShare,
+      awayUsers,
+      abandoned,
+      now,
+      online,
+      strip,
+    ],
   );
 
   return { snapshot, stale };
