@@ -161,7 +161,7 @@ final class RulesTest extends ExtensionTestCase {
 		$this->assertSame( 3, (int) $rows[0]['steps'], 'the next report fills the journey in' );
 		$this->assertSame( cart_id(), $rows[0]['ref'], 'and puts the cart on it' );
 		$this->assertSame( $started, $rows[0]['started_at'], 'and keeps the start the firing set' );
-		$this->assertCount( 1, json_decode( (string) $rows[0]['firings'], true ), 'the firing survives the report' );
+		$this->assertCount( 1, \WPSignal\Journeys::unpack_firings( (string) $rows[0]['firings'] ), 'the firing survives the report' );
 	}
 
 	public function test_alert_staff_publishes_the_saved_moments_message_from_php_and_is_rate_limited_per_cart(): void {
@@ -203,8 +203,8 @@ final class RulesTest extends ExtensionTestCase {
 		global $wpdb;
 		$this->set_history( true );
 		$now = current_time( 'mysql', true );
-		$wpdb->insert( journeys_table(), array( 'journey_id' => self::J, 'visitor' => self::V, 'ref' => 'abcd000000000001', 'journey' => 'home:1:1000>cart:0:500', 'steps' => 2, 'outcome' => 'converted', 'value' => 42.5, 'started_at' => $now, 'last_seen' => $now ) );
-		$wpdb->insert( journeys_table(), array( 'journey_id' => '8d2e3f4a-5b6c-4d7e-9f80-1b2c3d4e5f60', 'visitor' => self::V, 'journey' => 'home:1:1000', 'steps' => 1, 'outcome' => 'left', 'started_at' => $now, 'last_seen' => $now ) );
+		\WPSignal\Journeys::insert_row( array( 'journey_id' => self::J, 'visitor' => self::V, 'ref' => 'abcd000000000001', 'journey' => 'home:1:1000>cart:0:500', 'outcome' => 'converted', 'value' => 42.5, 'started_at' => $now ) );
+		\WPSignal\Journeys::insert_row( array( 'journey_id' => '8d2e3f4a-5b6c-4d7e-9f80-1b2c3d4e5f60', 'visitor' => self::V, 'journey' => 'home:1:1000', 'outcome' => 'left', 'started_at' => $now ) );
 
 		$journeys  = WPS::journeys()->feed( 30, 10 );
 		$with_cart = array_values( array_filter( $journeys, static fn( array $j ): bool => $j['has_ref'] ) )[0];

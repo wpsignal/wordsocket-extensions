@@ -147,21 +147,17 @@ abstract class ExtensionTestCase extends TestCase {
 		}
 		$at         = gmdate( 'Y-m-d H:i:s', time() - $ended_ago );
 		$journey_id = wp_generate_uuid4();
-		$wpdb->insert(
-			\WPSignal\Extensions\ShopSocket\journeys_table(),
+		\WPSignal\Journeys::insert_row(
 			array(
 				'journey_id' => $journey_id,
 				'visitor'    => '5eed0000-' . substr( md5( $id . $journey_id ), 0, 4 ) . '-4000-8000-' . substr( md5( $id ), 0, 12 ),
-				'user_id'    => $user_id > 0 ? $user_id : null,
+				'user_id'    => $user_id,
 				'ref'        => $id,
 				'journey'    => $journey,
-				'steps'      => substr_count( $journey, '>' ) + 1,
 				'outcome'    => $outcome,
 				'value'      => $value,
-				'data'       => wp_json_encode( array( 'c' => get_woocommerce_currency(), 'i' => $items ) ),
+				'data'       => array( 'c' => get_woocommerce_currency(), 'i' => $items ),
 				'started_at' => $at,
-				'last_seen'  => $at,
-				'ended_at'   => 'open' === $outcome ? null : $at,
 			)
 		);
 		\WPSignal\Extensions\ShopSocket\invalidate_cart_caches();
@@ -174,10 +170,18 @@ abstract class ExtensionTestCase extends TestCase {
 	}
 
 
-	/** Every journey row, oldest first. */
+	/** Every journey row, oldest first, the ids as UUIDs and the journey in kind names. */
 	protected function journeys(): array {
 		global $wpdb;
-		return (array) $wpdb->get_results( 'SELECT * FROM ' . \WPSignal\Extensions\ShopSocket\journeys_table() . ' ORDER BY started_at, journey_id', ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows     = (array) $wpdb->get_results( 'SELECT *, HEX(journey_id) AS journey_hex, HEX(visitor) AS visitor_hex FROM ' . \WPSignal\Extensions\ShopSocket\journeys_table() . ' ORDER BY started_at, id', ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$journeys = \WPSignal\Journeys::unpack_journeys( array_column( $rows, 'journey' ) );
+		foreach ( $rows as $i => $row ) {
+			$rows[ $i ]['journey_id'] = \WPSignal\Journeys::uuid( (string) $row['journey_hex'] );
+			$rows[ $i ]['visitor']    = \WPSignal\Journeys::uuid( (string) $row['visitor_hex'] );
+			$rows[ $i ]['journey']    = $journeys[ $i ];
+			unset( $rows[ $i ]['journey_hex'], $rows[ $i ]['visitor_hex'] );
+		}
+		return $rows;
 	}
 
 	/** A managed-stock simple product, deleted in tearDown. */

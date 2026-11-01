@@ -11,6 +11,7 @@ use function WPSignal\Extensions\ShopSocket\count_in_carts;
 use function WPSignal\Extensions\ShopSocket\in_carts_enabled;
 use function WPSignal\Extensions\ShopSocket\journeys_table;
 use WPSignal\Extensions\ShopSocket\Privacy;
+use WPSignal\Journeys;
 use WPSignal\WPS;
 use function WPSignal\Extensions\ShopSocket\mark_converted;
 use function WPSignal\Extensions\ShopSocket\on_order_created;
@@ -323,23 +324,15 @@ final class HistoryTest extends ExtensionTestCase {
 				'data'       => array(),
 			)
 		);
-		// Beside it, one that fired before the window and one an earlier order already claimed.
-		$firings   = json_decode( (string) $this->journeys()[0]['firings'], true );
+		// Beside it, one that fired before the window and a dismissal.
+		$firings   = Journeys::unpack_firings( (string) $this->journeys()[0]['firings'] );
 		$firings[] = array(
 			'rule'   => 'r1',
 			'action' => 'show',
 			'step'   => 0,
 			's'      => 0,
+			'kind'   => 'fired',
 			'at'     => gmdate( 'Y-m-d H:i:s', time() - 8 * DAY_IN_SECONDS ),
-		);
-		$firings[] = array(
-			'rule'     => 'r1',
-			'action'   => 'show',
-			'step'     => 0,
-			's'        => 0,
-			'at'       => current_time( 'mysql', true ),
-			'order'    => 5,
-			'order_at' => '2026-01-01 00:00:00',
 		);
 		$firings[] = array(
 			'rule'   => 'r1',
@@ -349,20 +342,20 @@ final class HistoryTest extends ExtensionTestCase {
 			'kind'   => 'dismissed',
 			'at'     => current_time( 'mysql', true ),
 		);
-		$wpdb->update( journeys_table(), array( 'firings' => wp_json_encode( $firings ) ), array( 'journey_id' => self::JOURNEY ) );
+		$wpdb->query( $wpdb->prepare( 'UPDATE ' . journeys_table() . ' SET firings = %s WHERE journey_id = UNHEX(%s)', Journeys::pack_firings( $firings ), Journeys::hex( self::JOURNEY ) ) );
 		do_action( 'wpsignal_visitor_visit', $this->report( 'product:' . $product->get_id() . ':0', false, self::JOURNEY_2 ) );
 		$order = $this->make_order( $product );
 		mark_converted( $id, $order->get_id(), (float) $order->get_total() );
 		$by_id   = array_column( $this->journeys(), null, 'journey_id' );
-		$firings = json_decode( (string) $by_id[ self::JOURNEY ]['firings'], true );
+		$firings = Journeys::unpack_firings( (string) $by_id[ self::JOURNEY ]['firings'] );
 		$this->assertSame( 'left', $by_id[ self::JOURNEY ]['outcome'], 'the journey the moment fired in still ended as left' );
 		$this->assertSame( $order->get_id(), $firings[0]['order'], 'the firing within the window is credited with the order of another journey' );
 		$this->assertSame( 1, $firings[0]['s'] );
 		$this->assertArrayHasKey( 'order_at', $firings[0] );
 		$this->assertSame( (float) $order->get_total(), (float) $firings[0]['value'], 'the order total rides on the stamp' );
-		$this->assertArrayNotHasKey( 'order', $firings[1], 'a firing older than the window is not' );
-		$this->assertSame( 5, $firings[2]['order'], 'an earlier order keeps its claim' );
-		$this->assertArrayNotHasKey( 'order', $firings[3], 'a dismissal is what followed a firing, not one' );
+		$this->assertSame( $order->get_id(), $firings[1]['order'], 'the row is credited once, so every firing of it reads the order' );
+		$this->assertArrayNotHasKey( 'order', $firings[2], 'a dismissal is what followed a firing, not one' );
+		$this->assertSame( 0, WPS::journeys()->credit( $id, 999, 1.0 ), 'a credited row keeps its order' );
 		$this->assertSame( 'converted', $by_id[ self::JOURNEY_2 ]['outcome'] );
 		$replay = array_column( WPS::journeys()->feed( 30, 10 ), null, 'journey' );
 		$this->assertSame( $order->get_id(), $replay['home:2:1200']['firings'][0]['order'], 'the replay feed carries the stamp' );
@@ -383,51 +376,43 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->seed_cart( 'aaaa000000000004', array( 9001 ), 50.0, array(), 'converted', 0, 0, 'cart:0:1>checkout:0:20>thanks:0:1' );
 		$this->seed_cart( 'aaaa000000000005', array( 9002 ), 10.0, array(), 'left', 10 * DAY_IN_SECONDS );
 		foreach ( array( array( 'af405b6c-7d8e-4f90-b1a2-3d4e5f607182', $now ), array( 'c1627d8e-9f00-4b12-d3c4-5f6071829304', $early ) ) as list( $jid, $started ) ) {
-			$wpdb->insert(
-				journeys_table(),
+			Journeys::insert_row(
 				array(
 					'journey_id' => $jid,
 					'visitor'    => self::VISITOR,
 					'journey'    => 'cart:0:1>checkout:0:20',
-					'steps'      => 2,
 					'outcome'    => 'left',
 					'started_at' => $started,
-					'last_seen'  => $started,
-					'ended_at'   => $started,
 				)
 			);
 		}
-		// One moment credited with this week's order, another with an order from last week.
-		$wpdb->update(
-			journeys_table(),
-			array(
-				'firings' => wp_json_encode(
-					array(
+		// One cart's moment credited with this week's order, another cart's with an order from last week.
+		foreach ( array(
+			array( 'aaaa000000000001', $now, 77, 50.0 ),
+			array( 'aaaa000000000005', $early, 66, 20.0 ),
+		) as list( $ref, $at, $order_id, $value ) ) {
+			$wpdb->query(
+				$wpdb->prepare(
+					'UPDATE ' . journeys_table() . ' SET firings = %s WHERE ref = %s',
+					Journeys::pack_firings(
 						array(
-							'rule'     => 'r1',
-							'action'   => 'show',
-							'step'     => 0,
-							's'        => 1,
-							'at'       => $now,
-							'order'    => 77,
-							'order_at' => $now,
-							'value'    => 50.0,
-						),
-						array(
-							'rule'     => 'r1',
-							'action'   => 'show',
-							'step'     => 0,
-							's'        => 1,
-							'at'       => $early,
-							'order'    => 66,
-							'order_at' => $early,
-							'value'    => 20.0,
-						),
-					)
-				),
-			),
-			array( 'ref' => 'aaaa000000000001' )
-		);
+							array(
+								'rule'     => 'r1',
+								'action'   => 'show',
+								'step'     => 0,
+								's'        => 1,
+								'kind'     => 'fired',
+								'at'       => $at,
+								'order'    => $order_id,
+								'order_at' => $at,
+								'value'    => $value,
+							),
+						)
+					),
+					$ref
+				)
+			);
+		}
 		wp_cache_delete( 'week_strip', 'shopsocket' );
 		$strip = week_strip();
 		$this->assertTrue( $strip['journeys'] );

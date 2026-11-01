@@ -18,6 +18,7 @@
 
 namespace WPSignal\Extensions\ShopSocket;
 
+use WPSignal\Journeys;
 use WPSignal\WPS;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -161,7 +162,7 @@ function data_field( ?string $json, string $key ) {
 
 /**
  * The non-open journeys carrying a cart since a moment, newest first, one per cart (its newest):
- * `{ ref, outcome, value, ended_at, items, currency, user_id, journey, order }`.
+ * `{ ref, outcome, value, last_seen, items, currency, user_id, journey, order }`.
  *
  * @since 0.8.0
  *
@@ -172,7 +173,7 @@ function cart_journeys_since( string $since ): array {
 	global $wpdb;
 	$rows = (array) $wpdb->get_results(
 		$wpdb->prepare(
-			'SELECT ref, outcome, value, ended_at, data, user_id, journey FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' AND ended_at >= %s ORDER BY ended_at DESC LIMIT %d",
+			'SELECT ref, outcome, value, last_seen, data, user_id, journey FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' AND last_seen >= %s ORDER BY last_seen DESC LIMIT %d",
 			$since,
 			STRIP_CARTS
 		),
@@ -187,18 +188,23 @@ function cart_journeys_since( string $since ): array {
 			continue;
 		}
 		$out[ $ref ] = array(
-			'ref'      => $ref,
-			'outcome'  => (string) $row['outcome'],
-			'value'    => round( (float) ( $row['value'] ?? 0 ), 2 ),
-			'ended_at' => (string) $row['ended_at'],
-			'items'    => $items,
-			'currency' => (string) ( data_field( $row['data'], 'c' ) ?? '' ),
-			'user_id'  => (int) ( $row['user_id'] ?? 0 ),
-			'journey'  => (string) ( $row['journey'] ?? '' ),
-			'order'    => (int) ( data_field( $row['data'], 'o' ) ?? 0 ),
+			'ref'       => $ref,
+			'outcome'   => (string) $row['outcome'],
+			'value'     => round( (float) ( $row['value'] ?? 0 ), 2 ),
+			'last_seen' => (string) $row['last_seen'],
+			'items'     => $items,
+			'currency'  => (string) ( data_field( $row['data'], 'c' ) ?? '' ),
+			'user_id'   => (int) ( $row['user_id'] ?? 0 ),
+			'journey'   => (string) ( $row['journey'] ?? '' ),
+			'order'     => (int) ( data_field( $row['data'], 'o' ) ?? 0 ),
 		);
 	}
-	return array_values( $out );
+	$out      = array_values( $out );
+	$journeys = Journeys::unpack_journeys( array_column( $out, 'journey' ) );
+	foreach ( $out as $i => $cart ) {
+		$out[ $i ]['journey'] = $journeys[ $i ];
+	}
+	return $out;
 }
 
 /**
@@ -324,8 +330,8 @@ function cart_left( string $cart_id, string $journey_id, array $state ): void {
 	global $wpdb;
 	$row = $wpdb->get_row(
 		$wpdb->prepare(
-			'SELECT user_id, visitor, value, started_at, last_seen, ended_at, journey FROM ' . journeys_table() . " WHERE journey_id = %s AND ref = %s AND outcome = 'left'",
-			$journey_id,
+			'SELECT user_id, HEX(visitor) AS visitor, value, started_at, last_seen, journey FROM ' . journeys_table() . " WHERE journey_id = UNHEX(%s) AND ref = %s AND outcome = 'left'",
+			Journeys::hex( $journey_id ),
 			$cart_id
 		),
 		ARRAY_A
@@ -335,9 +341,9 @@ function cart_left( string $cart_id, string $journey_id, array $state ): void {
 	}
 	$earlier = (int) $wpdb->get_var(
 		$wpdb->prepare(
-			'SELECT COUNT(*) FROM ' . journeys_table() . " WHERE ref = %s AND outcome <> 'open' AND journey_id <> %s",
+			'SELECT COUNT(*) FROM ' . journeys_table() . " WHERE ref = %s AND outcome <> 'open' AND journey_id <> UNHEX(%s)",
 			$cart_id,
-			$journey_id
+			Journeys::hex( $journey_id )
 		)
 	);
 	if ( $earlier > 0 ) {
@@ -345,13 +351,13 @@ function cart_left( string $cart_id, string $journey_id, array $state ): void {
 	}
 	$record = array(
 		'user_id'    => null === $row['user_id'] ? null : (int) $row['user_id'],
-		'visitor'    => (string) $row['visitor'],
+		'visitor'    => Journeys::uuid( (string) $row['visitor'] ),
 		'currency'   => get_woocommerce_currency(),
 		'value'      => round( (float) ( $state['value'] ?? $row['value'] ), 2 ),
 		'first_seen' => (string) $row['started_at'],
 		'last_seen'  => (string) $row['last_seen'],
-		'left_at'    => (string) $row['ended_at'],
-		'journey'    => (string) $row['journey'],
+		'left_at'    => (string) $row['last_seen'],
+		'journey'    => Journeys::unpack_journey( (string) $row['journey'] ),
 	);
 	/**
 	 * A cart's shopper left for the first time.
@@ -458,6 +464,38 @@ function page_step( array $step ): array {
 add_filter( 'wpsignal_page_step', __NAMESPACE__ . '\page_step' );
 
 /**
+ * The codes WordSocket stores the shop's step kinds under.
+ *
+ * @since 0.8.0
+ *
+ * @param array<string, string> $codes Codes by kind so far.
+ * @return array<string, string>
+ */
+function kind_codes( array $codes ): array {
+	return $codes + array(
+		'shop'     => 'sh',
+		'cart'     => 'ct',
+		'checkout' => 'ck',
+		'thanks'   => 'ty',
+	);
+}
+add_filter( 'wpsignal_kind_codes', __NAMESPACE__ . '\kind_codes' );
+
+/**
+ * A product category term reads back as the `category` step `page_step()` records it as.
+ *
+ * @since 0.8.0
+ *
+ * @param string $kind     The kind so far.
+ * @param string $taxonomy The taxonomy.
+ * @return string
+ */
+function taxonomy_kind( string $kind, string $taxonomy ): string {
+	return 'product_cat' === $taxonomy ? 'category' : $kind;
+}
+add_filter( 'wpsignal_taxonomy_kind', __NAMESPACE__ . '\taxonomy_kind', 10, 2 );
+
+/**
  * The carts whose shopper left, newest leave first, for the board's "Recently abandoned" panel: one row per cart, from its newest left journey, with the order a later journey became.
  *
  * Whether the shopper is back right now, and whether the leave is older than the grace, is the board's to judge: it has presence and its own clock.
@@ -470,7 +508,7 @@ function abandoned_rows(): array {
 	global $wpdb;
 	$rows  = (array) $wpdb->get_results(
 		$wpdb->prepare(
-			'SELECT ref, user_id, value, journey, outcome, ended_at, data FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' ORDER BY ended_at DESC LIMIT %d",
+			'SELECT ref, user_id, value, journey, outcome, last_seen, data FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' ORDER BY last_seen DESC LIMIT %d",
 			ABANDONED_SCAN
 		),
 		ARRAY_A
@@ -494,10 +532,10 @@ function abandoned_rows(): array {
 		if ( 'left' === $row['outcome'] && null === $cart['left'] ) {
 			$cart['left'] = $row;
 			// An order placed before this leave is an earlier cart's.
-			if ( null !== $cart['converted'] && $cart['converted']['ended_at'] < $row['ended_at'] ) {
+			if ( null !== $cart['converted'] && $cart['converted']['last_seen'] < $row['last_seen'] ) {
 				$cart['converted'] = null;
 			}
-		} elseif ( 'converted' === $row['outcome'] && null === $cart['converted'] && ( null === $cart['left'] || $row['ended_at'] >= $cart['left']['ended_at'] ) ) {
+		} elseif ( 'converted' === $row['outcome'] && null === $cart['converted'] && ( null === $cart['left'] || $row['last_seen'] >= $cart['left']['last_seen'] ) ) {
 			$cart['converted'] = $row;
 		}
 		$carts[ $ref ] = $cart;
@@ -523,8 +561,8 @@ function abandoned_rows(): array {
 			'value'        => round( (float) ( $left['value'] ?? 0 ), 2 ),
 			'currency'     => (string) ( data_field( $left['data'], 'c' ) ?? get_woocommerce_currency() ),
 			'journey'      => (string) ( $left['journey'] ?? '' ),
-			'left_at'      => datetime_to_rfc3339( (string) $left['ended_at'] ),
-			'converted_at' => null === $converted ? null : datetime_to_rfc3339( (string) $converted['ended_at'] ),
+			'left_at'      => datetime_to_rfc3339( (string) $left['last_seen'] ),
+			'converted_at' => null === $converted ? null : datetime_to_rfc3339( (string) $converted['last_seen'] ),
 			'order_id'     => $order_id > 0 ? $order_id : null,
 			'order_url'    => $order_id > 0 ? order_edit_url( $order_id ) : '',
 			'user_id'      => $user_id > 0 ? $user_id : null,
@@ -534,6 +572,10 @@ function abandoned_rows(): array {
 		if ( count( $out ) >= BOARD_ABANDONED ) {
 			break;
 		}
+	}
+	$journeys = Journeys::unpack_journeys( array_column( $out, 'journey' ) );
+	foreach ( $out as $i => $cart ) {
+		$out[ $i ]['journey'] = $journeys[ $i ];
 	}
 	return $out;
 }

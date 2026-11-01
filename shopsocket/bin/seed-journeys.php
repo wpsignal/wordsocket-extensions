@@ -109,15 +109,15 @@ $next        = array(
 	),
 );
 $dwell       = array(
-	'home'     => array( 1500, 8000 ),
-	'shop'     => array( 3000, 20000 ),
-	'category' => array( 3000, 15000 ),
-	'search'   => array( 3000, 12000 ),
-	'product'  => array( 8000, 180000 ),
-	'cart'     => array( 5000, 90000 ),
-	'checkout' => array( 20000, 300000 ),
-	'thanks'   => array( 3000, 15000 ),
-	'away'     => array( 8000, 900000 ),
+	'home'     => array( 2, 8 ),
+	'shop'     => array( 3, 20 ),
+	'category' => array( 3, 15 ),
+	'search'   => array( 3, 12 ),
+	'product'  => array( 8, 180 ),
+	'cart'     => array( 5, 90 ),
+	'checkout' => array( 20, 300 ),
+	'thanks'   => array( 3, 15 ),
+	'away'     => array( 8, 900 ),
 );
 $day_weights = array();
 for ( $d = 0; $d < 28; $d++ ) {
@@ -184,12 +184,12 @@ for ( $n = 0; $n < $count; $n++ ) {
 	}
 	$ended_hidden = 'away' === $kind;
 	$journey      = implode( '>', $steps );
-	$total_ms     = array_sum( array_map( static fn( $s ) => (int) explode( ':', $s )[2], $steps ) );
+	$total        = array_sum( array_map( static fn( $s ) => (int) explode( ':', $s )[2], $steps ) );
 
 	$day     = (int) $weighted( $day_weights );
 	$hour    = (int) $weighted( $hour_weights );
 	$started = min( time() - 60, strtotime( gmdate( 'Y-m-d', strtotime( "-{$day} days" ) ) . sprintf( ' %02d:%02d:%02d', $hour, mt_rand( 0, 59 ), mt_rand( 0, 59 ) ) ) );
-	$ended   = $started + (int) ( $total_ms / 1000 );
+	$ended   = $started + $total;
 	$value   = 0.0;
 	foreach ( $held as $pid => $qty ) {
 		$value += $prices[ $pid ] * $qty;
@@ -211,8 +211,7 @@ for ( $n = 0; $n < $count; $n++ ) {
 		}
 	}
 
-	$wpdb->insert(
-		journeys_table(),
+	\WPSignal\Journeys::insert_row(
 		array(
 			'journey_id' => $uuid(),
 			'visitor'    => $visitor,
@@ -221,10 +220,9 @@ for ( $n = 0; $n < $count; $n++ ) {
 			'steps'      => count( $steps ),
 			'outcome'    => $outcome,
 			'value'      => $held ? round( $value, 4 ) : null,
-			'data'       => null === $data ? null : wp_json_encode( $data ),
+			'data'       => $data,
 			'started_at' => gmdate( 'Y-m-d H:i:s', $started ),
 			'last_seen'  => gmdate( 'Y-m-d H:i:s', $ended ),
-			'ended_at'   => 'open' === $outcome ? null : gmdate( 'Y-m-d H:i:s', $ended ),
 		)
 	);
 	++$journeys;

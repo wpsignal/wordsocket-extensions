@@ -11,6 +11,7 @@
 
 namespace WPSignal\Extensions\ShopSocket;
 
+use WPSignal\Journeys;
 use WPSignal\WPS;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -106,9 +107,9 @@ function carts_left( string $since, string $prev, array $dates ): array {
 		if ( 'left' !== $cart['outcome'] || empty( $cart['items'] ) ) {
 			continue;
 		}
-		$day            = substr( $cart['ended_at'], 0, 10 );
+		$day            = substr( $cart['last_seen'], 0, 10 );
 		$by_day[ $day ] = ( $by_day[ $day ] ?? 0 ) + 1;
-		if ( $cart['ended_at'] >= $since ) {
+		if ( $cart['last_seen'] >= $since ) {
 			++$count;
 			$value += $cart['value'];
 		} else {
@@ -167,16 +168,12 @@ function recovered_orders( string $since, string $prev, array $dates ): array {
 	global $wpdb;
 	// A credited firing is at most the attribution window before its order, and a journey starts before its firings.
 	$floor    = gmdate( 'Y-m-d H:i:s', (int) strtotime( $prev . ' UTC' ) - attribution_window() );
-	$rows     = (array) $wpdb->get_col( $wpdb->prepare( 'SELECT firings FROM ' . journeys_table() . ' WHERE started_at >= %s AND firings LIKE %s', $floor, '%"order_at"%' ) );
+	$rows     = (array) $wpdb->get_col( $wpdb->prepare( 'SELECT firings FROM ' . journeys_table() . ' WHERE started_at >= %s AND ' . Journeys::credited_where(), $floor ) );
 	$orders   = array();
 	$previous = array();
 	$days     = array();
 	foreach ( $rows as $json ) {
-		$firings = json_decode( (string) $json, true );
-		if ( ! is_array( $firings ) ) {
-			continue;
-		}
-		foreach ( $firings as $firing ) {
+		foreach ( Journeys::unpack_firings( (string) $json ) as $firing ) {
 			if ( ! is_array( $firing ) || empty( $firing['order'] ) ) {
 				continue;
 			}
@@ -211,31 +208,29 @@ function recovered_orders( string $since, string $prev, array $dates ): array {
  */
 function checkout_conversion( string $since, string $prev, array $dates ): array {
 	global $wpdb;
-	$weeks  = (array) $wpdb->get_row(
+	$reached = Journeys::step_where( 'checkout' );
+	$weeks   = (array) $wpdb->get_row(
 		$wpdb->prepare(
-			'SELECT SUM(started_at >= %s AND journey LIKE %s) AS reached_n, SUM(started_at >= %s AND outcome = %s) AS converted_n, SUM(started_at < %s AND journey LIKE %s) AS reached_before, SUM(started_at < %s AND outcome = %s) AS converted_before FROM ' . journeys_table() . ' WHERE started_at >= %s',
+			'SELECT SUM(started_at >= %s AND ' . $reached . ') AS reached_n, SUM(started_at >= %s AND outcome = %s) AS converted_n, SUM(started_at < %s AND ' . $reached . ') AS reached_before, SUM(started_at < %s AND outcome = %s) AS converted_before FROM ' . journeys_table() . ' WHERE started_at >= %s',
 			$since,
-			'%checkout:%',
 			$since,
 			'converted',
 			$since,
-			'%checkout:%',
 			$since,
 			'converted',
 			$prev
 		),
 		ARRAY_A
 	);
-	$rows   = (array) $wpdb->get_results(
+	$rows    = (array) $wpdb->get_results(
 		$wpdb->prepare(
-			'SELECT DATE(started_at) AS day, SUM(journey LIKE %s) AS reached_n, SUM(outcome = %s) AS converted_n FROM ' . journeys_table() . ' WHERE started_at >= %s GROUP BY day',
-			'%checkout:%',
+			'SELECT DATE(started_at) AS day, SUM(' . $reached . ') AS reached_n, SUM(outcome = %s) AS converted_n FROM ' . journeys_table() . ' WHERE started_at >= %s GROUP BY day',
 			'converted',
 			$prev
 		),
 		ARRAY_A
 	);
-	$by_day = array();
+	$by_day  = array();
 	foreach ( $rows as $row ) {
 		$by_day[ (string) $row['day'] ] = percent_of( (int) ( $row['converted_n'] ?? 0 ), (int) ( $row['reached_n'] ?? 0 ) );
 	}
@@ -282,7 +277,7 @@ function leak( string $since ): ?array {
 		)
 	);
 	$last     = array();
-	foreach ( $journeys as $journey ) {
+	foreach ( Journeys::unpack_journeys( $journeys ) as $journey ) {
 		foreach ( array_reverse( explode( '>', (string) $journey ) ) as $step ) {
 			list( $kind, , $s ) = array_pad( explode( ':', $step ), 3, '0' );
 			if ( '' === $kind || 'away' === $kind ) {
