@@ -58,6 +58,8 @@ interface WordSocketTask< Args extends unknown[], Result > {
 interface WordSocketExtensionTab {
 	name: string;
 	title: string;
+	/** Shows a "New" badge beside the title (WordSocket 0.31). */
+	new?: boolean;
 	render: React.ComponentType;
 }
 

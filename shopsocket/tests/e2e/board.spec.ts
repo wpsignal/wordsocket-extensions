@@ -197,6 +197,55 @@ test.describe("ShopSocket dashboard", () => {
     }
   });
 
+  test("emptying the cart from the drawer takes it out of Carts in use without a reload", async ({
+    admin,
+    page,
+    browser,
+    baseURL,
+    requestUtils,
+  }) => {
+    await admin.visitAdminPage("admin.php", PAGE);
+    await waitForLive(page);
+    const liveShoppers = stat(page, "live");
+    const live0 = await num(liveShoppers)();
+    const product = await createProduct(requestUtils, "E2E Emptied Widget", 12);
+    const visitor = await visitorContext(browser, baseURL);
+    try {
+      const shop = await visitor.newPage();
+      await shop.goto(product.permalink);
+      await waitForLive(shop);
+      await addToCart(shop);
+      await expect
+        .poll(num(liveShoppers), { timeout: 15_000 })
+        .toBeGreaterThanOrEqual(live0 + 1);
+
+      /*
+       * The shopper empties the cart from the mini-cart drawer on the same
+       * page, the Interactivity store's path with no wp.data on the page: its
+       * presence drops the cart id, so the board lets the shopper go without
+       * any page reloading.
+       */
+      await shop.locator(".wc-block-mini-cart__button").first().click();
+      await shop
+        .locator(".wc-block-mini-cart__drawer")
+        .getByRole("button", { name: /Remove/ })
+        .first()
+        .click();
+      await expect
+        .poll(num(liveShoppers), { timeout: 15_000 })
+        .toBeLessThanOrEqual(live0);
+      await expect(
+        page.locator(".shopsocket-live-products a", {
+          hasText: "E2E Emptied Widget",
+        }),
+      ).toHaveCount(0, { timeout: 15_000 });
+    } finally {
+      await visitor.close();
+      clearCarts(product.id);
+      await deleteProduct(requestUtils, product.id);
+    }
+  });
+
   test("a logged-in shopper's own cart shows live, not abandoned", async ({
     admin,
     page,

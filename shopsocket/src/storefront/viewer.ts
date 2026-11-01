@@ -73,6 +73,8 @@ export function startViewer(
   let inFlight = false;
   let dirty = false;
   let tracker: WPSPresenceTracker | null = null;
+  /* Whether the server has answered once: from then on the answer, not the cookie, says if there is a cart. */
+  let synced = false;
   let cart: CartSnapshot = {
     count: 0,
     total: 0,
@@ -126,7 +128,9 @@ export function startViewer(
     if (config.productId && typeof viewer?.count === "number") {
       onCount(Number(config.productId), viewer.count);
     }
-    announce(viewer?.id ?? null);
+    synced = true;
+    /* The id names the session, which outlives the items: an emptied cart leaves presence. */
+    announce(items.length > 0 ? (viewer?.id ?? null) : null);
   }
 
   /**
@@ -172,8 +176,12 @@ export function startViewer(
   /**
    * A shopper never receives their own `woo.cart.added`, so re-sync on every cart
    * signal WooCommerce gives: the jQuery events on classic themes, the
-   * `wc-blocks_*` CustomEvents block themes dispatch on `document.body`, and the
-   * `wc/store/cart` wp.data store for changes that dispatch no event.
+   * `wc-blocks_*` CustomEvents block themes dispatch on `document.body`, the
+   * `wc-blocks_store_sync_required` event the Interactivity cart store (the
+   * mini-cart drawer, the add-to-cart form) dispatches on `window` after each
+   * change, and the `wc/store/cart` wp.data store for changes that dispatch no event.
+   *
+   * @since 0.8.0 Listens for the Interactivity store's sync event.
    */
   function watchOwnCart(): void {
     const jq = window.jQuery;
@@ -186,6 +194,7 @@ export function startViewer(
     ]) {
       document.body.addEventListener(type, () => sync());
     }
+    window.addEventListener("wc-blocks_store_sync_required", () => sync());
     const data = window.wp?.data;
     if (!data?.subscribe || !data.select) return;
     let last: string | null = null;
@@ -215,15 +224,14 @@ export function startViewer(
   }
 
   /**
-   * Whether this shopper has a cart: the `woocommerce_items_in_cart` cookie, or a synced cart with items.
+   * Whether this shopper has a cart: the synced answer once there is one, before that the
+   * `woocommerce_items_in_cart` cookie, which only a full page load refreshes.
    *
    * @since 0.8.0
    */
   function hasCart(): boolean {
-    return (
-      cart.count > 0 ||
-      /(?:^|;\s*)woocommerce_items_in_cart=1(?:;|$)/.test(document.cookie)
-    );
+    if (synced) return cart.count > 0;
+    return /(?:^|;\s*)woocommerce_items_in_cart=1(?:;|$)/.test(document.cookie);
   }
 
   /**
