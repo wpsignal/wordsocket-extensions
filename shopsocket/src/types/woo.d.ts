@@ -37,7 +37,7 @@ interface WooCartRow {
 
 /** A cart whose shopper left (inc/history.php `abandoned_rows()`, its newest left journey), newest leave first. */
 interface WooAbandonedRow extends WooCartRow {
-	/** The journey the cart was left in, `kind:id:ms` steps joined by `>`. */
+	/** The journey the cart was left in, `kind:id:s` steps joined by `>`, the time in whole seconds. */
 	journey: string;
 	/** When the shopper left, RFC 3339 UTC. */
 	left_at: string;
@@ -84,7 +84,7 @@ interface WooWeekStrip {
 	/** Orders against journeys that reached checkout, as a percentage, with the percentage per day over two weeks. */
 	conversion: { reached: number; orders: number; percent: number; previous_percent: number; days: number[] };
 	/** Where most carted leavers left from; null when nobody left. */
-	leak: { kind: string; count: number; leavers: number; median_ms: number } | null;
+	leak: { kind: string; count: number; leavers: number; median_s: number } | null;
 	/** The products most often in a left cart, with how many carts bought each. */
 	products: Array< { id: number; left: number; bought: number } >;
 }

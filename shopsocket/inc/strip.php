@@ -269,7 +269,7 @@ function percent_of( int $orders, int $reached ): int {
  * @since 0.8.0
  *
  * @param string $since Start of this week, SQL UTC.
- * @return array{kind: string, count: int, leavers: int, median_ms: int}|null Null when nobody left.
+ * @return array{kind: string, count: int, leavers: int, median_s: int}|null Null when nobody left.
  */
 function leak( string $since ): ?array {
 	global $wpdb;
@@ -284,11 +284,11 @@ function leak( string $since ): ?array {
 	$last     = array();
 	foreach ( $journeys as $journey ) {
 		foreach ( array_reverse( explode( '>', (string) $journey ) ) as $step ) {
-			list( $kind, , $ms ) = array_pad( explode( ':', $step ), 3, '0' );
+			list( $kind, , $s ) = array_pad( explode( ':', $step ), 3, '0' );
 			if ( '' === $kind || 'away' === $kind ) {
 				continue;
 			}
-			$last[ $kind ][] = (int) $ms;
+			$last[ $kind ][] = (int) $s;
 			break;
 		}
 	}
@@ -297,15 +297,15 @@ function leak( string $since ): ?array {
 	}
 	uasort( $last, static fn( array $a, array $b ): int => count( $b ) <=> count( $a ) );
 	$kind = (string) array_key_first( $last );
-	$ms   = $last[ $kind ];
-	sort( $ms );
-	$n      = count( $ms );
-	$median = $n % 2 ? $ms[ intdiv( $n, 2 ) ] : (int) round( ( $ms[ $n / 2 - 1 ] + $ms[ $n / 2 ] ) / 2 );
+	$s    = $last[ $kind ];
+	sort( $s );
+	$n      = count( $s );
+	$median = $n % 2 ? $s[ intdiv( $n, 2 ) ] : (int) round( ( $s[ $n / 2 - 1 ] + $s[ $n / 2 ] ) / 2 );
 	return array(
-		'kind'      => $kind,
-		'count'     => $n,
-		'leavers'   => array_sum( array_map( 'count', $last ) ),
-		'median_ms' => $median,
+		'kind'     => $kind,
+		'count'    => $n,
+		'leavers'  => array_sum( array_map( 'count', $last ) ),
+		'median_s' => $median,
 	);
 }
 

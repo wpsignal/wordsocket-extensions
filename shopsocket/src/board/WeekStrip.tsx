@@ -28,9 +28,9 @@ function delta(now: number, before: number, unit = ""): string {
   );
 }
 
-/** Milliseconds as "48 s" or "2 min 10 s". */
-function duration(ms: number): string {
-  const total = Math.round(ms / 1000);
+/** Seconds as "48 s" or "2 min 10 s". */
+function duration(s: number): string {
+  const total = Math.round(s);
   const minutes = Math.floor(total / 60);
   const seconds = total % 60;
   /* translators: %d: seconds */
@@ -195,7 +195,7 @@ export function WeekStrip({
               "shopsocket",
             ),
             placeOf(leak.kind),
-            duration(leak.median_ms),
+            duration(leak.median_s),
             leak.count,
             Math.round((100 * leak.count) / Math.max(1, leak.leavers)),
           )}{" "}

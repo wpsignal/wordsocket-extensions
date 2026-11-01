@@ -317,7 +317,7 @@ final class HistoryTest extends ExtensionTestCase {
 				'rule_id'    => 'r1',
 				'action'     => 'show',
 				'step'       => 0,
-				'ms'         => 900,
+				's'          => 1,
 				'kind'       => 'fired',
 				'user_id'    => 0,
 				'data'       => array(),
@@ -329,14 +329,14 @@ final class HistoryTest extends ExtensionTestCase {
 			'rule'   => 'r1',
 			'action' => 'show',
 			'step'   => 0,
-			'ms'     => 0,
+			's'      => 0,
 			'at'     => gmdate( 'Y-m-d H:i:s', time() - 8 * DAY_IN_SECONDS ),
 		);
 		$firings[] = array(
 			'rule'     => 'r1',
 			'action'   => 'show',
 			'step'     => 0,
-			'ms'       => 0,
+			's'        => 0,
 			'at'       => current_time( 'mysql', true ),
 			'order'    => 5,
 			'order_at' => '2026-01-01 00:00:00',
@@ -345,7 +345,7 @@ final class HistoryTest extends ExtensionTestCase {
 			'rule'   => 'r1',
 			'action' => 'show',
 			'step'   => 0,
-			'ms'     => 0,
+			's'      => 0,
 			'kind'   => 'dismissed',
 			'at'     => current_time( 'mysql', true ),
 		);
@@ -357,7 +357,7 @@ final class HistoryTest extends ExtensionTestCase {
 		$firings = json_decode( (string) $by_id[ self::JOURNEY ]['firings'], true );
 		$this->assertSame( 'left', $by_id[ self::JOURNEY ]['outcome'], 'the journey the moment fired in still ended as left' );
 		$this->assertSame( $order->get_id(), $firings[0]['order'], 'the firing within the window is credited with the order of another journey' );
-		$this->assertSame( 900, $firings[0]['ms'] );
+		$this->assertSame( 1, $firings[0]['s'] );
 		$this->assertArrayHasKey( 'order_at', $firings[0] );
 		$this->assertSame( (float) $order->get_total(), (float) $firings[0]['value'], 'the order total rides on the stamp' );
 		$this->assertArrayNotHasKey( 'order', $firings[1], 'a firing older than the window is not' );
@@ -377,10 +377,10 @@ final class HistoryTest extends ExtensionTestCase {
 		$now   = current_time( 'mysql', true );
 		$early = gmdate( 'Y-m-d H:i:s', time() - 10 * DAY_IN_SECONDS );
 		// Carts on journeys: three left this week (two hold 9001), one converted this week holding 9001, one left last week; two journeys without a cart reached checkout.
-		$this->seed_cart( 'aaaa000000000001', array( 9001, 9002 ), 10.0, array(), 'left', 0, 0, 'home:1:1000>cart:0:48000>away:0:5000' );
-		$this->seed_cart( 'aaaa000000000002', array( 9001 ), 10.0, array(), 'left', 0, 0, 'product:9001:9000>cart:0:30000' );
-		$this->seed_cart( 'aaaa000000000003', array( 9003 ), 10.0, array(), 'left', 0, 0, 'home:1:1000>product:9003:7000' );
-		$this->seed_cart( 'aaaa000000000004', array( 9001 ), 50.0, array(), 'converted', 0, 0, 'cart:0:1000>checkout:0:20000>thanks:0:1' );
+		$this->seed_cart( 'aaaa000000000001', array( 9001, 9002 ), 10.0, array(), 'left', 0, 0, 'home:1:1>cart:0:48>away:0:5' );
+		$this->seed_cart( 'aaaa000000000002', array( 9001 ), 10.0, array(), 'left', 0, 0, 'product:9001:9>cart:0:30' );
+		$this->seed_cart( 'aaaa000000000003', array( 9003 ), 10.0, array(), 'left', 0, 0, 'home:1:1>product:9003:7' );
+		$this->seed_cart( 'aaaa000000000004', array( 9001 ), 50.0, array(), 'converted', 0, 0, 'cart:0:1>checkout:0:20>thanks:0:1' );
 		$this->seed_cart( 'aaaa000000000005', array( 9002 ), 10.0, array(), 'left', 10 * DAY_IN_SECONDS );
 		foreach ( array( array( 'af405b6c-7d8e-4f90-b1a2-3d4e5f607182', $now ), array( 'c1627d8e-9f00-4b12-d3c4-5f6071829304', $early ) ) as list( $jid, $started ) ) {
 			$wpdb->insert(
@@ -388,7 +388,7 @@ final class HistoryTest extends ExtensionTestCase {
 				array(
 					'journey_id' => $jid,
 					'visitor'    => self::VISITOR,
-					'journey'    => 'cart:0:1000>checkout:0:20000',
+					'journey'    => 'cart:0:1>checkout:0:20',
 					'steps'      => 2,
 					'outcome'    => 'left',
 					'started_at' => $started,
@@ -407,7 +407,7 @@ final class HistoryTest extends ExtensionTestCase {
 							'rule'     => 'r1',
 							'action'   => 'show',
 							'step'     => 0,
-							'ms'       => 1,
+							's'        => 1,
 							'at'       => $now,
 							'order'    => 77,
 							'order_at' => $now,
@@ -417,7 +417,7 @@ final class HistoryTest extends ExtensionTestCase {
 							'rule'     => 'r1',
 							'action'   => 'show',
 							'step'     => 0,
-							'ms'       => 1,
+							's'        => 1,
 							'at'       => $early,
 							'order'    => 66,
 							'order_at' => $early,
@@ -472,10 +472,10 @@ final class HistoryTest extends ExtensionTestCase {
 		);
 		$this->assertSame(
 			array(
-				'kind'      => 'cart',
-				'count'     => 2,
-				'leavers'   => 3,
-				'median_ms' => 39000,
+				'kind'     => 'cart',
+				'count'    => 2,
+				'leavers'  => 3,
+				'median_s' => 39,
 			),
 			$strip['leak'],
 			'the last step that is not away, median of the two cart leavers'

@@ -38,13 +38,18 @@ export async function addToCart(page: Page): Promise<void> {
     .toBe(true);
 }
 
-/** Wait until window.WPS reports a connection on the current page. */
+/**
+ * Wait until window.WPS reports a connection on the current page, then move the pointer: a new
+ * journey, and with it presence, begins on the visitor's first interaction (WordSocket 0.31).
+ */
 export async function waitForLive(page: Page): Promise<void> {
   await expect
     .poll(() => page.evaluate(() => window.WPS?.state.connected ?? false), {
       timeout: 20_000,
     })
     .toBe(true);
+  await page.mouse.move(12, 12);
+  await page.mouse.move(48, 48);
 }
 
 /** A fresh anonymous browser (own cookies and storage): a new shopper, not the logged-in admin. */

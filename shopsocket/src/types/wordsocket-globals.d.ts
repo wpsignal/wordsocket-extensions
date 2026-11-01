@@ -167,8 +167,8 @@ interface WPSFiring {
   rule: string;
   action: string;
   step: number;
-  /** Elapsed ms of that step when the action ran (WordSocket 0.31). */
-  ms?: number;
+  /** Whole seconds into that step when the action ran (WordSocket 0.31). */
+  s?: number;
   /** `fired` when absent; the other kinds are what the visitor did with the prompt. */
   kind?: WPSFiringKind;
   data?: Record<string, unknown>;
@@ -177,7 +177,7 @@ interface WPSHistoryFiring {
   rule: string;
   action: string;
   step: number;
-  ms?: number;
+  s?: number;
   kind?: WPSFiringKind;
   at?: string;
   order?: number;

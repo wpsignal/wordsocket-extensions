@@ -129,7 +129,7 @@ final class RulesTest extends ExtensionTestCase {
 			'rule_id'    => DEFAULT_RULE_ID,
 			'action'     => 'show',
 			'step'       => 2,
-			'ms'         => 0,
+			's'          => 0,
 			'kind'       => 'fired',
 			'user_id'    => 0,
 			'data'       => array(),
