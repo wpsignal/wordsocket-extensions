@@ -94,7 +94,7 @@ function order_statuses(): array {
 /**
  * Render the dashboard screen and enqueue its bundle.
  *
- * @since 0.8.0 Adds `journeysUrl` to the board config.
+ * @since 0.8.0 Adds `journeysUrl`, `pagesUrl`, `homeUrl`, `shopUrl`, `cartUrl` and `checkoutUrl` to the board config.
  *
  * @return void
  */
@@ -143,6 +143,11 @@ function render_dashboard(): void {
 			array(
 				'dashboardUrl'   => rest_url( REST_NS . '/dashboard' ),
 				'productsUrl'    => rest_url( REST_NS . '/products' ),
+				'pagesUrl'       => rest_url( REST_NS . '/pages' ),
+				'homeUrl'        => home_url( '/' ),
+				'shopUrl'        => (string) wc_get_page_permalink( 'shop' ),
+				'cartUrl'        => (string) wc_get_cart_url(),
+				'checkoutUrl'    => (string) wc_get_checkout_url(),
 				'adminUrl'       => admin_url(),
 				'journeysUrl'    => admin_url( 'admin.php?page=wordsocket&tab=journeys' ),
 				'nonce'          => wp_create_nonce( 'wp_rest' ),

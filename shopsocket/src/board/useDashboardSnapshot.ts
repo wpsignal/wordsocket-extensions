@@ -25,6 +25,70 @@ type Config = Pick<
 >;
 
 /*
+ * A shopper's presence state: `v` and `b` are the visitor and cart ids, `j`
+ * the journey WordSocket's tracker keeps (0.30), whose last step is `away`
+ * while the tab is hidden.
+ */
+type Member = { v?: string; b?: string | null; j?: string };
+
+/** Whether a member's tab is hidden: the journey's last step is `away`. */
+function isAway(m: Member): boolean {
+  const last = (m.j ?? "").split(">").pop() ?? "";
+  return last.startsWith("away:");
+}
+
+/**
+ * The page a member is on: the journey's open step, or the one before it when the tab is hidden;
+ * `other:0` for a journey that has none.
+ *
+ * @since 0.8.0
+ */
+export function openStep(j: string | undefined): { kind: string; id: number } {
+  const steps = (j ?? "").split(">").filter((s) => s !== "");
+  let last = steps.pop() ?? "";
+  if (last.startsWith("away:")) last = steps.pop() ?? "";
+  const [kind, id] = last.split(":");
+  return /^[a-z_]+$/.test(kind ?? "")
+    ? { kind, id: Number(id) || 0 }
+    : { kind: "other", id: 0 };
+}
+
+/** A connected visitor before the cart row is joined on. */
+type Roster = Omit<WooShopper, "cart">;
+
+/*
+ * One entry per visitor from the members in announce order: a visible tab
+ * wins over a hidden one, and among equals the last announced wins, so a
+ * navigation shows the new page the moment it joins. Any tab's cart id serves,
+ * since a visitor's tabs share the cart.
+ */
+function byVisitor(
+  members: Map<string, Member>,
+  staffVisitors: Set<string>,
+): Roster[] {
+  const picked = new Map<string, Roster>();
+  members.forEach((m) => {
+    if (!m.v) return;
+    const away = isAway(m);
+    const before = picked.get(m.v);
+    if (before && !before.away && away) {
+      if (!before.b && m.b) before.b = m.b;
+      return;
+    }
+    const { kind, id } = openStep(m.j);
+    picked.set(m.v, {
+      v: m.v,
+      b: m.b ?? before?.b ?? null,
+      kind,
+      id,
+      away,
+      staff: staffVisitors.has(m.v),
+    });
+  });
+  return [...picked.values()];
+}
+
+/*
  * Cross the cart rows with presence into three segments: live (a visible tab),
  * away (present, every tab hidden), abandoned (gone). Live carts per product
  * count the first two, since the shopper is still on the site.
@@ -124,6 +188,7 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
   );
   const [awayUsers, setAwayUsers] = useState(0);
   const [awayIds, setAwayIds] = useState<Set<string>>(() => new Set());
+  const [roster, setRoster] = useState<Roster[]>([]);
   // Re-evaluated when the youngest leave crosses the grace, so a row appears without a refresh.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -229,20 +294,9 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
      * shoppers' roster carries { v: visitor id, b: cart id | null }; a
      * shopper's tabs share v, so distinct v is "users online" and distinct b
      * is the live-cart split. The staff roster carries { v } from every admin
-     * and storefront page a staff member has open.
+     * and storefront page a staff member has open. The map's order is announce
+     * order, which the per-visitor roster reads.
      */
-    /*
-     * A shopper's presence state: `v` and `b` are the visitor and cart ids, `j`
-     * the journey WordSocket's tracker keeps (0.30), whose last step is `away`
-     * while the tab is hidden.
-     */
-    type Member = { v?: string; b?: string | null; j?: string };
-
-    /** Whether a member's tab is hidden: the journey's last step is `away`. */
-    function isAway(m: Member): boolean {
-      const last = (m.j ?? "").split(">").pop() ?? "";
-      return last.startsWith("away:");
-    }
     type PresenceFrame = {
       action?: string;
       id?: string;
@@ -271,6 +325,8 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
           );
         } else if (p.action === "join" && p.id) {
           cancelLeave(p.id);
+          // A re-announce moves the member to the end.
+          members.delete(p.id);
           members.set(p.id, p.state ?? {});
         } else if (p.action === "leave" && p.id) {
           /*
@@ -330,6 +386,7 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
       setPresent(carts);
       setUsersOnline(users.size);
       setStaffShare({ users: staffUsers, tabs: staff.members.size });
+      setRoster(byVisitor(shoppers.members, staffVisitors));
     }
 
     if (wps) {
@@ -399,8 +456,9 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
     config.snapshot.as_of,
   ]);
 
-  const snapshot = useMemo<WooDashboardSnapshot>(
-    () => ({
+  const snapshot = useMemo<WooDashboardSnapshot>(() => {
+    const byCart = new Map(rows.map((row) => [row.id, row]));
+    return {
       ...splitCarts(rows, present, awayIds),
       usersOnline,
       staff: staffShare,
@@ -408,20 +466,24 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
       abandoned: recentlyAbandoned(abandoned, present, now),
       online,
       strip,
-    }),
-    [
-      rows,
-      present,
-      awayIds,
-      usersOnline,
-      staffShare,
-      awayUsers,
-      abandoned,
-      now,
-      online,
-      strip,
-    ],
-  );
+      shoppers: roster.map((s) => ({
+        ...s,
+        cart: (s.b && byCart.get(s.b)) || null,
+      })),
+    };
+  }, [
+    rows,
+    present,
+    awayIds,
+    usersOnline,
+    staffShare,
+    awayUsers,
+    abandoned,
+    now,
+    online,
+    strip,
+    roster,
+  ]);
 
   return { snapshot, stale };
 }

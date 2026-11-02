@@ -32,6 +32,81 @@ test.describe("ShopSocket dashboard", () => {
     if (historyBefore) wp("option", "update", HISTORY, historyBefore);
     else wp("option", "delete", HISTORY);
   });
+  test("the shoppers table shows the page each shopper is on, and a hidden tab", async ({
+    admin,
+    page,
+    browser,
+    baseURL,
+    requestUtils,
+  }) => {
+    await admin.visitAdminPage("admin.php", PAGE);
+    await waitForLive(page);
+    const product = await createProduct(requestUtils, "E2E Page Widget", 5);
+    const visitor = await visitorContext(browser, baseURL);
+    try {
+      const shop = await visitor.newPage();
+      await shop.goto(product.permalink);
+      await waitForLive(shop);
+      const v = await shop.evaluate(() => window.WPS?.visitorId() ?? "");
+      expect(v).not.toBe("");
+
+      // A guest on the product page: their row names the product and links to its page.
+      const row = page
+        .locator(`.shopsocket-shoppers [data-visitor="${v}"]`)
+        .locator("xpath=ancestor::tr[1]");
+      await expect(row).toBeVisible({ timeout: 15_000 });
+      await expect(row).toContainText("Guest");
+      await expect(row).toContainText("Live");
+      const link = row.getByRole("link", { name: /E2E Page Widget/ });
+      await expect(link).toBeVisible({ timeout: 15_000 });
+      expect(new URL((await link.getAttribute("href")) ?? "").pathname).toBe(
+        new URL(product.permalink).pathname,
+      );
+
+      // A hop to the shop: the row follows, with a lookup-free label.
+      await shop.goto("/shop/");
+      await waitForLive(shop);
+      await expect(row.getByRole("link", { name: "Shop" })).toHaveAttribute(
+        "href",
+        /\/shop\/?$/,
+        { timeout: 15_000 },
+      );
+      await expect(
+        row.getByRole("link", { name: /E2E Page Widget/ }),
+      ).toHaveCount(0);
+
+      // Hidden: the tab reads Hidden and the page stays the one before the away.
+      await shop.evaluate(() => {
+        Object.defineProperty(document, "hidden", {
+          configurable: true,
+          get: () => true,
+        });
+        Object.defineProperty(document, "visibilityState", {
+          configurable: true,
+          get: () => "hidden",
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await expect(row).toContainText("Hidden", { timeout: 15_000 });
+      await expect(row.getByRole("link", { name: "Shop" })).toBeVisible();
+      await shop.evaluate(() => {
+        Object.defineProperty(document, "hidden", {
+          configurable: true,
+          get: () => false,
+        });
+        Object.defineProperty(document, "visibilityState", {
+          configurable: true,
+          get: () => "visible",
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await expect(row).toContainText("Live", { timeout: 15_000 });
+    } finally {
+      await visitor.close();
+      await deleteProduct(requestUtils, product.id);
+    }
+  });
+
   test("the extension has a card on WordSocket's Extensions tab", async ({
     admin,
     page,

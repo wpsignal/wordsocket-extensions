@@ -16,9 +16,10 @@ import { useLiveOrders, useStaffAlerts, useStockAlerts } from "./useLiveOrders";
 import { useConnectionState } from "./useConnectionState";
 import { useDashboardSnapshot } from "./useDashboardSnapshot";
 import { productLabel, useProductNames } from "./useProductNames";
+import { needsLookup, pageLabel, pageUrl, usePageNames } from "./usePageNames";
 import { money } from "./format";
 import { WeekStrip } from "./WeekStrip";
-import { adminUrlOrNull } from "./trust";
+import { adminUrlOrNull, siteUrlOrNull } from "./trust";
 import { LiveOrders } from "./LiveOrders";
 import { playChime } from "./chime";
 import { BoardTable, Section, Stat, productColumn, type Column } from "./ui";
@@ -26,6 +27,11 @@ import { BoardTable, Section, Stat, productColumn, type Column } from "./ui";
 const config: ShopSocketBoardConfig = window.shopSocket ?? {
   dashboardUrl: "",
   productsUrl: "",
+  pagesUrl: "",
+  homeUrl: "",
+  shopUrl: "",
+  cartUrl: "",
+  checkoutUrl: "",
   adminUrl: "",
   journeysUrl: "",
   nonce: "",
@@ -282,10 +288,154 @@ function RightNow({
         />
       </div>
       <Text variant="heading-md" render={<h3 />} className="shopsocket-subhead">
+        {__("Shoppers on the site right now", "shopsocket")}
+      </Text>
+      <ShoppersPanel shoppers={snapshot.shoppers} />
+      <Text variant="heading-md" render={<h3 />} className="shopsocket-subhead">
         {__("Products in carts right now", "shopsocket")}
       </Text>
       <LiveProductsPanel products={snapshot.liveProducts} />
     </Section>
+  );
+}
+
+/** A shopper's visitor id as their row key. */
+const byVisitorId = (row: WooShopper) => row.v;
+
+/**
+ * Every connected visitor: who they are when logged in, the page they are on
+ * linked to it, what their cart holds, and whether their tab is hidden.
+ */
+function ShoppersPanel({ shoppers }: { shoppers: WooShopper[] }) {
+  const steps = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          shoppers
+            .filter((s) => needsLookup(s.kind))
+            .map((s) => `${s.kind}:${s.id}`),
+        ),
+      ).slice(0, LIVE_PRODUCTS),
+    [shoppers],
+  );
+  const page = usePageNames(steps, config);
+  const productIds = useMemo(
+    () =>
+      Array.from(
+        new Set(shoppers.filter((s) => s.kind === "product").map((s) => s.id)),
+      ).slice(0, LIVE_PRODUCTS),
+    [shoppers],
+  );
+  const product = useProductNames(productIds, config);
+  const columns = useMemo<Column<WooShopper>[]>(() => {
+    const label = (row: WooShopper) =>
+      pageLabel(
+        row.kind,
+        row.id,
+        page(`${row.kind}:${row.id}`),
+        product(row.id),
+      );
+    return [
+      {
+        id: "shopper",
+        label: __("Shopper", "shopsocket"),
+        value: (row) =>
+          row.cart?.customer ||
+          (row.staff ? __("Staff", "shopsocket") : __("Guest", "shopsocket")),
+        render: (row) => {
+          const customer = row.cart?.customer;
+          const profile =
+            customer && row.cart?.customer_url
+              ? adminUrlOrNull(row.cart.customer_url, config.adminUrl)
+              : null;
+          return (
+            <span data-visitor={row.v}>
+              {customer ? (
+                profile ? (
+                  <Link href={profile}>{customer}</Link>
+                ) : (
+                  customer
+                )
+              ) : (
+                <span className="shopsocket-muted">
+                  {row.staff
+                    ? __("Staff", "shopsocket")
+                    : __("Guest", "shopsocket")}
+                </span>
+              )}
+            </span>
+          );
+        },
+      },
+      {
+        id: "page",
+        label: __("Page", "shopsocket"),
+        value: label,
+        render: (row) => {
+          const url = pageUrl(
+            row.kind,
+            page(`${row.kind}:${row.id}`),
+            product(row.id),
+            config,
+          );
+          const href = url ? siteUrlOrNull(url, config.homeUrl) : null;
+          return href ? (
+            <Link href={href} openInNewTab>
+              {label(row)}
+            </Link>
+          ) : (
+            label(row)
+          );
+        },
+      },
+      {
+        id: "cart",
+        label: __("Cart", "shopsocket"),
+        value: (row) => row.cart?.value ?? 0,
+        render: (row) =>
+          row.cart ? (
+            <>
+              {sprintf(
+                /* translators: %d: products in the cart */
+                _n(
+                  "%d product",
+                  "%d products",
+                  row.cart.products.length,
+                  "shopsocket",
+                ),
+                row.cart.products.length,
+              )}
+              {", "}
+              {money(
+                row.cart.value,
+                row.cart.currency || config.currencySymbol,
+              )}
+            </>
+          ) : (
+            ""
+          ),
+        numeric: true,
+      },
+      {
+        id: "tab",
+        label: __("Tab", "shopsocket"),
+        value: (row) => (row.away ? "hidden" : "live"),
+        render: (row) => (
+          <Badge intent={row.away ? "none" : "stable"}>
+            {row.away ? __("Hidden", "shopsocket") : __("Live", "shopsocket")}
+          </Badge>
+        ),
+      },
+    ];
+  }, [page, product]);
+  return (
+    <BoardTable
+      className="shopsocket-shoppers"
+      rows={shoppers}
+      rowId={byVisitorId}
+      empty={__("No shopper is on the site right now.", "shopsocket")}
+      columns={columns}
+    />
   );
 }
 

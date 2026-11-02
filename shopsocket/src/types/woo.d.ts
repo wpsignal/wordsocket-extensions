@@ -5,6 +5,36 @@ interface ShopSocketBoardConfig {
 	dashboardUrl: string;
 	/** `GET ?ids=1,2,3` here returns `{ products: WooProductRef[] }` for the live-products list. */
 	productsUrl: string;
+	/**
+	 * `GET ?steps=page:3,category:7` here returns `{ pages: WooPageRef[] }` for the shoppers table.
+	 *
+	 * @since 0.8.0
+	 */
+	pagesUrl: string;
+	/**
+	 * The storefront's front page; a page link is only followed when it points onto this site.
+	 *
+	 * @since 0.8.0
+	 */
+	homeUrl: string;
+	/**
+	 * The shop page.
+	 *
+	 * @since 0.8.0
+	 */
+	shopUrl: string;
+	/**
+	 * The cart page.
+	 *
+	 * @since 0.8.0
+	 */
+	cartUrl: string;
+	/**
+	 * The checkout page.
+	 *
+	 * @since 0.8.0
+	 */
+	checkoutUrl: string;
 	/** The wp-admin base; an order link is only followed when it points there. */
 	adminUrl: string;
 	/** WordSocket's Journeys tab, which the leak sentence links into with its filters (0.8). */
@@ -33,6 +63,24 @@ interface WooCartRow {
 	value: number;
 	/** ISO 4217 code for `value`. */
 	currency: string;
+	/**
+	 * The shopper's account when they were logged in; absent on a payload from before 0.8.
+	 *
+	 * @since 0.8.0
+	 */
+	user_id?: number | null;
+	/**
+	 * The account's display name, null for a guest.
+	 *
+	 * @since 0.8.0
+	 */
+	customer?: string | null;
+	/**
+	 * The account's profile screen; followed only into this site's admin.
+	 *
+	 * @since 0.8.0
+	 */
+	customer_url?: string;
 }
 
 /** A cart whose shopper left (inc/history.php `abandoned_rows()`, its newest left journey), newest leave first. */
@@ -46,12 +94,6 @@ interface WooAbandonedRow extends WooCartRow {
 	order_id: number | null;
 	/** The order's edit screen, built without loading the order; followed only into this site's admin. */
 	order_url: string;
-	/** The shopper's account when they were logged in; absent on a payload from before 0.8. */
-	user_id?: number | null;
-	/** The account's display name, null for a guest. */
-	customer?: string | null;
-	/** The account's profile screen; followed only into this site's admin. */
-	customer_url?: string;
 }
 
 /** The raw dashboard payload from the server (rows + online). */
@@ -120,6 +162,35 @@ interface WooDashboardSnapshot {
 	strip: WooWeekStrip | null;
 	/** Products in live carts: how many of those carts hold each, and the units across them, unordered. */
 	liveProducts: Array< { id: number; carts: number; units: number } >;
+	/**
+	 * One row per connected visitor: the open step of their visible tab, or of the last announced tab
+	 * when every tab is hidden, and the cart row for their cart id.
+	 *
+	 * @since 0.8.0
+	 */
+	shoppers: WooShopper[];
+}
+
+/**
+ * A connected visitor as the shoppers table lists them.
+ *
+ * @since 0.8.0
+ */
+interface WooShopper {
+	/** The visitor id (WordSocket's, one per browser). */
+	v: string;
+	/** The cart id, null without a cart. */
+	b: string | null;
+	/** The open step's kind, the page before `away` when the tab is hidden. */
+	kind: string;
+	/** The open step's id, 0 when the kind has none. */
+	id: number;
+	/** Whether every tab of theirs is hidden. */
+	away: boolean;
+	/** Whether the visitor is a staff member browsing the store. */
+	staff: boolean;
+	/** The cart row for `b`, null when there is none. */
+	cart: WooCartRow | null;
 }
 
 /** A product the board names (inc/dashboard.php `products_for_board()`). */
@@ -128,6 +199,25 @@ interface WooProductRef {
 	name: string;
 	/** The wp-admin edit screen; the board follows it only into this site's admin. */
 	edit_url: string;
+	/**
+	 * The storefront product page; followed only onto this site.
+	 *
+	 * @since 0.8.0
+	 */
+	url: string;
+}
+
+/**
+ * A page the board names (inc/dashboard.php `pages_for_board()`): a post, a term archive or a post type archive.
+ *
+ * @since 0.8.0
+ */
+interface WooPageRef {
+	/** The journey step, `kind:id`. */
+	step: string;
+	title: string;
+	/** The public URL; followed only onto this site. */
+	url: string;
 }
 
 /** Payload of woo.order.* events (inc/payloads.php). */

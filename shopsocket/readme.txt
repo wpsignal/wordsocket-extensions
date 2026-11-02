@@ -132,6 +132,8 @@ Nothing of its own: carts ride on WordSocket's journeys. Switch on History on Wo
 
 With WordSocket 0.31 or later, yes, through moments you set up on WordSocket's Moments tab: when the cart holds something and the shopper is on the cart page, show a prompt; when they hide the tab, remind them on return; and alert your team on the Realtime board. Nothing fires until you switch a moment on, and every prompt can be dismissed.
 
+To offer a coupon, create it in WooCommerce with the limits you want (an expiry, a usage limit, one per customer), put its code in a synced pattern, and show that pattern with a moment. The Moments tab then tells you how many orders followed. The code is as public as one on a banner, so let the coupon's own limits do the guarding.
+
 = Who can see the board? =
 
 Anyone who can manage WooCommerce.
@@ -159,6 +161,7 @@ Anyone who can manage WooCommerce.
 * New: the board opens with this week's figures when history is on: carts left behind and what they hold, orders recovered after a moment fired, checkout conversion, where shoppers with a cart leave from and how long they stay there first, and the products most often left behind.
 * With history on, an order is credited to the moments that fired for that cart in the past week, even when the shopper came back later in a new visit, and each firing records how far into its page it happened, whether the shopper came back to the tab, dismissed the prompt or clicked something inside it.
 * The History settings warn when your site has no persistent object cache, since with history on every page a shopper with a cart opens writes to the database; Redis or Memcached is recommended on a busy store.
+* New: the Realtime board lists every shopper on the site with the page they are on, what their cart holds and whether their tab is hidden; a logged-in shopper is named with a link to their profile. A search shows as "Search", never what was searched for.
 
 = 0.7.0 =
 * New: cart history. Switch it on under ShopSocket settings to keep each cart's products, value, when the shopper left and whether it became an order, for the days you choose, and shoppers' page journeys for the months you choose. Off by default; off keeps exactly what earlier versions kept

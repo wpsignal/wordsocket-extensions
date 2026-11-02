@@ -18,3 +18,18 @@ export function adminUrlOrNull(url: string, adminUrl: string): string | null {
     return null;
   }
 }
+
+/**
+ * `url` when it points onto this site (the origin of `homeUrl`), else null.
+ *
+ * @since 0.8.0
+ */
+export function siteUrlOrNull(url: string, homeUrl: string): string | null {
+  try {
+    const target = new URL(url, window.location.origin);
+    const home = new URL(homeUrl, window.location.origin);
+    return target.origin === home.origin ? target.href : null;
+  } catch {
+    return null;
+  }
+}

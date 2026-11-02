@@ -10,6 +10,7 @@
 
 namespace WPSignal\Extensions\ShopSocket;
 
+use WPSignal\Journeys;
 use WPSignal\WPS;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -114,12 +115,14 @@ function parse_product_ids( string $ids ): array {
 }
 
 /**
- * Name and edit link for each product that still exists, for the board's
+ * Name, edit link and permalink for each product that still exists, for the board's
  * live-products list. The board alone knows which carts are live, so it
  * picks the ids and asks here for the words.
  *
+ * @since 0.8.0 Adds `url`, the storefront page.
+ *
  * @param int[] $ids Parent product ids.
- * @return array<int, array{id: int, name: string, edit_url: string}>
+ * @return array<int, array{id: int, name: string, edit_url: string, url: string}>
  */
 function products_for_board( array $ids ): array {
 	if ( empty( $ids ) ) {
@@ -139,7 +142,119 @@ function products_for_board( array $ids ): array {
 			'id'       => $product->get_id(),
 			'name'     => $product->get_name(),
 			'edit_url' => (string) get_edit_post_link( $product->get_id(), 'raw' ),
+			'url'      => (string) $product->get_permalink(),
 		);
+	}
+	return $rows;
+}
+
+/**
+ * Journey steps from a comma-separated list, each `kind:id`, lower-case and
+ * with the id as an integer, no repeats, capped at BOARD_LIVE_PRODUCTS.
+ *
+ * @since 0.8.0
+ *
+ * @param string $steps Raw `steps` parameter.
+ * @return string[]
+ */
+function parse_steps( string $steps ): array {
+	$clean = array();
+	foreach ( explode( ',', $steps ) as $step ) {
+		if ( ! preg_match( '/^([a-z_]+):(\d{1,12})$/', trim( $step ), $m ) ) {
+			continue;
+		}
+		$key           = $m[1] . ':' . (int) $m[2];
+		$clean[ $key ] = $key;
+	}
+	return array_slice( array_values( $clean ), 0, BOARD_LIVE_PRODUCTS );
+}
+
+/**
+ * The step kinds that are a taxonomy's term archives, as WordSocket records them.
+ *
+ * @since 0.8.0
+ *
+ * @return string[]
+ */
+function taxonomy_step_kinds(): array {
+	if ( ! class_exists( Journeys::class ) ) {
+		return array();
+	}
+	return array_values( array_unique( array_map( array( Journeys::class, 'taxonomy_kind' ), get_taxonomies( array( 'public' => true ) ) ) ) );
+}
+
+/**
+ * The title and public URL of the page a journey step names: a published post
+ * of the kind's post type, a term of a public taxonomy, or a post type's
+ * archive. Null for anything else, which the board labels itself.
+ *
+ * @since 0.8.0
+ *
+ * @param string $kind The step kind.
+ * @param int    $id   The step id.
+ * @return array{step: string, title: string, url: string}|null
+ */
+function page_for_step( string $kind, int $id ): ?array {
+	$step = $kind . ':' . $id;
+	$type = get_post_type_object( $kind );
+	if ( $type instanceof \WP_Post_Type && $type->public ) {
+		$post = $id > 0 ? get_post( $id ) : null;
+		if ( ! $post instanceof \WP_Post || $post->post_type !== $kind || ! is_post_publicly_viewable( $post ) ) {
+			return null;
+		}
+		return array(
+			'step'  => $step,
+			'title' => (string) get_the_title( $post ),
+			'url'   => (string) get_permalink( $post ),
+		);
+	}
+	if ( in_array( $kind, taxonomy_step_kinds(), true ) ) {
+		$term = $id > 0 ? get_term( $id ) : null;
+		if ( ! $term instanceof \WP_Term || ! is_taxonomy_viewable( $term->taxonomy ) ) {
+			return null;
+		}
+		$link = get_term_link( $term );
+		if ( ! is_string( $link ) ) {
+			return null;
+		}
+		return array(
+			'step'  => $step,
+			'title' => (string) $term->name,
+			'url'   => $link,
+		);
+	}
+	if ( str_ends_with( $kind, '_archive' ) ) {
+		$archive = get_post_type_object( substr( $kind, 0, -8 ) );
+		$link    = $archive instanceof \WP_Post_Type && $archive->public ? get_post_type_archive_link( $archive->name ) : false;
+		if ( ! is_string( $link ) ) {
+			return null;
+		}
+		return array(
+			'step'  => $step,
+			'title' => (string) $archive->labels->name,
+			'url'   => $link,
+		);
+	}
+	return null;
+}
+
+/**
+ * The pages behind the journey steps the board lists, for the shoppers
+ * table; a step that names nothing public has no row.
+ *
+ * @since 0.8.0
+ *
+ * @param string[] $steps Steps as `kind:id`, from `parse_steps()`.
+ * @return array<int, array{step: string, title: string, url: string}>
+ */
+function pages_for_board( array $steps ): array {
+	$rows = array();
+	foreach ( $steps as $step ) {
+		[ $kind, $id ] = explode( ':', $step, 2 );
+		$page          = page_for_step( $kind, (int) $id );
+		if ( null !== $page ) {
+			$rows[] = $page;
+		}
 	}
 	return $rows;
 }
@@ -149,6 +264,8 @@ function products_for_board( array $ids ): array {
  * with `?since=<as_of>` also the orders created or changed since then.
  * `GET /shopsocket/v1/products?ids=1,2,3`: names and edit links for the
  * products the board lists.
+ * `GET /shopsocket/v1/pages?steps=page:3,category:7`: titles and URLs for the
+ * pages the shoppers table lists.
  */
 add_action(
 	'rest_api_init',
@@ -181,6 +298,23 @@ add_action(
 				),
 				'callback'            => static fn( \WP_REST_Request $request ) => rest_ensure_response(
 					array( 'products' => products_for_board( parse_product_ids( (string) $request->get_param( 'ids' ) ) ) )
+				),
+				'permission_callback' => static fn() => current_user_can( STAFF_CAP ),
+			)
+		);
+		register_rest_route(
+			REST_NS,
+			'/pages',
+			array(
+				'methods'             => 'GET',
+				'args'                => array(
+					'steps' => array(
+						'type'     => 'string',
+						'required' => true,
+					),
+				),
+				'callback'            => static fn( \WP_REST_Request $request ) => rest_ensure_response(
+					array( 'pages' => pages_for_board( parse_steps( (string) $request->get_param( 'steps' ) ) ) )
 				),
 				'permission_callback' => static fn() => current_user_can( STAFF_CAP ),
 			)

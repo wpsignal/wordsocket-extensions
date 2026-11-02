@@ -76,18 +76,18 @@ function current_cart_state(): ?array {
 }
 
 /**
- * Every open cart for the dashboard, from each cart's newest journey within the session lifetime, unless that journey converted: `{ id, products, quantities, value, currency }`. The dashboard decides live or abandoned from presence.
+ * Every open cart for the dashboard, from each cart's newest journey within the session lifetime, unless that journey converted: `{ id, products, quantities, value, currency, user_id, customer, customer_url }`. The dashboard decides live or abandoned from presence.
  *
- * @since 0.8.0 Read from WordSocket's journeys.
+ * @since 0.8.0 Read from WordSocket's journeys; carries the customer.
  *
- * @return array<int, array{id: string, products: int[], quantities: array<int, int>, value: float, currency: string}>
+ * @return array<int, array{id: string, products: int[], quantities: array<int, int>, value: float, currency: string, user_id: int|null, customer: string|null, customer_url: string}>
  */
 function cart_rows(): array {
 	global $wpdb;
 	$cutoff = gmdate( 'Y-m-d H:i:s', time() - cart_lifetime() );
 	$rows   = (array) $wpdb->get_results(
 		$wpdb->prepare(
-			'SELECT ref, value, data, outcome, last_seen FROM ' . journeys_table() . ' WHERE ref IS NOT NULL AND data IS NOT NULL AND last_seen >= %s ORDER BY last_seen DESC',
+			'SELECT ref, user_id, value, data, outcome, last_seen FROM ' . journeys_table() . ' WHERE ref IS NOT NULL AND data IS NOT NULL AND last_seen >= %s ORDER BY last_seen DESC',
 			$cutoff
 		),
 		ARRAY_A
@@ -100,19 +100,33 @@ function cart_rows(): array {
 	foreach ( $by_ref as $id => $journeys ) {
 		$newest = $journeys[0];
 		// A cart that became an order is closed, however its leave and its order are ordered within the same second.
-		$converted = array_filter( $journeys, static fn( array $row ): bool => 'converted' === $row['outcome'] && $row['last_seen'] >= $newest['last_seen'] );
+		$converted  = array_filter( $journeys, static fn( array $row ): bool => 'converted' === $row['outcome'] && $row['last_seen'] >= $newest['last_seen'] );
 		$quantities = items_of( $newest['data'] );
 		if ( empty( $quantities ) || ! empty( $converted ) || ( 'open' !== $newest['outcome'] && 'left' !== $newest['outcome'] ) ) {
 			continue;
 		}
-		$row = $newest;
+		$row     = $newest;
+		$user_id = 0;
+		foreach ( $journeys as $journey ) {
+			if ( (int) ( $journey['user_id'] ?? 0 ) > 0 ) {
+				$user_id = (int) $journey['user_id'];
+				break;
+			}
+		}
 		$out[ $id ] = array(
-			'id'         => $id,
-			'products'   => array_keys( $quantities ),
-			'quantities' => $quantities,
-			'value'      => round( (float) ( $row['value'] ?? 0 ), 2 ),
-			'currency'   => (string) ( data_field( $row['data'], 'c' ) ?? get_woocommerce_currency() ),
+			'id'           => $id,
+			'products'     => array_keys( $quantities ),
+			'quantities'   => $quantities,
+			'value'        => round( (float) ( $row['value'] ?? 0 ), 2 ),
+			'currency'     => (string) ( data_field( $row['data'], 'c' ) ?? get_woocommerce_currency() ),
+			'user_id'      => $user_id > 0 ? $user_id : null,
+			'customer'     => null,
+			'customer_url' => $user_id > 0 ? customer_edit_url( $user_id ) : '',
 		);
+	}
+	$names = customer_names( array_column( $out, 'user_id' ) );
+	foreach ( $out as $id => $cart ) {
+		$out[ $id ]['customer'] = $names[ (int) $cart['user_id'] ] ?? null;
 	}
 	return array_values( $out );
 }
