@@ -309,7 +309,8 @@ function on_visitor_report( array $report ): void {
 	list( $cart_id, $state ) = $cart;
 	invalidate_cart_caches();
 	publish_carts_changed();
-	if ( ! empty( $report['leaving'] ) && null !== $state ) {
+	// A leave dated in the past comes from the browser's outbox with the shopper back: kept, not announced.
+	if ( ! empty( $report['leaving'] ) && null !== $state && empty( $report['ago'] ) ) {
 		cart_left( $cart_id, (string) $report['journey_id'], $state );
 	}
 }

@@ -348,7 +348,7 @@ final class HistoryTest extends ExtensionTestCase {
 		mark_converted( $id, $order->get_id(), (float) $order->get_total() );
 		$by_id   = array_column( $this->journeys(), null, 'journey_id' );
 		$firings = Journeys::unpack_firings( (string) $by_id[ self::JOURNEY ]['firings'] );
-		$this->assertSame( 'left', $by_id[ self::JOURNEY ]['outcome'], 'the journey the moment fired in still ended as left' );
+		$this->assertSame( 'incomplete', $by_id[ self::JOURNEY ]['outcome'], 'the journey the moment fired in was never seen ending; the order is the second journey\'s' );
 		$this->assertSame( $order->get_id(), $firings[0]['order'], 'the firing within the window is credited with the order of another journey' );
 		$this->assertSame( 1, $firings[0]['s'] );
 		$this->assertArrayHasKey( 'order_at', $firings[0] );
