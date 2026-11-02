@@ -189,6 +189,14 @@ add_filter(
 	}
 );
 
+// The cart and the checkout write the visit on arrival, whatever the write schedule holds back elsewhere.
+add_filter(
+	'wpsignal_journey_write_kinds',
+	static function ( array $kinds ): array {
+		return array_merge( $kinds, array( 'cart', 'checkout' ) );
+	}
+);
+
 // Product category pages are the `category` kind, so they count as a taxonomy archive.
 add_filter(
 	'wpsignal_taxonomy_kinds',

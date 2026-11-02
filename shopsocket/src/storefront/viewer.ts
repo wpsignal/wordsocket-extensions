@@ -5,7 +5,11 @@
  * - Presence is WordSocket's `WPS.presence.track()`, which carries `v`, `n` and `j` and reports
  *   visits and leaves; this module adds `b`, reads the shopper's state from the visit report's
  *   answer, and falls back to plain `setPresence` on an older WordSocket.
+ * - The last answer is kept in `sessionStorage` with the cart hash cookie it was true for, so a page
+ *   that writes no visit (WordSocket 0.31 writes on a change of state) still knows the cart on load.
  */
+
+const REMEMBERED_KEY = "shopsocket-viewer";
 
 export interface ViewerConfig {
   cartIdUrl?: string;
@@ -55,6 +59,51 @@ interface ViewerState {
   items?: CartSnapshot["products"];
 }
 
+/** The last answer and the `woocommerce_cart_hash` cookie at the time, in `sessionStorage`. */
+interface Remembered {
+  hash: string;
+  state: ViewerState;
+}
+
+/** A cookie's value, '' when absent. */
+function cookie(name: string): string {
+  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
+/** The cart hash cookie WooCommerce rewrites whenever the cart's contents change. */
+function cartHash(): string {
+  return cookie("woocommerce_cart_hash");
+}
+
+/** The remembered answer, while the cart hash cookie still matches the one it was true for. */
+function recall(): ViewerState | null {
+  try {
+    const raw = window.sessionStorage.getItem(REMEMBERED_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Remembered>;
+    if (typeof parsed.hash !== "string" || typeof parsed.state !== "object")
+      return null;
+    const hash = cartHash();
+    return hash !== "" && parsed.hash === hash ? (parsed.state ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keep an answer for the pages that write no visit; the live count is the page's, so it is dropped. */
+function remember(state: ViewerState): void {
+  try {
+    const { count: _count, ...kept } = state;
+    window.sessionStorage.setItem(
+      REMEMBERED_KEY,
+      JSON.stringify({ hash: cartHash(), state: kept } satisfies Remembered),
+    );
+  } catch {
+    // Storage blocked: the next page asks again.
+  }
+}
+
 /**
  * Start following this shopper: one sync on load, then on every change to
  * their own cart and on every recovered connection. `onCount` receives the
@@ -102,8 +151,9 @@ export function startViewer(
     wps.setPresence(config.presenceChannel, { v: wps.visitorId(), b });
   }
 
-  /** Take in this shopper's state as the server answered it, from either route. */
+  /** Take in this shopper's state as the server answered it, from either route, and remember it. */
   function apply(viewer: ViewerState): void {
+    remember(viewer);
     quantities.clear();
     (viewer?.products ?? []).forEach((id) => {
       quantities.set(
@@ -247,22 +297,30 @@ export function startViewer(
       state: { b: null },
       report: hasCart,
     });
-    if (typeof tracker.onVisit !== "function") return false;
-    tracker.onVisit((answer) => {
+    return typeof tracker.onVisit === "function";
+  }
+
+  /** Hear each visit answer; one that carries nothing asks only when this tab does not know the cart yet. */
+  function listenTracked(): void {
+    tracker?.onVisit?.((answer) => {
       const mine = answer?.shopsocket;
       if (mine && typeof mine === "object") apply(mine as ViewerState);
-      else if (hasCart()) sync();
-      /* A cartless visitor gets no answer and fetches nothing. */
+      else if (!synced && hasCart()) sync();
+      /* A cartless visitor, or one whose cart this tab already knows, fetches nothing. */
     });
-    return true;
   }
 
   /*
-   * One answer on load (the visit report's, or a fetch), then events and the
-   * shopper's own cart changes keep it current. WordSocket's client is a classic
-   * footer script that runs before this module, so `window.WPS` is already there.
+   * The cart on load: the remembered answer while the cart hash cookie still matches it, else the
+   * visit report's answer or a fetch, then events and the shopper's own cart changes keep it
+   * current. WordSocket's client is a classic footer script that runs before this module, so
+   * `window.WPS` is already there.
    */
-  if (!startTracked() && hasCart()) sync();
+  const tracked = startTracked();
+  const remembered = recall();
+  if (remembered) apply(remembered);
+  if (tracked) listenTracked();
+  else if (!remembered && hasCart()) sync();
   watchOwnCart();
 
   /*

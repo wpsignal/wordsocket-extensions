@@ -147,6 +147,7 @@ Anyone who can manage WooCommerce.
 == Changelog ==
 
 = 0.8.0 =
+* A shopper moving between pages no longer costs the server a request: the storefront remembers their cart for the visit and asks again only when it changed.
 * New: with WordSocket 0.31, the Moments tab knows the shop. Conditions on the cart (items, count, total, a product, a category) and the WooCommerce pages, and one action: alert your team on the Realtime board
 * New: one moment ships switched off, listed on WordSocket's Moments tab: a shopper who hides the tab with a cart sees the tab title flash and, on return, a banner naming what is waiting
 * New: with history on, the journeys record which moments fired, and the Moments tab can replay a moment over them before you switch it on; a moment that fires right after a shopper's first add to cart is recorded too

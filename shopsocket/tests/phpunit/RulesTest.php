@@ -105,6 +105,13 @@ final class RulesTest extends ExtensionTestCase {
 		}
 	}
 
+	public function test_the_cart_and_the_checkout_always_write_the_visit(): void {
+		$kinds = WPS::instance()->presence()->config()['writeKinds'];
+		$this->assertContains( 'cart', $kinds );
+		$this->assertContains( 'checkout', $kinds );
+		$this->assertNotContains( 'product', $kinds, 'a product page writes on the schedule' );
+	}
+
 	public function test_the_shipped_rule_is_listed_disabled_and_validates(): void {
 		$all     = WPS::rules()->all();
 		$shipped = array_column( $all, null, 'id' )[ DEFAULT_RULE_ID ] ?? null;

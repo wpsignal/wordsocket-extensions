@@ -81,6 +81,40 @@ test.describe("Storefront", () => {
     }
   });
 
+  test("a shopper's cart follows them to the next page without a visit request", async ({ browser, baseURL, requestUtils }) => {
+    const first = await createProduct(requestUtils, "E2E Held Widget", 5);
+    const second = await createProduct(requestUtils, "E2E Other Widget", 5);
+    const visitor = await visitorContext(browser, baseURL);
+    const page = await visitor.newPage();
+    const visits: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/wpsignal/v1/visit")) visits.push(request.url());
+    });
+    try {
+      await page.goto(first.permalink);
+      await waitForLive(page);
+      await addToCart(page);
+      await expect(page.locator(".shopsocket-in-carts")).toContainText("You have this in your cart right now");
+      // The add reported the cart: its answer is remembered with the cart hash cookie.
+      await expect.poll(() => page.evaluate(() => window.sessionStorage.getItem("shopsocket-viewer"))).toContain('"hash":"');
+      const before = visits.length;
+
+      // The next page is a hop within the visit: the remembered cart is applied, nothing is asked.
+      await page.goto(second.permalink);
+      await waitForLive(page);
+      await expect(page.locator(".shopsocket-in-carts")).toBeHidden();
+      await page.goto(first.permalink);
+      await waitForLive(page);
+      await expect(page.locator(".shopsocket-in-carts")).toContainText("You have this in your cart right now");
+      await page.waitForTimeout(1500);
+      expect(visits.length, "two hops, no visit request").toBe(before);
+    } finally {
+      await visitor.close();
+      await deleteProduct(requestUtils, first.id);
+      await deleteProduct(requestUtils, second.id);
+    }
+  });
+
   test("the toast shows the product thumbnail when the product has an image", async ({ browser, baseURL, requestUtils }) => {
     const imageId = await anyImageId(requestUtils);
     test.skip(imageId === undefined, "the site has no image in its media library");
