@@ -20,6 +20,6 @@ export function startRules(viewer: Viewer, config: RulesConfig): void {
     wps.rules,
     config,
     () => wps.visitorId(),
-    () => window.wpSignalConfig?.presence?.kind ?? "",
+    () => wps.config?.page.kind ?? window.wpSignalConfig?.presence?.kind ?? "",
   );
 }

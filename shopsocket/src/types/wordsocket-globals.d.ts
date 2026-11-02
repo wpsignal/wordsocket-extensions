@@ -63,6 +63,31 @@ interface WPSApi {
   readonly recovery?: WPSRecoveryApi;
   /** The rules engine and registration API (WordSocket 0.31); absent on older versions. */
   readonly rules?: WPSRulesApi;
+  /**
+   * The read-only view of the site and page (WordSocket 0.31); absent on older versions.
+   *
+   * @since 0.8.0
+   */
+  readonly config?: WPSConfig;
+  /**
+   * Logs while WordSocket's debug mode is on (WordSocket 0.31); absent on older versions.
+   *
+   * @since 0.8.0
+   */
+  debug?(...args: unknown[]): void;
+}
+
+/**
+ * What `WPS.config` holds (WordSocket 0.31).
+ *
+ * @since 0.8.0
+ */
+interface WPSConfig {
+  readonly version: string;
+  readonly isDebug: boolean;
+  readonly siteName: string;
+  /** This page's journey step. */
+  readonly page: { readonly kind: string; readonly id: number };
 }
 
 type WPSAttentionState = "page" | "window" | "hidden";
