@@ -132,16 +132,13 @@ test.describe("Rules", () => {
     expect(shipped?.enabled).toBe(true);
     expect(shipped?.source).toBe("shopsocket");
 
-    // The ShopSocket tab points at the Moments tab instead of repeating it. Extension tabs register after the
-    // first paint, so the URL's tab can lose to Connect; select it by hand.
+    // The ShopSocket tab repeats none of it: the Moments tab is the one home for rules. Extension tabs
+    // register after the first paint, so the URL's tab can lose to Connect; select it by hand.
     await admin.visitAdminPage("admin.php", "page=wordsocket&tab=shopsocket");
     await page.getByRole("tab", { name: "ShopSocket" }).click();
     const tab = page.locator(".shopsocket-tab");
-    const link = tab.getByRole("link", { name: "Moments tab" });
-    // The link sits in the Cart history card, which may start collapsed.
-    if ((await link.count()) === 0)
-      await tab.getByText("Cart history", { exact: true }).click();
-    await expect(link).toHaveAttribute("href", /tab=moments$/);
+    await expect(tab.getByText("Storefront settings")).toBeVisible();
     await expect(tab.getByText("Recovery", { exact: true })).toHaveCount(0);
+    await expect(tab.getByText("Moments", { exact: true })).toHaveCount(0);
   });
 });

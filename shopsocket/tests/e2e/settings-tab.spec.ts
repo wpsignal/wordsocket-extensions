@@ -91,11 +91,7 @@ test.describe("Storefront settings", () => {
 
     // The cards start collapsed, and a collapsed card's controls are hidden to the role queries.
     const openCards = async () => {
-      for (const title of [
-        "In-cart count",
-        "Added-to-cart notification",
-        "Cart history",
-      ]) {
+      for (const title of ["In-cart count", "Added-to-cart notification"]) {
         await page
           .locator(".shopsocket-tab")
           .getByRole("button", { name: title })
@@ -104,17 +100,12 @@ test.describe("Storefront settings", () => {
     };
     await openCards();
 
-    // The two site-wide toggles, in order: the in-cart count, then the notification; cart history has no switch here (WordSocket's History holds the carts).
+    // The two site-wide toggles, in order: the in-cart count, then the notification; the carts are WordSocket's History, which has no switch here.
     // Found by position, since their labels change with their state.
     const toggles = () => page.locator(".shopsocket-tab").getByRole("checkbox");
     await expect(toggles()).toHaveCount(2);
     await expect(toggles().nth(0)).toBeChecked();
     await expect(toggles().nth(1)).toBeChecked();
-    await expect(
-      page
-        .locator(".shopsocket-tab")
-        .getByRole("link", { name: "Journeys tab" }),
-    ).toBeVisible();
 
     await toggles().nth(0).uncheck();
     await page.getByRole("button", { name: "Save changes" }).click();
