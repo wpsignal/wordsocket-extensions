@@ -57,35 +57,39 @@ export function openStep(j: string | undefined): { kind: string; id: number } {
 type Roster = Omit<WooShopper, "cart">;
 
 /*
- * One entry per visitor from the members in announce order: a visible tab
- * wins over a hidden one, and among equals the last announced wins, so a
- * navigation shows the new page the moment it joins. Any tab's cart id serves,
+ * One entry per visitor from the members in announce order: a live visible
+ * tab wins over a live hidden one, both win over a connection waiting out its
+ * leave grace, and among equals the last announced wins, so a navigation shows
+ * the new page the moment it joins, hidden or not. Any tab's cart id serves,
  * since a visitor's tabs share the cart.
  */
 function byVisitor(
   members: Map<string, Member>,
+  leaving: Set<string>,
   staffVisitors: Set<string>,
 ): Roster[] {
-  const picked = new Map<string, Roster>();
-  members.forEach((m) => {
+  const picked = new Map<string, Roster & { rank: number }>();
+  members.forEach((m, id) => {
     if (!m.v) return;
     const away = isAway(m);
+    const rank = leaving.has(id) ? 0 : away ? 1 : 2;
     const before = picked.get(m.v);
-    if (before && !before.away && away) {
+    if (before && before.rank > rank) {
       if (!before.b && m.b) before.b = m.b;
       return;
     }
-    const { kind, id } = openStep(m.j);
+    const step = openStep(m.j);
     picked.set(m.v, {
       v: m.v,
       b: m.b ?? before?.b ?? null,
-      kind,
-      id,
+      kind: step.kind,
+      id: step.id,
       away,
       staff: staffVisitors.has(m.v),
+      rank,
     });
   });
-  return [...picked.values()];
+  return [...picked.values()].map(({ rank: _rank, ...shopper }) => shopper);
 }
 
 /*
@@ -354,7 +358,7 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
         pendingLeaves.forEach((timer) => clearTimeout(timer));
         pendingLeaves.clear();
       };
-      return { members, handle, dispose };
+      return { members, leaving: pendingLeaves, handle, dispose };
     };
     const shoppers = roster(() => applyPresent());
     const staff = roster(() => applyPresent());
@@ -386,7 +390,13 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
       setPresent(carts);
       setUsersOnline(users.size);
       setStaffShare({ users: staffUsers, tabs: staff.members.size });
-      setRoster(byVisitor(shoppers.members, staffVisitors));
+      setRoster(
+        byVisitor(
+          shoppers.members,
+          new Set(shoppers.leaving.keys()),
+          staffVisitors,
+        ),
+      );
     }
 
     if (wps) {

@@ -63,19 +63,10 @@ test.describe("ShopSocket dashboard", () => {
         new URL(product.permalink).pathname,
       );
 
-      // A hop to the shop: the row follows, with a lookup-free label.
+      // A hop to the shop, hidden at once (the merchant switching to the board): the row follows
+      // the new page well within the old connection's leave grace, and reads Hidden.
       await shop.goto("/shop/");
       await waitForLive(shop);
-      await expect(row.getByRole("link", { name: "Shop" })).toHaveAttribute(
-        "href",
-        /\/shop\/?$/,
-        { timeout: 15_000 },
-      );
-      await expect(
-        row.getByRole("link", { name: /E2E Page Widget/ }),
-      ).toHaveCount(0);
-
-      // Hidden: the tab reads Hidden and the page stays the one before the away.
       await shop.evaluate(() => {
         Object.defineProperty(document, "hidden", {
           configurable: true,
@@ -87,8 +78,15 @@ test.describe("ShopSocket dashboard", () => {
         });
         document.dispatchEvent(new Event("visibilitychange"));
       });
-      await expect(row).toContainText("Hidden", { timeout: 15_000 });
-      await expect(row.getByRole("link", { name: "Shop" })).toBeVisible();
+      await expect(row.getByRole("link", { name: "Shop" })).toHaveAttribute(
+        "href",
+        /\/shop\/?$/,
+        { timeout: 3_000 },
+      );
+      await expect(
+        row.getByRole("link", { name: /E2E Page Widget/ }),
+      ).toHaveCount(0);
+      await expect(row).toContainText("Hidden", { timeout: 3_000 });
       await shop.evaluate(() => {
         Object.defineProperty(document, "hidden", {
           configurable: true,
