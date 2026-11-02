@@ -330,7 +330,7 @@ function products_left( string $since ): array {
 	if ( empty( $left ) ) {
 		return array();
 	}
-	uksort( $left, static fn( int $a, int $b ): int => ( $left[ $b ] <=> $left[ $a ] ) ?: ( $a <=> $b ) );
+	uksort( $left, static fn( int $a, int $b ): int => array( $left[ $b ], $a ) <=> array( $left[ $a ], $b ) );
 	$out = array();
 	foreach ( array_slice( $left, 0, STRIP_PRODUCTS, true ) as $product_id => $n ) {
 		$out[] = array(

@@ -239,14 +239,14 @@ add_action(
  *
  * @param int  $product_id   Parent product ID.
  * @param int  $variation_id Variation that was in the cart, 0 for simple products.
- * @param bool $self         Whether this cart may still hold the product (another variation or line); false for an emptied cart.
+ * @param bool $is_self      Whether this cart may still hold the product (another variation or line); false for an emptied cart.
  * @return void
  */
-function publish_cart_removed( int $product_id, int $variation_id, bool $self = true ): void {
+function publish_cart_removed( int $product_id, int $variation_id, bool $is_self = true ): void {
 	if ( ! $product_id || ! in_carts_enabled( $product_id ) ) {
 		return;
 	}
-	$state = $self ? current_cart_state() : null;
+	$state = $is_self ? current_cart_state() : null;
 	$held  = null !== $state && isset( $state['quantities'][ $product_id ] ) ? 1 : 0;
 	WPS::publish(
 		ACTIVITY_CHANNEL,
