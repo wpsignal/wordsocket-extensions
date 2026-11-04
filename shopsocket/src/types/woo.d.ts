@@ -12,6 +12,12 @@ interface ShopSocketBoardConfig {
 	 */
 	pagesUrl: string;
 	/**
+	 * `GET ?v=a,b` here returns `{ guests: WooGuestRef[] }`, the best guesses at who the guests are.
+	 *
+	 * @since 0.8.0
+	 */
+	guestsUrl: string;
+	/**
 	 * The storefront's front page; a page link is only followed when it points onto this site.
 	 *
 	 * @since 0.8.0
@@ -197,6 +203,26 @@ interface WooShopper {
 	staff: boolean;
 	/** The cart row for `b`, null when there is none. */
 	cart: WooCartRow | null;
+	/**
+	 * The best guess at who a guest is, null when there is none or they are named already.
+	 *
+	 * @since 0.8.0
+	 */
+	guess?: WooGuestRef | null;
+}
+
+/**
+ * A best guess at who a guest is: the email their browser remembers from a paid order here (inc/guests.php).
+ *
+ * @since 0.8.0
+ */
+interface WooGuestRef {
+	v: string;
+	email: string;
+	/** The billing name on the newest order, '' when it has none. */
+	name: string;
+	/** Paid orders placed with the email. */
+	orders: number;
 }
 
 /** A product the board names (inc/dashboard.php `products_for_board()`). */

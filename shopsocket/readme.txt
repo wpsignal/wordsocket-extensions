@@ -24,7 +24,7 @@ https://www.youtube.com/watch?v=BKwID6t_kpQ
 **For you and your team**
 
 * Every order on screen the moment it is placed, with a chime
-* Who is shopping right now, the pages that brought each of them to where they are, what is in their carts, and what it is worth
+* Who is shopping right now, the pages that brought each of them to where they are, what is in their carts, and what it is worth, with a guest who has ordered before named as a best guess
 * Which carts were left behind
 * Which products are in carts right now
 * Low-stock and sold-out alerts as they happen
@@ -76,7 +76,7 @@ Inside those encrypted events:
 
 What WPSignal does see, because it needs it to deliver messages: channel names, how many browsers are connected, and an anonymous id for each shopper's browser and cart. None of it is personal.
 
-**What stays on your site.** ShopSocket keeps no table of its own. While WordSocket's History is on (its Journeys tab), each visit WordSocket keeps carries the cart it was made with: what it held, its value and the order it became, in your own database, for the months set there, linked to the shopper's account when they were logged in. With it off, nothing is kept beyond the WooCommerce session, and the board, the counters and this week's figures have nothing to show.
+**What stays on your site.** ShopSocket keeps no table of its own. While WordSocket's History is on (its Journeys tab), each visit WordSocket keeps carries the cart it was made with: what it held, its value and the order it became, in your own database, for the months set there, linked to the shopper's account when they were logged in. With it off, nothing is kept beyond the WooCommerce session, and the board, the counters and this week's figures have nothing to show. A guest whose browser remembers the email of an earlier checkout offers it to your site once per visit; it is kept for two days only when that email has placed a paid order here, shown to staff flagged as a best guess, never sent to WPSignal, and covered by WordPress's privacy export and erasure by email.
 
 * [Terms of Service](https://wpsignal.io/terms)
 * [Privacy Policy](https://wpsignal.io/privacy)
@@ -150,6 +150,7 @@ Anyone who can manage WooCommerce.
 
 = 0.8.0 =
 * New: the board's Right now card draws where each shopper came from: their route through your pages this visit, ending where they are now, with a hidden tab's route dotted and the page they are on pulsing.
+* New: a guest whose browser remembers the email of a past checkout is named on the board as a best guess, with the billing name and how many paid orders that email has placed here, once the email matches; the guess is kept for two days and WordPress's privacy tools export and erase it by email.
 * A shopper moving between pages no longer costs the server a request: the storefront remembers their cart for the visit and asks again only when it changed.
 * New: with WordSocket 0.31, the Moments tab knows the shop. Conditions on the cart (items, count, total, a product, a category) and the WooCommerce pages, and one action: alert your team on the Realtime board
 * New: one moment ships switched off, listed on WordSocket's Moments tab: a shopper who hides the tab with a cart sees the tab title flash and, on return, a banner naming what is waiting

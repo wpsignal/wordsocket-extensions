@@ -22,6 +22,7 @@ import { WeekStrip } from "./WeekStrip";
 import { adminUrlOrNull, siteUrlOrNull } from "./trust";
 import { LiveOrders } from "./LiveOrders";
 import { LiveJourneys, type RouteNames } from "./LiveJourneys";
+import { useGuestNames } from "./useGuestNames";
 import { routeSteps } from "./journey";
 import { playChime } from "./chime";
 import { BoardTable, Section, Stat, productColumn, type Column } from "./ui";
@@ -30,6 +31,7 @@ const config: ShopSocketBoardConfig = window.shopSocket ?? {
   dashboardUrl: "",
   productsUrl: "",
   pagesUrl: "",
+  guestsUrl: "",
   homeUrl: "",
   shopUrl: "",
   cartUrl: "",
@@ -211,6 +213,23 @@ function RightNow({
 }) {
   const { carts, usersOnline, online, staff, awayUsers } = snapshot;
   const names = useShopperNames(snapshot.shoppers);
+  /* A guest nobody has named yet may have a best guess waiting on the server. */
+  const unnamed = useMemo(
+    () =>
+      snapshot.shoppers
+        .filter((s) => !s.staff && !s.cart?.customer)
+        .map((s) => s.v),
+    [snapshot.shoppers],
+  );
+  const guests = useGuestNames(unnamed, config);
+  const shoppers = useMemo(
+    () =>
+      snapshot.shoppers.map((s) => ({
+        ...s,
+        guess: s.staff || s.cart?.customer ? null : (guests(s.v) ?? null),
+      })),
+    [snapshot.shoppers, guests],
+  );
   /* translators: %d: how many of the figure above are staff (people or tabs) */
   const staffNote = (count: number) =>
     count > 0
@@ -293,8 +312,8 @@ function RightNow({
       <Text variant="heading-md" render={<h3 />} className="shopsocket-subhead">
         {__("Shoppers on the site right now", "shopsocket")}
       </Text>
-      <ShoppersPanel shoppers={snapshot.shoppers} names={names} />
-      {snapshot.shoppers.length > 0 && (
+      <ShoppersPanel shoppers={shoppers} names={names} />
+      {shoppers.length > 0 && (
         <>
           <Text
             variant="heading-md"
@@ -309,7 +328,7 @@ function RightNow({
               "shopsocket",
             )}
           </Text>
-          <LiveJourneys shoppers={snapshot.shoppers} names={names} />
+          <LiveJourneys shoppers={shoppers} names={names} />
         </>
       )}
       <Text variant="heading-md" render={<h3 />} className="shopsocket-subhead">
@@ -392,6 +411,8 @@ function ShoppersPanel({
         label: __("Shopper", "shopsocket"),
         value: (row) =>
           row.cart?.customer ||
+          row.guess?.name ||
+          row.guess?.email ||
           (row.staff ? __("Staff", "shopsocket") : __("Guest", "shopsocket")),
         render: (row) => {
           const customer = row.cart?.customer;
@@ -407,6 +428,19 @@ function ShoppersPanel({
                 ) : (
                   customer
                 )
+              ) : row.guess ? (
+                <span title={row.guess.email}>
+                  {row.guess.email || row.guess.name}
+                  <span className="shopsocket-muted">
+                    {" · "}
+                    {sprintf(
+                      /* translators: %d: paid orders placed with the guessed email */
+                      _n("%d order", "%d orders", row.guess.orders, "shopsocket"),
+                      row.guess.orders,
+                    )}
+                  </span>{" "}
+                  <Badge intent="none">{__("Guest", "shopsocket")}</Badge>
+                </span>
               ) : (
                 <span className="shopsocket-muted">
                   {row.staff

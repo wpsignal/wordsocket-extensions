@@ -10,9 +10,18 @@
  */
 
 const REMEMBERED_KEY = "shopsocket-viewer";
+/** Where WooCommerce Blocks keeps the checkout form's last addresses, and the email offered from it. */
+const CART_DATA_KEY = "storeApiCartData";
+const OFFERED_KEY = "shopsocket-guess";
 
 export interface ViewerConfig {
   cartIdUrl?: string;
+  /**
+   * Where the email the checkout form remembers is offered as a best guess at who this guest is.
+   *
+   * @since 0.8.0
+   */
+  guestUrl?: string;
   nonce?: string;
   productId?: number;
   presenceChannel?: string;
@@ -285,6 +294,35 @@ export function startViewer(
   }
 
   /**
+   * Offer the email the checkout form remembers once per tab, as a best guess at who this guest is; the
+   * server keeps it only when that email has ordered here.
+   *
+   * @since 0.8.0
+   */
+  function offerGuess(): void {
+    const v = window.WPS?.visitorId?.();
+    if (!config.guestUrl || !v || document.body.classList.contains("logged-in")) return;
+    let email = "";
+    try {
+      const data = JSON.parse(window.localStorage.getItem(CART_DATA_KEY) ?? "null") as {
+        billingAddress?: { email?: unknown };
+      } | null;
+      email = typeof data?.billingAddress?.email === "string" ? data.billingAddress.email.trim().toLowerCase() : "";
+      if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+      if (window.sessionStorage.getItem(OFFERED_KEY) === email) return;
+      window.sessionStorage.setItem(OFFERED_KEY, email);
+    } catch {
+      return;
+    }
+    void fetch(config.guestUrl, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ v, email }),
+    }).catch(() => undefined);
+  }
+
+  /**
    * Start presence and read this shopper's state from the visit report's answer; false when nothing will answer.
    *
    * @since 0.8.0
@@ -318,6 +356,7 @@ export function startViewer(
    */
   const tracked = startTracked();
   const remembered = recall();
+  offerGuess();
   if (remembered) apply(remembered);
   if (tracked) listenTracked();
   else if (!remembered && hasCart()) sync();

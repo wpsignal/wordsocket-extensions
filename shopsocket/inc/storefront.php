@@ -348,6 +348,7 @@ add_action(
 					'activity' => ACTIVITY_CHANNEL,
 				),
 				'cartIdUrl'         => rest_url( REST_NS . '/cart-id' ),
+				'guestUrl'          => rest_url( REST_NS . '/guest' ),
 				'nonce'             => wp_create_nonce( 'wp_rest' ),
 				// The rules actions' routes (0.8); the engine itself is WordSocket's.
 				'rules'             => array(

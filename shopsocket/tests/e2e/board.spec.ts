@@ -112,6 +112,47 @@ test.describe("ShopSocket dashboard", () => {
     }
   });
 
+  test("a guest whose browser remembers a past order's email is named as a best guess", async ({
+    admin,
+    page,
+    browser,
+    baseURL,
+    requestUtils,
+  }) => {
+    await admin.visitAdminPage("admin.php", PAGE);
+    await waitForLive(page);
+    const product = await createProduct(requestUtils, "E2E Guess Widget", 5);
+    const order = await createOrder(requestUtils, product.id, 1);
+    const visitor = await visitorContext(browser, baseURL);
+    try {
+      // What WooCommerce Blocks leaves behind after a checkout: the form's addresses in localStorage.
+      await visitor.addInitScript(() => {
+        window.localStorage.setItem(
+          "storeApiCartData",
+          JSON.stringify({ billingAddress: { email: "Grace@example.com" } }),
+        );
+      });
+      const shop = await visitor.newPage();
+      await shop.goto(product.permalink);
+      await waitForLive(shop);
+      const v = await shop.evaluate(() => window.WPS?.visitorId() ?? "");
+      const cell = page.locator(`.shopsocket-shoppers [data-visitor="${v}"]`);
+      await expect(cell).toBeVisible({ timeout: 15_000 });
+      // The order's billing name, flagged, and never a link: a guess is not an account.
+      await expect(cell).toContainText("Grace Hopper", { timeout: 15_000 });
+      await expect(cell).toContainText("Best guess");
+      await expect(cell).toContainText("1 order");
+      await expect(cell.locator("a")).toHaveCount(0);
+      await expect(
+        page.locator(`.shopsocket-journeys [data-visitor="${v}"] title`),
+      ).toHaveText(/Grace Hopper \(best guess\)/);
+    } finally {
+      await visitor.close();
+      await deleteOrder(requestUtils, order.id);
+      await deleteProduct(requestUtils, product.id);
+    }
+  });
+
   test("the extension has a card on WordSocket's Extensions tab", async ({
     admin,
     page,

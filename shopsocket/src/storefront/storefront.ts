@@ -337,6 +337,7 @@ watchVariationForm((variationId) => {
 const viewer = startViewer(
   {
     cartIdUrl: state.cartIdUrl,
+    guestUrl: state.guestUrl,
     nonce: state.nonce,
     productId: state.productId,
     presenceChannel: state.presenceChannel,

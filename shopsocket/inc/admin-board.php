@@ -144,6 +144,7 @@ function render_dashboard(): void {
 				'dashboardUrl'   => rest_url( REST_NS . '/dashboard' ),
 				'productsUrl'    => rest_url( REST_NS . '/products' ),
 				'pagesUrl'       => rest_url( REST_NS . '/pages' ),
+				'guestsUrl'      => rest_url( REST_NS . '/guests' ),
 				'homeUrl'        => home_url( '/' ),
 				'shopUrl'        => (string) wc_get_page_permalink( 'shop' ),
 				'cartUrl'        => (string) wc_get_cart_url(),

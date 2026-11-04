@@ -183,7 +183,15 @@ export const LiveJourneys = memo(function LiveJourneys({
       .join("");
     const who =
       shopper.cart?.customer ||
-      (shopper.staff ? __("Staff", "shopsocket") : __("Guest", "shopsocket"));
+      (shopper.guess
+        ? sprintf(
+            /* translators: %s: the name or email guessed for a guest */
+            __("%s (best guess)", "shopsocket"),
+            shopper.guess.name || shopper.guess.email,
+          )
+        : shopper.staff
+          ? __("Staff", "shopsocket")
+          : __("Guest", "shopsocket"));
     const pages = steps.map((s) => names.label(s.kind, s.id)).join(" › ");
     return { shopper, d, keys, title: `${who} · ${pages}` };
     });
