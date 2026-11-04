@@ -397,9 +397,10 @@ function cart_left( string $cart_id, string $journey_id, array $state ): void {
 }
 
 /**
- * What the cart conditions can know from a stored journey, for the replay: how many units were in the cart and what they came to.
+ * What the cart conditions can know from a stored journey, for the replay: how many units were in the cart, what they came to and which products.
  *
  * @since 0.8.0
+ * @since 0.8.0 The products, as ids without categories.
  *
  * @param array $context The context so far.
  * @param array $row     WordSocket's row: `journey`, `started_at`, `outcome`, `value`, `ref`, `firings`, `data`.
@@ -410,7 +411,13 @@ function journey_context( array $context, array $row ): array {
 	$context['cart'] = array(
 		'count'    => $items ? array_sum( $items ) : ( '' !== (string) ( $row['ref'] ?? '' ) ? 1 : 0 ),
 		'total'    => round( (float) ( $row['value'] ?? 0 ), 2 ),
-		'products' => array(),
+		'products' => array_map(
+			static fn( int $id ): array => array(
+				'id'         => $id,
+				'categories' => array(),
+			),
+			array_keys( $items )
+		),
 		'product'  => '',
 	);
 	return $context;
