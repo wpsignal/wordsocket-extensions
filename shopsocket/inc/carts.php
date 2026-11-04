@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL, WordPress.DB.PreparedSQLPlaceholders -- WordSocket's journeys table: the name from its class, fragments from prepare(), one placeholder per id.
 
 /** The hash of the last `woo.carts` publish, so staff only hear about a change. */
-const CARTS_PUB_HASH = 'shopsocket_carts_pub';
+const CARTS_PUB_HASH = 'carts_pub';
 
 /**
  * Seconds a row survives without a cart change: the WooCommerce session lifetime.
@@ -177,10 +177,10 @@ function publish_carts_changed(): void {
 		'abandoned' => abandoned_rows(),
 	);
 	$hash    = md5( (string) wp_json_encode( $payload ) );
-	if ( get_transient( CARTS_PUB_HASH ) === $hash ) {
+	if ( recall( CARTS_PUB_HASH ) === $hash ) {
 		return;
 	}
-	set_transient( CARTS_PUB_HASH, $hash, cart_lifetime() );
+	remember( CARTS_PUB_HASH, $hash, cart_lifetime() );
 	WPS::publish( ORDERS_CHANNEL, 'woo.carts', $payload );
 }
 

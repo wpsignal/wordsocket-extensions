@@ -6,6 +6,7 @@
 use WPSignal\WPS;
 use function WPSignal\Extensions\ShopSocket\cart_id;
 use function WPSignal\Extensions\ShopSocket\count_in_carts;
+use function WPSignal\Extensions\ShopSocket\forget;
 use const WPSignal\Extensions\ShopSocket\ACTIVITY_CHANNEL;
 use const WPSignal\Extensions\ShopSocket\CARTS_PRESENCE_CHANNEL;
 use const WPSignal\Extensions\ShopSocket\STAFF_PRESENCE_CHANNEL;
@@ -228,7 +229,7 @@ final class TriggersTest extends ExtensionTestCase {
 	public function test_adding_to_the_cart_publishes_anonymous_activity_once_per_throttle_window(): void {
 		$this->set_history( true );
 		$product = $this->make_product( 10 );
-		delete_transient( 'shopsocket_act_' . $product->get_id() );
+		forget( 'act_' . $product->get_id() );
 		WC()->cart->empty_cart();
 
 		WC()->cart->add_to_cart( $product->get_id(), 2 );
@@ -248,7 +249,7 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->assertCount( 1, $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' ) );
 
 		// Window elapsed: publishes again.
-		delete_transient( 'shopsocket_act_' . $product->get_id() );
+		forget( 'act_' . $product->get_id() );
 		WC()->cart->add_to_cart( $product->get_id(), 1 );
 		$this->assertCount( 2, $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' ) );
 		$this->assertTrue( $this->events_on( ACTIVITY_CHANNEL, 'woo.cart.added' )[1]['data']['activity'] );
@@ -258,7 +259,7 @@ final class TriggersTest extends ExtensionTestCase {
 		 * needs the new count, but flagged so no toast shows (0.5). Both features
 		 * disabled: silent.
 		 */
-		delete_transient( 'shopsocket_act_' . $product->get_id() );
+		forget( 'act_' . $product->get_id() );
 		add_filter( 'shopsocket_activity_enabled', '__return_false' );
 		try {
 			WC()->cart->add_to_cart( $product->get_id(), 1 );
@@ -266,7 +267,7 @@ final class TriggersTest extends ExtensionTestCase {
 			$this->assertCount( 3, $events );
 			$this->assertFalse( $events[2]['data']['activity'] );
 
-			delete_transient( 'shopsocket_act_' . $product->get_id() );
+			forget( 'act_' . $product->get_id() );
 			add_filter( 'shopsocket_in_carts_enabled', '__return_false' );
 			try {
 				WC()->cart->add_to_cart( $product->get_id(), 1 );
@@ -284,7 +285,7 @@ final class TriggersTest extends ExtensionTestCase {
 		$this->set_history( true );
 		$product = $this->make_product( 10 );
 		$id      = $product->get_id();
-		delete_transient( 'shopsocket_act_' . $id );
+		forget( 'act_' . $id );
 		WC()->cart->empty_cart();
 		$this->clear_carts();
 		$this->published = array();

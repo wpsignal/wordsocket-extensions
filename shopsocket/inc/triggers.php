@@ -110,11 +110,11 @@ function should_publish_cart_add( $cart_item_key, $product_id, $quantity, $varia
 	if ( $throttle <= 0 ) {
 		return true;
 	}
-	$key = 'shopsocket_act_' . $id;
-	if ( get_transient( $key ) ) {
+	$key = 'act_' . $id;
+	if ( null !== recall( $key ) ) {
 		return false;
 	}
-	set_transient( $key, 1, $throttle );
+	remember( $key, 1, $throttle );
 	return true;
 }
 

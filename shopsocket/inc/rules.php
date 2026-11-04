@@ -267,11 +267,11 @@ add_filter(
  * @return bool
  */
 function rules_rate_ok( string $what, string $cart_id ): bool {
-	$key = 'shopsocket_' . $what . '_' . md5( $cart_id );
-	if ( get_transient( $key ) ) {
+	$key = $what . '_' . md5( $cart_id );
+	if ( null !== recall( $key ) ) {
 		return false;
 	}
-	set_transient( $key, 1, RULES_RATE_LIMIT );
+	remember( $key, 1, RULES_RATE_LIMIT );
 	return true;
 }
 

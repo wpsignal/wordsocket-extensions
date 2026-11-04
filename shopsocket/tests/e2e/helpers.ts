@@ -90,7 +90,7 @@ export function clearCarts(productId?: number): void {
     "eval",
     `global $wpdb; $journeys = ${ns}\\journeys_table(); ` +
       `$wpdb->query("DELETE FROM $journeys WHERE ${where}"); ` +
-      `delete_transient('shopsocket_carts_pub');`,
+      `${ns}\\forget('carts_pub');`,
   );
 }
 

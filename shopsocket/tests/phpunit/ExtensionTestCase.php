@@ -132,7 +132,7 @@ abstract class ExtensionTestCase extends TestCase {
 	protected function clear_carts(): void {
 		global $wpdb;
 		$wpdb->query( 'DELETE FROM ' . \WPSignal\Extensions\ShopSocket\journeys_table() ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		delete_transient( 'shopsocket_carts_pub' );
+		\WPSignal\Extensions\ShopSocket\forget( 'carts_pub' );
 		\WPSignal\Extensions\ShopSocket\invalidate_cart_caches();
 	}
 

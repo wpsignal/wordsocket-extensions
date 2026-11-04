@@ -7,6 +7,7 @@
 
 use WPSignal\WPS;
 use function WPSignal\Extensions\ShopSocket\cart_id;
+use function WPSignal\Extensions\ShopSocket\forget;
 use function WPSignal\Extensions\ShopSocket\journeys_table;
 use function WPSignal\Extensions\ShopSocket\on_visitor_report;
 use const WPSignal\Extensions\ShopSocket\DEFAULT_RULE_ID;
@@ -26,7 +27,7 @@ final class RulesTest extends ExtensionTestCase {
 		$this->saved_rules = get_option( 'wpsignal_rules', false );
 		delete_option( 'wpsignal_rules' );
 		WC()->cart->empty_cart();
-		delete_transient( 'shopsocket_alert_' . md5( cart_id() ) );
+		forget( 'alert_' . md5( cart_id() ) );
 		$this->published = array();
 	}
 
@@ -196,7 +197,7 @@ final class RulesTest extends ExtensionTestCase {
 		$this->assertSame( 429, $status, 'the limit is the cart\'s, so a new visitor id does not reset it' );
 		$this->assertCount( 1, $this->events_on( ORDERS_CHANNEL, 'woo.alert' ) );
 
-		delete_transient( 'shopsocket_alert_' . md5( cart_id() ) );
+		forget( 'alert_' . md5( cart_id() ) );
 		list( $status ) = $this->rest_post( 'alert', array( 'v' => self::V, 'rule' => 'nope', 'message' => 'Stuck on checkout' ) );
 		$this->assertSame( 404, $status, 'a moment that is not saved and enabled alerts nobody' );
 		$this->assertCount( 1, $this->events_on( ORDERS_CHANNEL, 'woo.alert' ) );
