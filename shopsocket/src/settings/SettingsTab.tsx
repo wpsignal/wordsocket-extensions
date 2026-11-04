@@ -14,7 +14,6 @@ import {
   Button,
   CollapsibleCard,
   Card,
-  Notice,
   Spinner,
   Stack,
   Text,
@@ -31,7 +30,8 @@ const DEFAULTS: ShopSocketStorefrontSettings = {
 };
 
 type ExclusionKey =
-  "in_carts_excluded_categories" | "activity_excluded_categories";
+  | "in_carts_excluded_categories"
+  | "activity_excluded_categories";
 
 function coreComponents(): Components {
   return (window as unknown as { wp: { components: Components } }).wp
@@ -45,7 +45,8 @@ function coreComponents(): Components {
  * @since 0.8.0 Laid out with `@wordpress/ui`.
  */
 export function SettingsTab() {
-  const { ToggleControl, FormTokenField, TextControl } = coreComponents();
+  const { ToggleControl, FormTokenField, TextControl, Icon, Tooltip } =
+    coreComponents();
   const [settings, setSettings] = useState<ShopSocketStorefrontSettings>(
     window.shopSocketSettings?.storefront ?? DEFAULTS,
   );
@@ -151,21 +152,25 @@ export function SettingsTab() {
     <Stack direction="column" gap="lg" className="shopsocket-tab">
       <Stack direction="column" gap="sm">
         <Text variant="heading-xl" render={<h2 />}>
+          <Tooltip
+            text={__(
+              "What shoppers see on the storefront. The board under WooCommerce is unaffected by these settings.",
+              "shopsocket",
+            )}
+          >
+            <span tabIndex={0}>
+              <Icon size={16} icon="editor-help" />
+            </span>
+          </Tooltip>{" "}
           {__("ShopSocket", "shopsocket")}
-        </Text>
-        <Text variant="body-md" render={<p />}>
-          {__(
-            "What shoppers see on the storefront. The board under WooCommerce is unaffected by these settings.",
-            "shopsocket",
-          )}
         </Text>
       </Stack>
 
       <Text variant="heading-sm" render={<h4 />}>
         {__("Storefront settings", "shopsocket")}
       </Text>
-      <Stack direction="row" gap="lg" align="start">
-        <CollapsibleCard.Root style={{ flex: 1 }}>
+      <Stack gap="lg" align="start" className="shopsocket-settings-cards">
+        <CollapsibleCard.Root>
           <CollapsibleCard.Header>
             <Card.Title>{__("In-cart count", "shopsocket")}</Card.Title>
           </CollapsibleCard.Header>
@@ -190,7 +195,7 @@ export function SettingsTab() {
             </Stack>
           </CollapsibleCard.Content>
         </CollapsibleCard.Root>
-        <CollapsibleCard.Root style={{ flex: 1 }}>
+        <CollapsibleCard.Root>
           <CollapsibleCard.Header>
             <Card.Title>
               {__("Added-to-cart notification", "shopsocket")}
