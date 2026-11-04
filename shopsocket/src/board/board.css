@@ -419,6 +419,13 @@ body.shopsocket-fullscreen {
   }
 }
 
+/* On a narrow screen only "Now" heads the columns. */
+@media (max-width: 782px) {
+  .shopsocket-journeys__back {
+    display: none;
+  }
+}
+
 /* The route's hit area: wide and invisible, above the line. */
 .shopsocket-journeys__hit {
   fill: none;

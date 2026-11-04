@@ -27,6 +27,8 @@ const COL_W = 72;
 const MIN_COL_W = 56;
 const R_MAX = 9;
 const R_MIN = 3.5;
+/** Half a header character's width at the header's 12 px, for keeping a header inside the plot. */
+const HEADER_CHAR_W = 3.5;
 /** How many routes draw at full ink; past it the ink thins by the square root of the excess. */
 const FULL_INK_ROUTES = 10;
 const MIN_INK = 0.1;
@@ -279,17 +281,26 @@ export const LiveJourneys = memo(function LiveJourneys({
               )}
             >
               <g>
-                {Array.from({ length: columns }, (_, col) => (
-                  <text
-                    key={col}
-                    x={colX(col)}
-                    y={16}
-                    textAnchor="middle"
-                    className={back(col) === 0 ? "is-strong" : undefined}
-                  >
-                    {header(col)}
-                  </text>
-                ))}
+                {Array.from({ length: columns }, (_, col) => {
+                  const label = header(col);
+                  /* Centred on the column, nudged in at either edge so no header is cut off. */
+                  const half = label.length * HEADER_CHAR_W;
+                  return (
+                    <text
+                      key={col}
+                      x={Math.min(W - half, Math.max(half, colX(col)))}
+                      y={16}
+                      textAnchor="middle"
+                      className={
+                        back(col) === 0
+                          ? "is-strong"
+                          : "shopsocket-journeys__back"
+                      }
+                    >
+                      {label}
+                    </text>
+                  );
+                })}
               </g>
               <g>
                 {drawn.map(({ shopper, d, keys, title }) => (
