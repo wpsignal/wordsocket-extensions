@@ -189,11 +189,11 @@ add_filter(
 	}
 );
 
-// The cart and the checkout write the visit on arrival, whatever the write schedule holds back elsewhere.
+// The cart, the checkout and the order received page write the visit on arrival, whatever the write schedule holds back elsewhere.
 add_filter(
 	'wpsignal_journey_write_kinds',
 	static function ( array $kinds ): array {
-		return array_merge( $kinds, array( 'cart', 'checkout' ) );
+		return array_merge( $kinds, array( 'cart', 'checkout', 'thanks' ) );
 	}
 );
 

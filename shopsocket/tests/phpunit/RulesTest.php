@@ -105,10 +105,11 @@ final class RulesTest extends ExtensionTestCase {
 		}
 	}
 
-	public function test_the_cart_and_the_checkout_always_write_the_visit(): void {
+	public function test_the_cart_the_checkout_and_the_order_received_page_always_write_the_visit(): void {
 		$kinds = WPS::instance()->presence()->config()['writeKinds'];
 		$this->assertContains( 'cart', $kinds );
 		$this->assertContains( 'checkout', $kinds );
+		$this->assertContains( 'thanks', $kinds );
 		$this->assertNotContains( 'product', $kinds, 'a product page writes on the schedule' );
 	}
 
