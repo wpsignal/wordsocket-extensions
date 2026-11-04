@@ -21,6 +21,8 @@ import { money } from "./format";
 import { WeekStrip } from "./WeekStrip";
 import { adminUrlOrNull, siteUrlOrNull } from "./trust";
 import { LiveOrders } from "./LiveOrders";
+import { LiveJourneys, type RouteNames } from "./LiveJourneys";
+import { routeSteps } from "./journey";
 import { playChime } from "./chime";
 import { BoardTable, Section, Stat, productColumn, type Column } from "./ui";
 
@@ -208,6 +210,7 @@ function RightNow({
   stale: boolean;
 }) {
   const { carts, usersOnline, online, staff, awayUsers } = snapshot;
+  const names = useShopperNames(snapshot.shoppers);
   /* translators: %d: how many of the figure above are staff (people or tabs) */
   const staffNote = (count: number) =>
     count > 0
@@ -290,7 +293,25 @@ function RightNow({
       <Text variant="heading-md" render={<h3 />} className="shopsocket-subhead">
         {__("Shoppers on the site right now", "shopsocket")}
       </Text>
-      <ShoppersPanel shoppers={snapshot.shoppers} />
+      <ShoppersPanel shoppers={snapshot.shoppers} names={names} />
+      {snapshot.shoppers.length > 0 && (
+        <>
+          <Text
+            variant="heading-md"
+            render={<h3 />}
+            className="shopsocket-subhead"
+          >
+            {__("Where they are coming from", "shopsocket")}
+          </Text>
+          <Text variant="body-sm" className="shopsocket-muted" render={<p />}>
+            {__(
+              "Each shopper's route through your pages this visit, ending where they are now. Hover a route for the pages.",
+              "shopsocket",
+            )}
+          </Text>
+          <LiveJourneys shoppers={snapshot.shoppers} names={names} />
+        </>
+      )}
       <Text variant="heading-md" render={<h3 />} className="shopsocket-subhead">
         {__("Products in carts right now", "shopsocket")}
       </Text>
@@ -302,39 +323,69 @@ function RightNow({
 /** A shopper's visitor id as their row key. */
 const byVisitorId = (row: WooShopper) => row.v;
 
+/** Names and links for every page in the shoppers' routes. */
+interface ShopperNames extends RouteNames {
+  url: (kind: string, id: number) => string | null;
+}
+
 /**
- * Every connected visitor: who they are when logged in, the page they are on
- * linked to it, what their cart holds, and whether their tab is hidden.
+ * The names and links of every page the shoppers' routes hold, each fetched once per page per step
+ * and shared by the shoppers table and the routes diagram.
+ *
+ * @since 0.8.0
  */
-function ShoppersPanel({ shoppers }: { shoppers: WooShopper[] }) {
+function useShopperNames(shoppers: WooShopper[]): ShopperNames {
+  /* The pages the shoppers are on first, so the table's cells are named before the routes' nodes. */
+  const all = useMemo(
+    () => [
+      ...shoppers.map((s) => ({ kind: s.kind, id: s.id })),
+      ...shoppers.flatMap((s) => routeSteps(s.j)),
+    ],
+    [shoppers],
+  );
   const steps = useMemo(
     () =>
       Array.from(
         new Set(
-          shoppers
-            .filter((s) => needsLookup(s.kind))
-            .map((s) => `${s.kind}:${s.id}`),
+          all.filter((s) => needsLookup(s.kind)).map((s) => `${s.kind}:${s.id}`),
         ),
       ).slice(0, LIVE_PRODUCTS),
-    [shoppers],
+    [all],
   );
   const page = usePageNames(steps, config);
   const productIds = useMemo(
     () =>
       Array.from(
-        new Set(shoppers.filter((s) => s.kind === "product").map((s) => s.id)),
+        new Set(all.filter((s) => s.kind === "product").map((s) => s.id)),
       ).slice(0, LIVE_PRODUCTS),
-    [shoppers],
+    [all],
   );
   const product = useProductNames(productIds, config);
+  return useMemo(
+    () => ({
+      label: (kind, id) =>
+        pageLabel(kind, id, page(`${kind}:${id}`), product(id)),
+      url: (kind, id) => pageUrl(kind, page(`${kind}:${id}`), product(id), config),
+    }),
+    [page, product],
+  );
+}
+
+/**
+ * Every connected visitor: who they are when logged in, the page they are on
+ * linked to it, what their cart holds, and whether their tab is hidden.
+ *
+ * @since 0.8.0
+ */
+function ShoppersPanel({
+  shoppers,
+  names,
+}: {
+  shoppers: WooShopper[];
+  names: ShopperNames;
+}) {
   const columns = useMemo<Column<WooShopper>[]>(() => {
-    const label = (row: WooShopper) =>
-      pageLabel(
-        row.kind,
-        row.id,
-        page(`${row.kind}:${row.id}`),
-        product(row.id),
-      );
+    const label = (row: WooShopper) => names.label(row.kind, row.id);
     return [
       {
         id: "shopper",
@@ -372,12 +423,7 @@ function ShoppersPanel({ shoppers }: { shoppers: WooShopper[] }) {
         label: __("Page", "shopsocket"),
         value: label,
         render: (row) => {
-          const url = pageUrl(
-            row.kind,
-            page(`${row.kind}:${row.id}`),
-            product(row.id),
-            config,
-          );
+          const url = names.url(row.kind, row.id);
           const href = url ? siteUrlOrNull(url, config.homeUrl) : null;
           return href ? (
             <Link href={href} openInNewTab>
@@ -427,7 +473,7 @@ function ShoppersPanel({ shoppers }: { shoppers: WooShopper[] }) {
         ),
       },
     ];
-  }, [page, product]);
+  }, [names]);
   return (
     <BoardTable
       className="shopsocket-shoppers"

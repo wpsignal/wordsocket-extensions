@@ -185,6 +185,12 @@ interface WooShopper {
 	kind: string;
 	/** The open step's id, 0 when the kind has none. */
 	id: number;
+	/**
+	 * The journey as the tracker announced it, `kind:id:s` steps joined by `>`.
+	 *
+	 * @since 0.8.0
+	 */
+	j: string;
 	/** Whether every tab of theirs is hidden. */
 	away: boolean;
 	/** Whether the visitor is a staff member browsing the store. */

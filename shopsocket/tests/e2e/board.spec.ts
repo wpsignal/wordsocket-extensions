@@ -87,6 +87,10 @@ test.describe("ShopSocket dashboard", () => {
         row.getByRole("link", { name: /E2E Page Widget/ }),
       ).toHaveCount(0);
       await expect(row).toContainText("Hidden", { timeout: 3_000 });
+      // The routes diagram: the guest's route runs from the product to Shop, dotted while hidden.
+      const route = page.locator(`.shopsocket-journeys [data-visitor="${v}"]`);
+      await expect(route.locator("title")).toHaveText(/Guest \u00b7 E2E Page Widget \u203a Shop/);
+      await expect(route).toHaveClass(/is-away/);
       await shop.evaluate(() => {
         Object.defineProperty(document, "hidden", {
           configurable: true,
@@ -99,6 +103,9 @@ test.describe("ShopSocket dashboard", () => {
         document.dispatchEvent(new Event("visibilitychange"));
       });
       await expect(row).toContainText("Live", { timeout: 15_000 });
+      // Back on the same page: the route is as it was, undotted, with no step added.
+      await expect(route).not.toHaveClass(/is-away/);
+      await expect(route.locator("title")).toHaveText(/Guest \u00b7 E2E Page Widget \u203a Shop$/);
     } finally {
       await visitor.close();
       await deleteProduct(requestUtils, product.id);

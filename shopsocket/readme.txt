@@ -24,7 +24,7 @@ https://www.youtube.com/watch?v=BKwID6t_kpQ
 **For you and your team**
 
 * Every order on screen the moment it is placed, with a chime
-* Who is shopping right now, what is in their carts, and what it is worth
+* Who is shopping right now, the pages that brought each of them to where they are, what is in their carts, and what it is worth
 * Which carts were left behind
 * Which products are in carts right now
 * Low-stock and sold-out alerts as they happen
@@ -149,6 +149,7 @@ Anyone who can manage WooCommerce.
 == Changelog ==
 
 = 0.8.0 =
+* New: the board's Right now card draws where each shopper came from: their route through your pages this visit, ending where they are now, with a hidden tab's route dotted and the page they are on pulsing.
 * A shopper moving between pages no longer costs the server a request: the storefront remembers their cart for the visit and asks again only when it changed.
 * New: with WordSocket 0.31, the Moments tab knows the shop. Conditions on the cart (items, count, total, a product, a category) and the WooCommerce pages, and one action: alert your team on the Realtime board
 * New: one moment ships switched off, listed on WordSocket's Moments tab: a shopper who hides the tab with a cart sees the tab title flash and, on return, a banner naming what is waiting

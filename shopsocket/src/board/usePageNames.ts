@@ -31,6 +31,18 @@ const KNOWN: Record<string, { label: () => string; url?: keyof Config }> = {
   away: { label: () => __("Away", "shopsocket") },
 };
 
+/** The kinds the diagram rows by that the table resolves to a page instead. */
+const ROW_ONLY: Record<string, () => string> = {
+  category: () => __("Category", "shopsocket"),
+  product: () => __("Product", "shopsocket"),
+  page: () => __("Page", "shopsocket"),
+  post: () => __("Post", "shopsocket"),
+};
+
+/** Whether `kind` is one of the table's own keys, never a name inherited from Object. */
+const own = (table: object, kind: string): boolean =>
+  Object.prototype.hasOwnProperty.call(table, kind);
+
 /**
  * Whether a step kind is resolved through the pages route: a post type, a
  * taxonomy or a post type archive. Products are named through the product
@@ -39,13 +51,25 @@ const KNOWN: Record<string, { label: () => string; url?: keyof Config }> = {
  * @since 0.8.0
  */
 export function needsLookup(kind: string): boolean {
-  return !(kind in KNOWN) && kind !== "product";
+  return !own(KNOWN, kind) && kind !== "product";
 }
 
 /** A kind as words: underscores as spaces, the first letter capital. */
 function kindWords(kind: string): string {
   const words = kind.replace(/_/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * A kind's own word, for a row label or a tooltip: the table's word, the diagram's for the kinds
+ * the table resolves to a page, else the kind as words.
+ *
+ * @since 0.8.0
+ */
+export function kindLabel(kind: string): string {
+  if (own(KNOWN, kind)) return KNOWN[kind].label();
+  if (own(ROW_ONLY, kind)) return ROW_ONLY[kind]();
+  return kindWords(kind);
 }
 
 /**
@@ -61,7 +85,7 @@ export function pageLabel(
   page: WooPageRef | null | undefined,
   product: WooProductRef | null | undefined,
 ): string {
-  if (kind in KNOWN) return KNOWN[kind].label();
+  if (own(KNOWN, kind)) return KNOWN[kind].label();
   if (kind === "product") return productLabel(product, id);
   if (page) return page.title;
   if (kind.endsWith("_archive")) return kindWords(kind);
@@ -81,7 +105,7 @@ export function pageUrl(
   product: WooProductRef | null | undefined,
   config: Config,
 ): string | null {
-  const known = KNOWN[kind];
+  const known = own(KNOWN, kind) ? KNOWN[kind] : null;
   if (known) return known.url ? config[known.url] || null : null;
   if (kind === "product") return product?.url || null;
   return page?.url || null;

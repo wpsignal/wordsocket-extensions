@@ -5,6 +5,11 @@
  * two are crossed here by cart id. "Online now" is the relay's own count.
  */
 import { useEffect, useMemo, useRef, useState } from "@wordpress/element";
+
+/**
+ * Internal dependencies.
+ */
+import { openStep } from "./journey";
 import apiFetch from "@wordpress/api-fetch";
 
 const POLL_MS = 30_000;
@@ -31,26 +36,23 @@ type Config = Pick<
  */
 type Member = { v?: string; b?: string | null; j?: string };
 
+/** The most of a journey string the board keeps, WordSocket's own limit on one. */
+const JOURNEY_MAX = 4000;
+
+/** A member's state as the board reads it: strings only, whatever the browser sent. */
+function member(state: unknown): Member {
+  const s = (state ?? {}) as Record<string, unknown>;
+  return {
+    ...(typeof s.v === "string" ? { v: s.v } : {}),
+    b: typeof s.b === "string" ? s.b : null,
+    j: typeof s.j === "string" ? s.j.slice(-JOURNEY_MAX) : "",
+  };
+}
+
 /** Whether a member's tab is hidden: the journey's last step is `away`. */
 function isAway(m: Member): boolean {
   const last = (m.j ?? "").split(">").pop() ?? "";
   return last.startsWith("away:");
-}
-
-/**
- * The page a member is on: the journey's open step, or the one before it when the tab is hidden;
- * `other:0` for a journey that has none.
- *
- * @since 0.8.0
- */
-export function openStep(j: string | undefined): { kind: string; id: number } {
-  const steps = (j ?? "").split(">").filter((s) => s !== "");
-  let last = steps.pop() ?? "";
-  if (last.startsWith("away:")) last = steps.pop() ?? "";
-  const [kind, id] = last.split(":");
-  return /^[a-z_]+$/.test(kind ?? "")
-    ? { kind, id: Number(id) || 0 }
-    : { kind: "other", id: 0 };
 }
 
 /** A connected visitor before the cart row is joined on. */
@@ -78,12 +80,13 @@ function byVisitor(
       if (!before.b && m.b) before.b = m.b;
       return;
     }
-    const step = openStep(m.j);
+    const step = openStep(m.j ?? "");
     picked.set(m.v, {
       v: m.v,
       b: m.b ?? before?.b ?? null,
       kind: step.kind,
       id: step.id,
+      j: m.j ?? "",
       away,
       staff: staffVisitors.has(m.v),
       rank,
@@ -325,13 +328,13 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
           pendingLeaves.clear();
           members.clear();
           (p.members ?? []).forEach(
-            (m) => m.id && members.set(m.id, m.state ?? {}),
+            (m) => m.id && members.set(m.id, member(m.state)),
           );
         } else if (p.action === "join" && p.id) {
           cancelLeave(p.id);
           // A re-announce moves the member to the end.
           members.delete(p.id);
-          members.set(p.id, p.state ?? {});
+          members.set(p.id, member(p.state));
         } else if (p.action === "leave" && p.id) {
           /*
            * Hold the member: if the same person is back on the next page
@@ -466,8 +469,17 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
     config.snapshot.as_of,
   ]);
 
+  /* The roster joined to the cart rows by cart id, kept while neither changes. */
+  const byCart = useMemo(() => new Map(rows.map((row) => [row.id, row])), [rows]);
+  const shoppers = useMemo(
+    () =>
+      roster.map((s) => ({
+        ...s,
+        cart: (s.b && byCart.get(s.b)) || null,
+      })),
+    [roster, byCart],
+  );
   const snapshot = useMemo<WooDashboardSnapshot>(() => {
-    const byCart = new Map(rows.map((row) => [row.id, row]));
     return {
       ...splitCarts(rows, present, awayIds),
       usersOnline,
@@ -476,10 +488,7 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
       abandoned: recentlyAbandoned(abandoned, present, now),
       online,
       strip,
-      shoppers: roster.map((s) => ({
-        ...s,
-        cart: (s.b && byCart.get(s.b)) || null,
-      })),
+      shoppers,
     };
   }, [
     rows,
@@ -492,7 +501,7 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
     now,
     online,
     strip,
-    roster,
+    shoppers,
   ]);
 
   return { snapshot, stale };

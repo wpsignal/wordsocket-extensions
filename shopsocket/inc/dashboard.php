@@ -248,6 +248,26 @@ function page_for_step( string $kind, int $id ): ?array {
  * @return array<int, array{step: string, title: string, url: string}>
  */
 function pages_for_board( array $steps ): array {
+	$posts = array();
+	$terms = array();
+	$taxes = taxonomy_step_kinds();
+	foreach ( $steps as $step ) {
+		[ $kind, $id ] = explode( ':', $step, 2 );
+		if ( (int) $id <= 0 ) {
+			continue;
+		}
+		if ( in_array( $kind, $taxes, true ) ) {
+			$terms[] = (int) $id;
+		} elseif ( get_post_type_object( $kind ) instanceof \WP_Post_Type ) {
+			$posts[] = (int) $id;
+		}
+	}
+	if ( $posts ) {
+		_prime_post_caches( $posts, false, false );
+	}
+	if ( $terms ) {
+		_prime_term_caches( $terms );
+	}
 	$rows = array();
 	foreach ( $steps as $step ) {
 		[ $kind, $id ] = explode( ':', $step, 2 );
