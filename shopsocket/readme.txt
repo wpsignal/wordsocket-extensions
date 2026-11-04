@@ -152,7 +152,7 @@ Anyone who can manage WooCommerce.
 * New: the board's Right now card draws where each shopper came from: their route through your pages this visit, ending where they are now, with a hidden tab's route dotted and the page they are on pulsing.
 * New: a guest whose browser remembers the email of a past checkout is named on the board as a best guess, with the billing name and how many paid orders that email has placed here, once the email matches; the guess is kept for two days and WordPress's privacy tools export and erase it by email.
 * A shopper moving between pages no longer costs the server a request: the storefront remembers their cart for the visit and asks again only when it changed.
-* New: with WordSocket 0.31, the Moments tab knows the shop. Conditions on the cart (items, count, total, a product, a category) and the WooCommerce pages, and one action: alert your team on the Realtime board
+* New: with WordSocket 0.31, the Moments tab knows the shop. Conditions on the cart (items, count, total, a product, a category, whether the product on the page is in it) and the WooCommerce pages, and one action: alert your team on the Realtime board
 * New: one moment ships switched off, listed on WordSocket's Moments tab: a shopper who hides the tab with a cart sees the tab title flash and, on return, a banner naming what is waiting
 * New: with history on, the journeys record which moments fired, and the Moments tab can replay a moment over them before you switch it on; a moment that fires right after a shopper's first add to cart is recorded too
 * Nothing changes on WordSocket 0.30: the rules pieces load only when the engine is there

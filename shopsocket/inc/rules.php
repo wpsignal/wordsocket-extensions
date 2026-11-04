@@ -145,6 +145,21 @@ function register_rules_vocabulary(): void {
 			'source'      => SLUG,
 		)
 	);
+	$rules->condition(
+		'cart_has_page_product',
+		array(
+			'label'       => __( 'Cart has the product on this page', 'shopsocket' ),
+			'operators'   => array(
+				array(
+					'key'   => 'is',
+					'label' => __( 'is', 'shopsocket' ),
+				),
+			),
+			'value'       => 'boolean',
+			'description' => __( 'Only on a product page; anywhere else the condition is false either way.', 'shopsocket' ),
+			'source'      => SLUG,
+		)
+	);
 	$categories = array();
 	$terms      = get_terms(
 		array(

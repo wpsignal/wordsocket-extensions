@@ -89,11 +89,44 @@ final class RulesTest extends ExtensionTestCase {
 	public function test_the_vocabulary_lists_the_cart_conditions_and_the_shop_actions(): void {
 		$vocabulary = WPS::rules()->vocabulary();
 		$conditions = array_column( $vocabulary['conditions'], null, 'key' );
-		foreach ( array( 'cart_has_items', 'cart_count', 'cart_total', 'cart_has_product' ) as $key ) {
+		foreach ( array( 'cart_has_items', 'cart_count', 'cart_total', 'cart_has_product', 'cart_has_page_product' ) as $key ) {
 			$this->assertArrayHasKey( $key, $conditions, $key );
 			$this->assertSame( 'shopsocket', $conditions[ $key ]['source'] );
 		}
 		$this->assertSame( array( 'at_least', 'at_most' ), array_column( $conditions['cart_total']['operators'], 'key' ) );
+		$this->assertSame( array( 'is' ), array_column( $conditions['cart_has_page_product']['operators'], 'key' ) );
+		$this->assertSame( 'boolean', $conditions['cart_has_page_product']['value'] );
+		$lingering = WPS::rules()->validate(
+			array(
+				array(
+					'id'         => 'be193829',
+					'name'       => 'Lingering on a product',
+					'frequency'  => 'visit',
+					'conditions' => array(
+						'all' => array(
+							array(
+								'condition' => 'cart_has_page_product',
+								'op'        => 'is',
+								'value'     => false,
+							),
+							array(
+								'condition' => 'dwell',
+								'op'        => 'at_least',
+								'value'     => 120,
+							),
+						),
+					),
+					'actions'    => array(
+						array(
+							'action'  => 'alert_staff',
+							'message' => 'Reading {page.title} without adding it',
+						),
+					),
+				),
+			)
+		);
+		$this->assertIsArray( $lingering, 'a moment on the page\'s product validates' );
+		$this->assertFalse( $lingering[0]['conditions']['all'][0]['value'] );
 		$this->assertSame( 'page_kind', $vocabulary['conditions'][0]['key'], 'WordSocket\'s own come first' );
 		$actions = array_column( $vocabulary['actions'], null, 'key' );
 		$this->assertArrayHasKey( 'alert_staff', $actions );

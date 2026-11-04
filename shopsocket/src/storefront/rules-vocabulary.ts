@@ -41,8 +41,14 @@ function bounds(op: string, actual: number, wanted: number): boolean {
   return false;
 }
 
+/** Whether the page's product is in the cart; null off a product page. */
+function pageProductInCart(ctx: WPSRuleContext): boolean | null {
+  if (ctx.page.kind !== "product" || !ctx.page.id) return null;
+  return cartOf(ctx).products.some((p) => p.id === ctx.page.id);
+}
+
 /**
- * Registers the cart conditions (items, count, total, product, category) with WordSocket's rules engine.
+ * Registers the cart conditions (items, count, total, product, category, the page's product) with WordSocket's rules engine.
  *
  * @since 0.8.0
  */
@@ -60,6 +66,10 @@ export function registerConditions(rules: WPSRulesApi): void {
   rules.condition("cart_has_product", (ctx, c) => {
     const has = cartOf(ctx).products.some((p) => p.id === num(c.value));
     return c.op === "includes" ? has : c.op === "excludes" ? !has : false;
+  });
+  rules.condition("cart_has_page_product", (ctx, c) => {
+    const has = pageProductInCart(ctx);
+    return c.op === "is" && has !== null && has === Boolean(c.value);
   });
   rules.condition("cart_has_category", (ctx, c) => {
     const has = cartOf(ctx).products.some((p) =>
