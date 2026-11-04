@@ -91,7 +91,7 @@ function week_strip(): ?array {
 /**
  * Carts whose shopper left and that never became an order, by each cart's newest journey: this week's count and value, and last week's count.
  *
- * @since 0.8.0 Read from WordSocket's journeys.
+ * @since 0.8.0
  *
  * @param string   $since Start of this week, SQL UTC.
  * @param string   $prev  Start of last week, SQL UTC.
@@ -307,7 +307,7 @@ function leak( string $since ): ?array {
 /**
  * The products most often in a cart left behind this week, with how many carts converted holding each.
  *
- * @since 0.8.0 Read from WordSocket's journeys.
+ * @since 0.8.0
  *
  * @param string $since Start of this week, SQL UTC.
  * @return array<int, array{id: int, left: int, bought: int}>

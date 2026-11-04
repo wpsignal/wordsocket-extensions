@@ -58,7 +58,11 @@ function readSound(): boolean {
   }
 }
 
-/** The board: header controls, tiles, the stock strip, and the live orders table. */
+/**
+ * The board: header controls, tiles, the stock strip, and the live orders table.
+ *
+ * @since 0.1.1
+ */
 export function Dashboard() {
   const [sound, setSound] = useState(readSound);
   const [fullscreen, setFullscreen] = useState(false);

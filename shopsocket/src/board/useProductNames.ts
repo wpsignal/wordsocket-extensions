@@ -29,7 +29,11 @@ export function productLabel(
     : `#${id}`;
 }
 
-/** A lookup from product id to its ref, null when removed, undefined while unknown. */
+/**
+ * A lookup from product id to its ref, null when removed, undefined while unknown.
+ *
+ * @since 0.1.1
+ */
 export function useProductNames(ids: number[], config: Config) {
   const cache = useRef(new Map<number, WooProductRef | null>());
   const pending = useRef(new Set<number>());

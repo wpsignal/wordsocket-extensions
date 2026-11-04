@@ -42,6 +42,8 @@ const GUEST_INDEX_MAX = 20;
 /**
  * The memory key a visitor's guess lives under.
  *
+ * @since 0.8.0
+ *
  * @param string $v The visitor id.
  * @return string
  */
@@ -51,6 +53,8 @@ function guest_key( string $v ): string {
 
 /**
  * The memory key an email's visitor ids live under.
+ *
+ * @since 0.8.0
  *
  * @param string $email The email.
  * @return string

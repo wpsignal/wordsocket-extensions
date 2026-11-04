@@ -5,7 +5,11 @@
  * link is only followed into wp-admin.
  */
 
-/** `url` when it points into this site's admin, else null. */
+/**
+ * `url` when it points into this site's admin, else null.
+ *
+ * @since 0.1.1
+ */
 export function adminUrlOrNull(url: string, adminUrl: string): string | null {
   try {
     const target = new URL(url, window.location.origin);

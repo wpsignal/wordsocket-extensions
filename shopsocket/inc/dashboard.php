@@ -19,15 +19,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 const REST_NS = 'shopsocket/v1';
 
-/** Products the board may name in one request, and the most it lists. */
+/**
+ * Products the board may name in one request, and the most it lists.
+ *
+ * @since 0.1.1
+ */
 const BOARD_LIVE_PRODUCTS = 100;
 
-/** Orders the board renders on first paint, and the most one refresh hands back. */
+/**
+ * Orders the board renders on first paint, and the most one refresh hands back.
+ *
+ * @since 0.1.1
+ */
 const BOARD_ORDERS = 50;
 
 /**
  * Browsers connected to the site right now, from the WPSignal server through
  * WordSocket (0.22+). Null when WordSocket is older or the server is unreachable.
+ *
+ * @since 0.1.1
  *
  * @return array{active_connections: int, max_connections: int}|null
  */
@@ -46,6 +56,7 @@ function online_now(): ?array {
  * `as_of` is this server's clock when the figures were read: the board sends
  * it back as `since` on its next refresh.
  *
+ * @since 0.1.1
  * @since 0.8.0 Adds `strip`.
  *
  * @return array{carts: array<int, array<string, mixed>>, abandoned: array<int, array<string, mixed>>, online: array{active_connections: int, max_connections: int}|null, as_of: int}
@@ -63,6 +74,8 @@ function dashboard_snapshot(): array {
 /**
  * Orders for the board, newest first: the latest BOARD_ORDERS, or with
  * `$since` only those created or changed at or after that moment.
+ *
+ * @since 0.5.1
  *
  * @param int $since Unix timestamp, or 0 for the latest orders regardless.
  * @return array<int, array<string, mixed>>
@@ -85,6 +98,8 @@ function board_orders( int $since = 0 ): array {
  * The `/dashboard` response: the snapshot, plus the orders changed since
  * `since` when the board names one.
  *
+ * @since 0.5.1
+ *
  * @param \WP_REST_Request $request The request.
  * @return \WP_REST_Response|\WP_Error
  */
@@ -99,6 +114,8 @@ function dashboard_response( \WP_REST_Request $request ) {
 /**
  * Product ids from a comma-separated list: positive integers, no repeats,
  * capped at BOARD_LIVE_PRODUCTS.
+ *
+ * @since 0.1.1
  *
  * @param string $ids Raw `ids` parameter.
  * @return int[]
@@ -119,6 +136,7 @@ function parse_product_ids( string $ids ): array {
  * live-products list. The board alone knows which carts are live, so it
  * picks the ids and asks here for the words.
  *
+ * @since 0.1.1
  * @since 0.8.0 Adds `url`, the storefront page.
  *
  * @param int[] $ids Parent product ids.

@@ -23,17 +23,29 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 const SETTINGS_OPTION = 'shopsocket_storefront';
 
-/** The two shopper-facing features the settings switch. */
+/**
+ * The two shopper-facing features the settings switch.
+ *
+ * @since 0.5.0
+ */
 const FEATURE_IN_CARTS = 'in_carts';
 const FEATURE_ACTIVITY = 'activity';
 
-/** Product meta per feature: '' (default), 'on', or 'off'. */
+/**
+ * Product meta per feature: '' (default), 'on', or 'off'.
+ *
+ * @since 0.5.0
+ */
 const PRODUCT_META = array(
 	FEATURE_IN_CARTS => '_shopsocket_in_carts',
 	FEATURE_ACTIVITY => '_shopsocket_activity',
 );
 
-/** The legacy filter per feature, applied last to the resolved value. */
+/**
+ * The legacy filter per feature, applied last to the resolved value.
+ *
+ * @since 0.5.0
+ */
 const FEATURE_FILTER = array(
 	FEATURE_IN_CARTS => 'shopsocket_in_carts_enabled',
 	FEATURE_ACTIVITY => 'shopsocket_activity_enabled',
@@ -42,6 +54,8 @@ const FEATURE_FILTER = array(
 /**
  * Defaults: everything on, nothing excluded, which is what every site had
  * before the settings existed.
+ *
+ * @since 0.5.0
  *
  * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[]}
  */
@@ -56,6 +70,8 @@ function settings_defaults(): array {
 
 /**
  * A list of `product_cat` term ids: integers above zero, deduplicated.
+ *
+ * @since 0.5.0
  *
  * @param mixed $value Whatever was saved.
  * @return int[]
@@ -73,6 +89,8 @@ function sanitize_term_ids( $value ): array {
 
 /**
  * Coerce whatever was saved into the option's shape.
+ *
+ * @since 0.5.0
  *
  * @param mixed $value The value being saved or read.
  * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[]}
@@ -92,6 +110,8 @@ function sanitize_settings( $value ): array {
 
 /**
  * The saved settings, sanitized, with defaults for anything missing.
+ *
+ * @since 0.5.0
  *
  * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[]}
  */
@@ -180,6 +200,8 @@ add_action(
  * The per-product choice for a feature: 'on', 'off', or '' for default.
  * Variations follow their parent.
  *
+ * @since 0.5.0
+ *
  * @param int    $product_id Product or variation ID.
  * @param string $feature    FEATURE_IN_CARTS or FEATURE_ACTIVITY.
  * @return string
@@ -192,6 +214,8 @@ function product_setting( int $product_id, string $feature ): string {
 
 /**
  * Whether any of the product's categories is excluded in the settings.
+ *
+ * @since 0.5.0
  *
  * @param int   $product_id Parent product ID.
  * @param int[] $excluded   Excluded `product_cat` term IDs.
@@ -211,6 +235,8 @@ function in_excluded_category( int $product_id, array $excluded ): bool {
  * - The product's own choice always wins: Off is off and On is on, whatever the site switch and the categories say.
  * - If the site switch is off, the feature is off for all products.
  * - If categories are excluded, the feature is off for products in those categories.
+ *
+ * @since 0.5.0
  *
  * @param string $feature    FEATURE_IN_CARTS or FEATURE_ACTIVITY.
  * @param int    $product_id Product or variation ID, 0 for the site as a whole.
@@ -238,6 +264,8 @@ function feature_enabled( string $feature, int $product_id = 0 ): bool {
 	 * Filters whether the feature applies. Runs after the settings, so code
 	 * still has the final say; `$product_id` is 0 for the site-wide check.
 	 *
+	 * @since 0.5.0
+	 *
 	 * @param bool $enabled    The resolved value.
 	 * @param int  $product_id Parent product ID, or 0.
 	 */
@@ -264,6 +292,8 @@ add_filter(
 /**
  * The ShopSocket mark as a CSS mask, so the tab icon is the logo in the tab's
  * own text colour, where WooCommerce's tabs use a dashicon.
+ *
+ * @since 0.5.0
  *
  * @return string A `url("data:image/svg+xml,...")` value.
  */

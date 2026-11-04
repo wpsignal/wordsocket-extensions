@@ -5,7 +5,11 @@
  */
 let context: AudioContext | null = null;
 
-/** Play the chime now; a browser that refuses audio just stays silent. */
+/**
+ * Play the chime now; a browser that refuses audio just stays silent.
+ *
+ * @since 0.1.1
+ */
 export function playChime(): void {
   try {
     context ??= new AudioContext();

@@ -16,12 +16,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * What the shop adds to a visitor's record.
  *
+ * @since 0.7.0
  * @since 0.8.0 The exporter and eraser cover the guest guesses alone.
  */
 class Privacy extends \WC_Abstract_Privacy {
 
 	/**
 	 * Named for the privacy policy guide, with the guesses' exporter and eraser.
+	 *
+	 * @since 0.7.0
 	 */
 	public function __construct() {
 		parent::__construct( __( 'ShopSocket', 'shopsocket' ) );
@@ -31,6 +34,8 @@ class Privacy extends \WC_Abstract_Privacy {
 
 	/**
 	 * The suggested policy text.
+	 *
+	 * @since 0.7.0
 	 *
 	 * @return string
 	 */

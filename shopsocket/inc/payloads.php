@@ -20,6 +20,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Payload for `woo.order.*` events.
  *
+ * @since 0.1.1
+ *
  * @param WC_Order $order The order.
  * @param array    $extra Event-specific keys merged in (for example `from` and `to` on a status change).
  * @return array<string, mixed>
@@ -54,6 +56,8 @@ function order_payload( WC_Order $order, array $extra = array() ): array {
 /**
  * Payload for `woo.cart.added`: what a stranger may see. No identity, no cart.
  *
+ * @since 0.1.1
+ *
  * @param WC_Product $product   Product (or variation) added.
  * @param int        $quantity  Quantity added.
  * @param string     $actor     Anonymous hash of the shopper's session, so the
@@ -85,6 +89,8 @@ function cart_added_payload( WC_Product $product, int $quantity, string $actor, 
  * never below zero. Null when there is no limit to know, because stock is
  * not managed or backorders are allowed.
  *
+ * @since 0.1.1
+ *
  * @param WC_Product $product The product or variation.
  * @return int|null
  */
@@ -104,6 +110,8 @@ function available_quantity( WC_Product $product ): ?int {
  * the reduction runs inside the buyer's request, and without it the buyer is
  * warned that the item they just bought has sold out. Empty when no shopper is
  * behind the change (an import, a gateway webhook, or a caller that passes none).
+ *
+ * @since 0.1.1
  *
  * @param WC_Product $product The product or variation whose stock changed.
  * @param string     $actor   Cart id of the shopper behind the change, or empty.

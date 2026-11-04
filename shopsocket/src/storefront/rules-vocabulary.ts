@@ -11,6 +11,11 @@
  */
 import type { CartSnapshot } from "shopsocket/storefront/viewer";
 
+/**
+ * What PHP hands the rules module: the alert route and its nonce.
+ *
+ * @since 0.8.0
+ */
 export interface RulesConfig {
   alertUrl?: string;
   nonce?: string;
@@ -36,6 +41,11 @@ function bounds(op: string, actual: number, wanted: number): boolean {
   return false;
 }
 
+/**
+ * Registers the cart conditions (items, count, total, product, category) with WordSocket's rules engine.
+ *
+ * @since 0.8.0
+ */
 export function registerConditions(rules: WPSRulesApi): void {
   rules.condition(
     "cart_has_items",
@@ -83,6 +93,11 @@ async function post(
   }
 }
 
+/**
+ * Registers the Alert Realtime Board action, which posts the firing to `/shopsocket/v1/alert`.
+ *
+ * @since 0.8.0
+ */
 export function registerActions(
   rules: WPSRulesApi,
   config: RulesConfig,

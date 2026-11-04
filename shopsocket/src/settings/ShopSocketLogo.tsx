@@ -1,3 +1,8 @@
+/**
+ * The ShopSocket mark, as an inline SVG.
+ *
+ * @since 0.1.1
+ */
 export default function ShopSocketLogo() {
   return (
     <svg

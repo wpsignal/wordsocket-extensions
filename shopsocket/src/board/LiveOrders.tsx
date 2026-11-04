@@ -112,7 +112,11 @@ function timeOf(row: OrderRow, withDate: boolean): string {
     : `${when.toLocaleDateString(undefined, { month: "short", day: "numeric" })} ${time}`;
 }
 
-/** The orders table; the view (search, filters, sort, page) is component state. */
+/**
+ * The orders table; the view (search, filters, sort, page) is component state.
+ *
+ * @since 0.1.1
+ */
 export function LiveOrders({
   rows,
   statuses,

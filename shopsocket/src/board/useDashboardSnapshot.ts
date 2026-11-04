@@ -183,6 +183,8 @@ type OnOrders = (
 /**
  * The board's tile figures, and whether the last fetch of them failed.
  *
+ * @since 0.1.1
+ *
  * @param config - The board configuration.
  * @param onOrders - A callback to call with the orders that changed since the last refresh.
  */

@@ -10,6 +10,11 @@ import {
   type RulesConfig,
 } from "shopsocket/storefront/rules-vocabulary";
 
+/**
+ * Wires the cart as a rule context and registers the shop's conditions and actions when WordSocket's rules engine is present.
+ *
+ * @since 0.8.0
+ */
 export function startRules(viewer: Viewer, config: RulesConfig): void {
   const wps = window.WPS;
   if (!wps?.rules) return;

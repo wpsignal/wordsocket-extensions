@@ -5,7 +5,11 @@
  */
 import { useCallback, useEffect, useRef, useState } from "@wordpress/element";
 
-/** An order on the board; `updatedAt` is 0 for the server-rendered rows and drives the "fresh" flash. */
+/**
+ * An order on the board; `updatedAt` is 0 for the server-rendered rows and drives the "fresh" flash.
+ *
+ * @since 0.1.1
+ */
 export type OrderRow = WooOrderEvent & { updatedAt: number };
 
 const MAX_ROWS = 100;
@@ -54,6 +58,8 @@ type Channels = ShopSocketBoardConfig["channels"];
  * Order rows kept current by `woo.order.*` events on the staff feed, and
  * `reconcile` to merge in what a refresh found; `onNewOrder` fires for each
  * order created, heard live or recovered.
+ *
+ * @since 0.1.1
  */
 export function useLiveOrders(
   initial: WooOrderEvent[],
@@ -109,7 +115,11 @@ export function useLiveOrders(
   return { rows, reconcile };
 }
 
-/** Low-stock and out-of-stock products, most recent first, deduplicated per product/variation. */
+/**
+ * Low-stock and out-of-stock products, most recent first, deduplicated per product/variation.
+ *
+ * @since 0.1.1
+ */
 export function useStockAlerts(channels: Channels) {
   const [alerts, setAlerts] = useState<
     Array<WooStockEvent & { kind: "low" | "out" }>
@@ -171,6 +181,8 @@ export function useStockAlerts(channels: Channels) {
 /**
  * Alerts the Alert staff rule action raised: published by PHP on the orders
  * feed (which only PHP writes), newest first, at most ten, each dismissible.
+ *
+ * @since 0.8.0
  */
 export function useStaffAlerts(channels: Channels) {
   const [alerts, setAlerts] = useState<WooAlertEvent[]>([]);

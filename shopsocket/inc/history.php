@@ -30,13 +30,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 const DB_VERSION        = '5';
 const DB_VERSION_OPTION = 'shopsocket_db_version';
 
-/** Rows the board lists under "Recently abandoned". */
+/**
+ * Rows the board lists under "Recently abandoned".
+ *
+ * @since 0.7.0
+ */
 const BOARD_ABANDONED = 50;
 
-/** Non-open journeys read to find the latest abandoned carts, newest first. */
+/**
+ * Non-open journeys read to find the latest abandoned carts, newest first.
+ *
+ * @since 0.8.0
+ */
 const ABANDONED_SCAN = 200;
 
-/** Non-open journeys the strip's cart measures read, newest first. */
+/**
+ * Non-open journeys the strip's cart measures read, newest first.
+ *
+ * @since 0.8.0
+ */
 const STRIP_CARTS = 5000;
 
 const CACHE_GROUP = 'shopsocket';
@@ -66,6 +78,7 @@ function journeys_available(): bool {
 /**
  * Drop the tables earlier versions kept, once.
  *
+ * @since 0.7.0
  * @since 0.8.0 Drops the carts and items tables too: every cart fact lives on WordSocket's journeys.
  *
  * @return void
@@ -85,6 +98,7 @@ add_action( 'plugins_loaded', __NAMESPACE__ . '\install' );
 /**
  * Whether carts are kept: WordSocket's History switch.
  *
+ * @since 0.7.0
  * @since 0.8.0 Reads WordSocket's switch; ShopSocket has none of its own.
  *
  * @return bool
@@ -96,6 +110,8 @@ function history_enabled(): bool {
 /**
  * The current UTC time as MySQL spells it.
  *
+ * @since 0.7.0
+ *
  * @return string
  */
 function now_sql(): string {
@@ -105,6 +121,8 @@ function now_sql(): string {
 /**
  * The cache generation: part of every count key and replaced on every write,
  * so a stale count is never served after a change and no per-key deletion is needed.
+ *
+ * @since 0.7.0
  *
  * @return string
  */
@@ -119,6 +137,8 @@ function cache_generation(): string {
 
 /**
  * Forget every cached count: called after any write that changes a cart.
+ *
+ * @since 0.7.0
  *
  * @return void
  */
@@ -210,6 +230,7 @@ function cart_journeys_since( string $since ): array {
 /**
  * The shopper checked out: end the cart's open journey as converted with the order on it, credit the moments that fired for the cart, and tell the board.
  *
+ * @since 0.7.0
  * @since 0.8.0 Everything goes through WordSocket; there is no cart row to stamp.
  *
  * @param string $id       Cart id.
@@ -230,6 +251,8 @@ function mark_converted( string $id, int $order_id, float $total ): void {
 /**
  * Conversion, in the shopper's own checkout request before the cart is emptied: the classic checkout and the Store API each fire this.
  *
+ * @since 0.7.0
+ *
  * @param mixed $order The order WooCommerce passes.
  * @return void
  */
@@ -245,7 +268,7 @@ add_action( 'woocommerce_store_api_checkout_order_processed', __NAMESPACE__ . '\
 /**
  * The shopper's cart behind a bare REST report (a visit, a leave, a firing), from the session cookie or the login: `[ cart_id, state ]`, `state` null for an empty cart, or null when there is no cart at all.
  *
- * @since 0.8.0 Answers an empty cart as `[ id, null ]`, so a report can clear the row's items.
+ * @since 0.8.0
  *
  * @return array{0: string, 1: array|null}|null
  */
@@ -293,6 +316,7 @@ add_filter( 'wpsignal_journey_record', __NAMESPACE__ . '\journey_record', 10, 2 
 /**
  * After WordSocket wrote a report's row for a shopper with a cart: forget the cached counts, tell the board when its figures changed, and on a cart's first leave fire `shopsocket_cart_left`.
  *
+ * @since 0.7.0
  * @since 0.8.0 Writes nothing itself: the row is WordSocket's, written before this runs.
  *
  * @param array $report `{ visitor, journey_id, journey, steps, user_id, data, leaving }` from WordSocket.
@@ -426,6 +450,8 @@ add_action( 'init', __NAMESPACE__ . '\register_journey_vocabulary', 6 );
  * WooCommerce's pages as journey steps: WordSocket names a page by post type
  * and taxonomy; the shop's own pages get the names the board and rules use.
  *
+ * @since 0.7.0
+ *
  * @param array{kind: string, id: int} $step The detected step.
  * @return array{kind: string, id: int}
  */
@@ -501,6 +527,7 @@ add_filter( 'wpsignal_taxonomy_kind', __NAMESPACE__ . '\taxonomy_kind', 10, 2 );
  *
  * Whether the shopper is back right now, and whether the leave is older than the grace, is the board's to judge: it has presence and its own clock.
  *
+ * @since 0.7.0
  * @since 0.8.0 Read from WordSocket's journeys.
  *
  * @return array<int, array<string, mixed>>
@@ -623,6 +650,8 @@ function customer_edit_url( int $user_id ): string {
  * The edit screen for an order, without loading it: this runs for up to 50
  * rows on every cart change, and the board only needs a link.
  *
+ * @since 0.7.0
+ *
  * @param int $order_id The order.
  * @return string
  */
@@ -636,6 +665,8 @@ function order_edit_url( int $order_id ): string {
 
 /**
  * A MySQL UTC datetime as RFC 3339 with the Z suffix, for the board's clock.
+ *
+ * @since 0.7.0
  *
  * @param string $datetime `Y-m-d H:i:s` in UTC.
  * @return string

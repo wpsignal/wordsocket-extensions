@@ -27,6 +27,8 @@ const STORE_NS          = 'shopsocket/storefront';
  * browsers that cached the previous build. Falls back to the plugin version
  * when the manifest is missing, which only happens on an unbuilt checkout.
  *
+ * @since 0.4.0
+ *
  * @param string $name File name under `build/storefront/`.
  * @return array{dependencies: array<string>, version: string}
  */
@@ -45,6 +47,8 @@ function storefront_asset( string $name ): array {
  * to shop pages made a cart look abandoned the moment its shopper opened
  * My Account or a blog post.
  *
+ * @since 0.1.1
+ *
  * @return bool
  */
 function is_live_storefront_page(): bool {
@@ -53,6 +57,8 @@ function is_live_storefront_page(): bool {
 	}
 	/**
 	 * Filters whether the live storefront features load on this request.
+	 *
+	 * @since 0.1.1
 	 *
 	 * @param bool $load Default: true on every front-end page.
 	 */
@@ -81,6 +87,8 @@ add_filter(
  * The `data-wp-context` for a stock element: ids, plus the rendered text and
  * class the store falls back to until an event arrives.
  *
+ * @since 0.1.1
+ *
  * @param WC_Product $product Product or variation.
  * @param array      $extra   Additional context keys.
  * @return string
@@ -91,6 +99,8 @@ function stock_context( WC_Product $product, array $extra = array() ): string {
 
 /**
  * The context values behind `stock_context()`.
+ *
+ * @since 0.1.1
  *
  * @param WC_Product $product Product or variation.
  * @param array      $extra   Additional context keys.
@@ -115,6 +125,8 @@ function stock_context_data( WC_Product $product, array $extra = array() ): arra
  * Replace WooCommerce's availability paragraph with one bound to the store.
  *
  * Rendered hidden when WooCommerce has nothing to say, so a later sell-out can appear.
+ *
+ * @since 0.1.1
  *
  * @param string     $html    Availability markup (may be empty).
  * @param WC_Product $product Product or variation.
@@ -143,6 +155,8 @@ add_filter( 'woocommerce_get_stock_html', __NAMESPACE__ . '\wrap_stock_html', 10
  *
  * Variable products keep WooCommerce's own `woocommerce/products` binding,
  * which the script feeds instead.
+ *
+ * @since 0.1.1
  *
  * @param string $content Rendered block.
  * @param array  $block   Parsed block, with `context`.
@@ -179,6 +193,8 @@ add_filter( 'render_block_woocommerce/product-stock-indicator', __NAMESPACE__ . 
  * "N shoppers have this in their cart" markup for a product, bound to the
  * store: hidden at zero, shown as soon as the count is positive.
  *
+ * @since 0.1.1
+ *
  * @param int $product_id Parent product ID.
  * @return string
  */
@@ -202,6 +218,8 @@ function in_carts_html( int $product_id ): string {
  * rather than reset them: a Live Stock block on an ordinary page has no other
  * source for its first count.
  *
+ * @since 0.2.1
+ *
  * @return object
  */
 function seeded_carts(): object {
@@ -212,6 +230,8 @@ function seeded_carts(): object {
 /**
  * The counter's two sentences, for the server render and the store's `i18n`
  * alike: `one` at exactly 1, `many` otherwise.
+ *
+ * @since 0.1.1
  *
  * @return array{one: string, many: string}
  */
@@ -231,6 +251,8 @@ function in_carts_strings(): array {
 
 /**
  * Render the counter once per request: a template may fire both hooks below.
+ *
+ * @since 0.1.1
  *
  * @param int $product_id The page's product.
  * @return string Markup, or '' when already rendered or disabled.
@@ -270,6 +292,8 @@ add_filter(
 /**
  * Which storefront page this is, for the module's page-specific behaviour.
  *
+ * @since 0.1.1
+ *
  * @return string `product`, `cart`, `checkout`, or `other`.
  */
 function storefront_page(): string {
@@ -291,6 +315,8 @@ function storefront_page(): string {
  * and the product's own choice are combined in `feature_enabled()`
  * (inc/settings.php); the `shopsocket_in_carts_enabled` filter still runs last.
  *
+ * @since 0.1.1
+ *
  * @param int $product_id Product or variation ID, 0 for the site-wide switch.
  * @return bool
  */
@@ -301,6 +327,8 @@ function in_carts_enabled( int $product_id = 0 ): bool {
 /**
  * Whether "someone just added" toasts are shown, for a product or for the
  * site as a whole. The `shopsocket_activity_enabled` filter still runs last.
+ *
+ * @since 0.1.1
  *
  * @param int $product_id Product or variation ID, 0 for the site-wide switch.
  * @return bool
@@ -406,6 +434,8 @@ add_action(
 /**
  * The products in a cart as the rules' cart context sees them: id, name, units, category ids.
  *
+ * @since 0.8.0
+ *
  * @param array<int, int> $quantities Units per parent product id.
  * @return array<int, array{id: int, name: string, qty: int, categories: int[]}>
  */
@@ -428,6 +458,8 @@ function cart_items_for_rules( array $quantities ): array {
 
 /**
  * Whether the request already carries a WooCommerce session cookie.
+ *
+ * @since 0.1.1
  *
  * @return bool
  */

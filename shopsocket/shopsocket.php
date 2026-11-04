@@ -37,29 +37,69 @@ const DIR     = __DIR__ . '/';
  */
 define( __NAMESPACE__ . '\URL', plugin_dir_url( __FILE__ ) );
 
-/** Capability that makes a user staff: the orders namespace, the dashboard route, and the board screen. */
+/**
+ * Capability that makes a user staff: the orders namespace, the dashboard route, and the board screen.
+ *
+ * @since 0.1.1
+ */
 const STAFF_CAP = 'manage_woocommerce';
 
-/** Channel namespace reserved for staff (orders and low-stock events). */
+/**
+ * Channel namespace reserved for staff (orders and low-stock events).
+ *
+ * @since 0.1.1
+ */
 const ORDERS_NS = 'woo:orders';
-/** Public channel carrying stock changes to product pages. */
+/**
+ * Public channel carrying stock changes to product pages.
+ *
+ * @since 0.1.1
+ */
 const STOCK_CHANNEL = 'woo:stock';
-/** Public channel carrying anonymous shopper activity (added to cart). */
+/**
+ * Public channel carrying anonymous shopper activity (added to cart).
+ *
+ * @since 0.1.1
+ */
 const ACTIVITY_CHANNEL = 'woo:activity';
-/** The relay's own channel: `wps.connections` with the site's live connection count. */
+/**
+ * The relay's own channel: `wps.connections` with the site's live connection count.
+ *
+ * @since 0.1.1
+ */
 const CONNECTIONS_CHANNEL = 'wps:connections';
 
-/** Namespace shoppers enter presence on; membership is their live cart. */
+/**
+ * Namespace shoppers enter presence on; membership is their live cart.
+ *
+ * @since 0.1.1
+ */
 const CARTS_NS = 'woo:carts';
-/** The presence channel: staff subscribe, shoppers enter (and never subscribe). */
+/**
+ * The presence channel: staff subscribe, shoppers enter (and never subscribe).
+ *
+ * @since 0.1.1
+ */
 const CARTS_PRESENCE_CHANNEL = 'woo:carts:live';
 
-/** Namespace staff enter presence on, from every admin and storefront page they have open. */
+/**
+ * Namespace staff enter presence on, from every admin and storefront page they have open.
+ *
+ * @since 0.6.0
+ */
 const STAFF_NS = 'woo:staff';
-/** The staff presence channel: the board reads it to tell staff tabs and visits from shoppers'. */
+/**
+ * The staff presence channel: the board reads it to tell staff tabs and visits from shoppers'.
+ *
+ * @since 0.6.0
+ */
 const STAFF_PRESENCE_CHANNEL = 'woo:staff:live';
 
-/** The WordSocket release this plugin needs: presence, publish grants, the stats route (0.22), the `window.WPS` helpers (0.23), visitor journeys (0.30) and their history (0.31). */
+/**
+ * The WordSocket release this plugin needs: presence, publish grants, the stats route (0.22), the `window.WPS` helpers (0.23), visitor journeys (0.30) and their history (0.31).
+ *
+ * @since 0.1.1
+ */
 const MIN_WORDSOCKET = '0.31.0';
 
 /**
@@ -68,6 +108,7 @@ const MIN_WORDSOCKET = '0.31.0';
  * browser API that carries `presence.track()` (API version 4), and the
  * journeys history (`WPS::journeys()`, 0.31).
  *
+ * @since 0.1.1
  * @since 0.8.0 Needs `WPS::journeys()`.
  *
  * @return bool

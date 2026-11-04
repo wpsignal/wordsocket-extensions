@@ -26,17 +26,31 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL -- The plugin's own tables.
 
-/** The rule shipped disabled. */
+/**
+ * The rule shipped disabled.
+ *
+ * @since 0.8.0
+ */
 const DEFAULT_RULE_ID = 'shopsocket-hidden-cart';
 
-/** Seconds between two alerts from one cart. */
+/**
+ * Seconds between two alerts from one cart.
+ *
+ * @since 0.8.0
+ */
 const RULES_RATE_LIMIT = 60;
 
-/** The longest an Alert message gets, as the board shows it. */
+/**
+ * The longest an Alert message gets, as the board shows it.
+ *
+ * @since 0.8.0
+ */
 const ALERT_MESSAGE_LENGTH = 200;
 
 /**
  * Whether the active WordSocket has the rules engine.
+ *
+ * @since 0.8.0
  *
  * @return bool
  */
@@ -46,6 +60,8 @@ function rules_available(): bool {
 
 /**
  * Register the vocabulary once taxonomies and coupons can be read (after WordSocket's own, which registers on `init` 5).
+ *
+ * @since 0.8.0
  *
  * @return void
  */
@@ -262,6 +278,8 @@ add_filter(
 /**
  * One request per cart per RULES_RATE_LIMIT for a public route; false when the cart is over the limit.
  *
+ * @since 0.8.0
+ *
  * @param string $what    The route's name.
  * @param string $cart_id The shopper's cart id.
  * @return bool
@@ -278,6 +296,8 @@ function rules_rate_ok( string $what, string $cart_id ): bool {
 /**
  * The shopper's cart for a route: the cart loaded from their cookie, the id, the state.
  *
+ * @since 0.8.0
+ *
  * @return array{id: string, state: array|null}
  */
 function route_cart(): array {
@@ -292,6 +312,8 @@ function route_cart(): array {
 
 /**
  * The message of the Alert action on the enabled moment `$rule_id`, as the merchant saved it; null when there is no such moment or action.
+ *
+ * @since 0.8.0
  *
  * @param string $rule_id The moment's id, from the browser.
  * @param string $given   The message the browser sent, which only picks among several Alert actions on one moment.
@@ -319,7 +341,7 @@ function alert_message( string $rule_id, string $given ): ?string {
 /**
  * `POST /shopsocket/v1/alert`: the Alert action's word to the board, published from PHP on the orders feed with the saved moment's message.
  *
- * @since 0.8.0 Names a logged-in shopper.
+ * @since 0.8.0
  *
  * @param \WP_REST_Request $request The request.
  * @return \WP_REST_Response|\WP_Error

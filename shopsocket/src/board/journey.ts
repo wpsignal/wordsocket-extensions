@@ -3,7 +3,11 @@
  * pages the board shows. The string is the browser's word, so every step is checked.
  */
 
-/** A page of a route. */
+/**
+ * A page of a route.
+ *
+ * @since 0.8.0
+ */
 export interface RouteStep {
   kind: string;
   id: number;

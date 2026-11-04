@@ -85,7 +85,11 @@ function curve(
   return `M${a.x},${a.y}C${mx},${a.y} ${mx},${b.y} ${b.x},${b.y}`;
 }
 
-/** What the diagram knows about a page beyond its kind. */
+/**
+ * What the diagram knows about a page beyond its kind.
+ *
+ * @since 0.8.0
+ */
 export interface RouteNames {
   label: (kind: string, id: number) => string;
 }

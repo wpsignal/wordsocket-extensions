@@ -19,11 +19,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL, WordPress.DB.PreparedSQLPlaceholders -- WordSocket's journeys table: the name from its class, fragments from prepare(), one placeholder per id.
 
-/** The hash of the last `woo.carts` publish, so staff only hear about a change. */
+/**
+ * The hash of the last `woo.carts` publish, so staff only hear about a change.
+ *
+ * @since 0.4.0
+ */
 const CARTS_PUB_HASH = 'carts_pub';
 
 /**
  * Seconds a row survives without a cart change: the WooCommerce session lifetime.
+ *
+ * @since 0.4.0
  *
  * @return int
  */
@@ -38,6 +44,8 @@ function cart_lifetime(): int {
  * Never loads the cart: a first-time visitor must not get a session (and a
  * random cart id) just for asking. The `cart-id` endpoint loads it only
  * for a request that already carries one.
+ *
+ * @since 0.1.1
  *
  * @return array{products: int[], quantities: array<int, int>, value: float}|null
  */
@@ -78,6 +86,7 @@ function current_cart_state(): ?array {
 /**
  * Every open cart for the dashboard, from each cart's newest journey within the session lifetime, unless that journey converted: `{ id, products, quantities, value, currency, user_id, customer, customer_url }`. The dashboard decides live or abandoned from presence.
  *
+ * @since 0.4.0
  * @since 0.8.0 Read from WordSocket's journeys; carries the customer.
  *
  * @return array<int, array{id: string, products: int[], quantities: array<int, int>, value: float, currency: string, user_id: int|null, customer: string|null, customer_url: string}>
@@ -134,6 +143,7 @@ function cart_rows(): array {
 /**
  * Shoppers holding the product (any variation) in an open cart, present or not, leaving out the cart named by `$exclude_ref` so a hook can count itself in or out before its own report lands.
  *
+ * @since 0.1.1
  * @since 0.8.0 Read from WordSocket's journeys; takes `$exclude_ref`.
  *
  * @param int    $product_id  Parent product ID.
@@ -169,6 +179,8 @@ function count_in_carts( int $product_id, string $exclude_ref = '' ): int {
 /**
  * Publish the open and recently abandoned rows to staff when they differ from the last publish.
  *
+ * @since 0.4.0
+ *
  * @return void
  */
 function publish_carts_changed(): void {
@@ -186,6 +198,8 @@ function publish_carts_changed(): void {
 
 /**
  * Parent product ID for a cart line.
+ *
+ * @since 0.1.1
  *
  * @param array $item Cart item.
  * @return int
@@ -235,6 +249,7 @@ add_action(
  * the remover's anonymous cart id, so their own pages know the item left
  * their cart (the count alone cannot say whose cart changed).
  *
+ * @since 0.1.1
  * @since 0.8.0 Counts this cart from its real contents, since its row updates on the next report.
  *
  * @param int  $product_id   Parent product ID.

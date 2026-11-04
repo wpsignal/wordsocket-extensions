@@ -14,6 +14,11 @@ const REMEMBERED_KEY = "shopsocket-viewer";
 const CART_DATA_KEY = "storeApiCartData";
 const OFFERED_KEY = "shopsocket-guess";
 
+/**
+ * What PHP hands the viewer: its routes, the nonce, the page's product and the presence channel.
+ *
+ * @since 0.1.1
+ */
 export interface ViewerConfig {
   cartIdUrl?: string;
   /**
@@ -27,7 +32,11 @@ export interface ViewerConfig {
   presenceChannel?: string;
 }
 
-/** What the rules' cart context reads, from the last sync. */
+/**
+ * What the rules' cart context reads, from the last sync.
+ *
+ * @since 0.8.0
+ */
 export interface CartSnapshot {
   count: number;
   total: number;
@@ -42,6 +51,11 @@ export interface CartSnapshot {
   product: string;
 }
 
+/**
+ * The storefront viewer's surface: the shopper's cart id, the cart as last synced, its sync, and what the shopper holds.
+ *
+ * @since 0.1.1
+ */
 export interface Viewer {
   /** The shopper's cart id once known, so their own events can be told apart. */
   readonly cartId: string | null;
