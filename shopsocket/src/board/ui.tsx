@@ -3,12 +3,15 @@
  *
  * - `Section`: a card with a title, an optional aside, a one-sentence lede and its content.
  * - `Stat`: one figure with its label, an arrow when it moved against last week, a detail line and a sparkline.
- * - `BoardTable`: a sortable DataViews table, paged, with a message when it is empty.
+ * - `StatGroup`: a card of figures that belong together, a headline over a bar split into its parts.
+ * - `BoardTable`: a sortable DataViews table, paged, with a message when it is empty; search, a filter, a phone layout and rows that open on request.
+ * - `useNarrow`: whether the screen is a phone's width.
  * - `productColumn`: a table's product cell, named from its ref and linked to its edit screen.
+ * - `shopperColumn`: a table's shopper cell, the customer, a guest's best guess, or Guest or Staff.
  */
-import { __ } from "@wordpress/i18n";
-import { useMemo, useState } from "@wordpress/element";
-import { Card, Link, Stack, Text } from "@wordpress/ui";
+import { __, _n, sprintf } from "@wordpress/i18n";
+import { useEffect, useMemo, useState } from "@wordpress/element";
+import { Badge, Card, Link, Stack, Text } from "@wordpress/ui";
 import {
   DataViews,
   filterSortAndPaginate,
@@ -48,20 +51,26 @@ export function Section({
           justify="space-between"
           wrap="wrap"
         >
-          <Card.Title>{title}</Card.Title>
+          <Card.Title style={{ width: "100%" }}>
+            <Stack direction="row" gap="lg" align="center" justify="space-between">
+              <Text variant="heading-xl" render={<h2 />}>
+                {title}
+              </Text>
+              {lede && (
+                <Text
+                  variant="body-sm"
+                  className="shopsocket-muted"
+                  render={<p />}
+                >
+                  {lede}
+                </Text>
+              )}
+            </Stack>
+          </Card.Title>
           {aside}
         </Stack>
       </Card.Header>
-      <Card.Content>
-        <Stack direction="column" gap="md">
-          {lede && (
-            <Text variant="body-sm" className="shopsocket-muted" render={<p />}>
-              {lede}
-            </Text>
-          )}
-          {children}
-        </Stack>
-      </Card.Content>
+      <Card.Content>{children}</Card.Content>
     </Card.Root>
   );
 }
@@ -156,7 +165,8 @@ export interface Compare {
 /**
  * One figure: its label, a chip with an arrow when `compare` says it moved (green when that is for the
  * better, red otherwise, the detail line toned the same), the value, a detail line, and a two-week
- * sparkline when `days` are given over `dates`; `name` marks the tile as `is-<name>`.
+ * sparkline when `days` are given over `dates`; `name` marks the tile as `is-<name>`, `compact` draws
+ * a smaller figure and `swatch` a square of its share's fill by the label.
  *
  * @since 0.8.0
  */
@@ -169,6 +179,8 @@ export function Stat({
   days,
   dates,
   dayLabel,
+  compact,
+  swatch,
 }: {
   name: string;
   value: string;
@@ -178,6 +190,8 @@ export function Stat({
   days?: number[];
   dates?: string[];
   dayLabel?: (value: number) => string;
+  compact?: boolean;
+  swatch?: boolean;
 }) {
   const trend =
     !compare || compare.now === compare.before
@@ -197,6 +211,9 @@ export function Stat({
   return (
     <div className={`shopsocket-stat is-${name}`}>
       <Stack direction="row" gap="xs" align="center">
+        {swatch && (
+          <span className="shopsocket-stat__swatch" aria-hidden="true" />
+        )}
         <Text variant="body-md" className="shopsocket-stat__label">
           {label}
         </Text>
@@ -213,7 +230,10 @@ export function Stat({
           </span>
         )}
       </Stack>
-      <Text variant="heading-2xl" className="shopsocket-stat__value">
+      <Text
+        variant={compact ? "heading-lg" : "heading-2xl"}
+        className="shopsocket-stat__value"
+      >
         {value}
       </Text>
       {detail && (
@@ -232,6 +252,69 @@ export function Stat({
 }
 
 /**
+ * A share of a group's bar: drawn as `is-<name>` as wide as its `size` among the others, and named
+ * in a tooltip.
+ *
+ * @since 0.8.0
+ */
+export interface Share {
+  name: string;
+  size: number;
+  title: string;
+}
+
+/**
+ * A card of figures that belong together: the headline figure, a bar split into `shares` by size
+ * (an empty track when every share is zero, `summary` its spoken name), and the parts under it.
+ *
+ * @since 0.8.0
+ */
+export function StatGroup({
+  name,
+  headline,
+  shares,
+  summary,
+  children,
+}: {
+  name: string;
+  headline: React.ReactNode;
+  shares: Share[];
+  summary: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`shopsocket-group is-${name}`}>
+      <div className="shopsocket-group__head">{headline}</div>
+      <div className="shopsocket-split" role="img" aria-label={summary}>
+        {shares
+          .filter((share) => share.size > 0)
+          .map((share) => (
+            <span
+              key={share.name}
+              className={`shopsocket-split__share is-${share.name}`}
+              style={{ flexGrow: share.size }}
+              title={share.title}
+            />
+          ))}
+      </div>
+      <div className="shopsocket-group__parts">{children}</div>
+    </div>
+  );
+}
+
+/** Only the table layout is offered, so a board table's view is always a table view. */
+type TableView = Extract<View, { type: "table" }>;
+
+/**
+ * A column's width and alignment, as DataViews takes them.
+ *
+ * @since 0.8.0
+ */
+export type ColumnStyle = NonNullable<
+  NonNullable<TableView["layout"]>["styles"]
+>[string];
+
+/**
  * A column of a board table: its label, the value it sorts by, and how a cell shows it.
  *
  * @since 0.8.0
@@ -241,7 +324,20 @@ export interface Column<T> {
   label: string;
   value: (row: T) => string | number;
   render?: (row: T) => React.ReactNode;
+  /** A number: a cell without its own render is a `.shopsocket-table__num`. */
   numeric?: boolean;
+  /** A date and time, sorted and filtered as one. */
+  datetime?: boolean;
+  /** False when the column's header does not sort the table. */
+  sortable?: boolean;
+  /** Whether the search box reads the column. */
+  searchable?: boolean;
+  /** The values the column filters by, each with its label. */
+  options?: { value: string; label: string }[];
+  /** The column's width and alignment; the first column takes what the others leave. */
+  style?: ColumnStyle;
+  /** The column on a phone: its style there, or false to leave it out. */
+  narrow?: ColumnStyle | false;
 }
 
 /** A table row as DataViews takes it: its id beside the row. */
@@ -250,13 +346,53 @@ interface Item<T> {
   row: T;
 }
 
-/** Rows a page of a board table holds. */
+/** Rows a page of a board table holds unless the caller says otherwise. */
 const PER_PAGE = 10;
 
+/** The width WordPress admin turns into its phone layout at. */
+const NARROW = "(max-width: 782px)";
+
 /**
- * A sortable DataViews table of `rows`, the first column naming the row, PER_PAGE to a page; `empty`
- * when there are none. A numeric cell without its own render is a `.shopsocket-table__num`; `columns` and
- * `rowId` are read by identity, so callers keep them stable.
+ * Whether the screen is a phone's width, followed as it changes.
+ *
+ * @since 0.8.0
+ */
+export function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(
+    () => window.matchMedia?.(NARROW).matches ?? false,
+  );
+  useEffect(() => {
+    const media = window.matchMedia?.(NARROW);
+    if (!media) return undefined;
+    const update = () => setNarrow(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
+
+/** The columns a view lists beside the first and the description, and their styles, at a width. */
+function layoutOf<T>(
+  columns: Column<T>[],
+  description: string | undefined,
+  narrow: boolean,
+): { fields: string[]; styles: Record<string, ColumnStyle> } {
+  const shown = columns
+    .slice(1)
+    .filter((c) => c.id !== description && !(narrow && c.narrow === false));
+  const styles: Record<string, ColumnStyle> = {};
+  for (const c of shown) {
+    const style = (narrow && c.narrow) || c.style;
+    if (style) styles[c.id] = style;
+  }
+  return { fields: shown.map((c) => c.id), styles };
+}
+
+/**
+ * A sortable DataViews table of `rows`, the first column naming the row with `description`'s column
+ * under it, `perPage` to a page; `empty` when there are none, `noMatch` when a search or a filter leaves
+ * none. `columns` and `rowId` are read by identity, so callers keep them stable.
  *
  * @since 0.8.0
  */
@@ -265,43 +401,79 @@ export function BoardTable<T>({
   rows,
   rowId,
   empty,
+  noMatch,
   className,
+  description,
+  density = "compact",
+  isFilterable = true,
+  perPage = PER_PAGE,
+  searchLabel,
+  onOpen,
 }: {
   columns: Column<T>[];
   rows: T[];
   rowId: (row: T) => string;
   empty: string;
+  noMatch?: string;
   className?: string;
+  description?: string;
+  density?: NonNullable<TableView["layout"]>["density"];
+  isFilterable?: boolean;
+  perPage?: number;
+  searchLabel?: string;
+  onOpen?: (row: T) => void;
 }) {
-  const [view, setView] = useState<View>({
-    type: "table",
-    fields: columns.slice(1).map((c) => c.id),
-    titleField: columns[0]?.id,
-    page: 1,
-    perPage: PER_PAGE,
-    search: "",
-    filters: [],
-    layout: { density: "compact" },
+  const narrow = useNarrow();
+  const [view, setView] = useState<TableView>(() => {
+    const { fields, styles } = layoutOf(columns, description, narrow);
+    return {
+      type: "table",
+      fields,
+      titleField: columns[0]?.id,
+      descriptionField: description,
+      page: 1,
+      perPage,
+      search: "",
+      filters: [],
+      layout: { density, styles },
+    };
   });
+  useEffect(() => {
+    setView((v) => {
+      const { fields, styles } = layoutOf(columns, description, narrow);
+      return { ...v, fields, layout: { ...v.layout, styles } };
+    });
+  }, [narrow]);
   const fields = useMemo<Field<Item<T>>[]>(
     () =>
-      columns.map((c) => ({
-        id: c.id,
-        label: c.label,
-        type: c.numeric ? "number" : "text",
-        enableSorting: true,
-        enableHiding: c !== columns[0],
-        getValue: ({ item }) => c.value(item.row),
-        render: ({ item }) =>
-          c.render ? (
-            c.render(item.row)
-          ) : (
-            <span className={c.numeric ? "shopsocket-table__num" : undefined}>
-              {c.value(item.row)}
-            </span>
-          ),
-      })),
-    [columns],
+      columns.map((c) => {
+        let filterBy: Field<Item<T>>["filterBy"];
+        if (!isFilterable) filterBy = false;
+        else if (c.options) filterBy = { operators: ["isAny"] };
+        let type: Field<Item<T>>["type"] = "text";
+        if (c.datetime) type = "datetime";
+        else if (c.numeric) type = "number";
+        return {
+          id: c.id,
+          label: c.label,
+          type,
+          enableSorting: c.sortable !== false,
+          enableGlobalSearch: c.searchable === true,
+          enableHiding: c !== columns[0],
+          elements: c.options,
+          filterBy,
+          getValue: ({ item }) => c.value(item.row),
+          render: ({ item }) =>
+            c.render ? (
+              c.render(item.row)
+            ) : (
+              <span className={c.numeric ? "shopsocket-table__num" : undefined}>
+                {c.value(item.row)}
+              </span>
+            ),
+        };
+      }),
+    [columns, isFilterable],
   );
   const items = useMemo(
     () => rows.map((row) => ({ id: rowId(row), row })),
@@ -324,10 +496,20 @@ export function BoardTable<T>({
         data={data}
         fields={fields}
         view={view}
-        onChangeView={setView}
+        onChangeView={(next) => setView(next as TableView)}
         paginationInfo={paginationInfo}
         defaultLayouts={{ table: {} }}
-        search={false}
+        search={Boolean(searchLabel)}
+        searchLabel={searchLabel}
+        isItemClickable={onOpen ? () => true : undefined}
+        onClickItem={onOpen ? (item) => onOpen(item.row) : undefined}
+        empty={
+          noMatch ? (
+            <Text variant="body-sm" className="shopsocket-muted" render={<p />}>
+              {noMatch}
+            </Text>
+          ) : undefined
+        }
       />
     </div>
   );
@@ -352,6 +534,80 @@ export function productColumn<T extends { id: number }>(
       const ref = product(row.id);
       const href = ref ? adminUrlOrNull(ref.edit_url, adminUrl) : null;
       return href ? <Link href={href}>{label(row)}</Link> : label(row);
+    },
+  };
+}
+
+/**
+ * Who a row's shopper is, as the shopper column reads them.
+ *
+ * @since 0.8.0
+ */
+export interface ShopperRef {
+  /** The visitor id, printed on the cell as `data-visitor`. */
+  v?: string;
+  /** The account's name, when the shopper is logged in. */
+  customer?: string | null;
+  /** The account's profile screen. */
+  customerUrl?: string;
+  /** The best guess at who a guest is. */
+  guess?: WooGuestRef | null;
+  staff?: boolean;
+}
+
+/** The name a shopper sorts by: the customer, a guest's guessed email or name, or Guest or Staff. */
+function shopperName({ customer, guess, staff }: ShopperRef): string {
+  return (
+    customer ||
+    guess?.email ||
+    guess?.name ||
+    (staff ? __("Staff", "shopsocket") : __("Guest", "shopsocket"))
+  );
+}
+
+/**
+ * A table's shopper column: the customer linked to their profile when that is on this site's admin,
+ * a guest's best guess with its paid orders, or Guest or Staff.
+ *
+ * @since 0.8.0
+ */
+export function shopperColumn<T>(
+  who: (row: T) => ShopperRef,
+  adminUrl: string,
+): Column<T> {
+  return {
+    id: "shopper",
+    label: __("Shopper", "shopsocket"),
+    value: (row) => shopperName(who(row)),
+    render: (row) => {
+      const shopper = who(row);
+      const { customer, guess } = shopper;
+      const profile =
+        customer && shopper.customerUrl
+          ? adminUrlOrNull(shopper.customerUrl, adminUrl)
+          : null;
+      let name: React.ReactNode;
+      if (customer) {
+        name = profile ? <Link href={profile}>{customer}</Link> : customer;
+      } else if (guess) {
+        name = (
+          <span title={guess.email}>
+            {shopperName(shopper)}
+            <span className="shopsocket-muted">
+              {" · "}
+              {sprintf(
+                /* translators: %d: paid orders placed with the guessed email */
+                _n("%d order", "%d orders", guess.orders, "shopsocket"),
+                guess.orders,
+              )}
+            </span>{" "}
+            <Badge intent="none">{__("Guest", "shopsocket")}</Badge>
+          </span>
+        );
+      } else {
+        name = <span className="shopsocket-muted">{shopperName(shopper)}</span>;
+      }
+      return <span data-visitor={shopper.v || undefined}>{name}</span>;
     },
   };
 }

@@ -112,13 +112,14 @@ test.describe("ShopSocket dashboard", () => {
     }
   });
 
-  test("a guest whose browser remembers a past order's email is named as a best guess", async ({
+  test("a guest whose browser remembers a past order's email is named by it, on the site and once gone with a cart", async ({
     admin,
     page,
     browser,
     baseURL,
     requestUtils,
   }) => {
+    test.setTimeout(120_000);
     await admin.visitAdminPage("admin.php", PAGE);
     await waitForLive(page);
     const product = await createProduct(requestUtils, "E2E Guess Widget", 5);
@@ -138,17 +139,67 @@ test.describe("ShopSocket dashboard", () => {
       const v = await shop.evaluate(() => window.WPS?.visitorId() ?? "");
       const cell = page.locator(`.shopsocket-shoppers [data-visitor="${v}"]`);
       await expect(cell).toBeVisible({ timeout: 15_000 });
-      // The order's billing name, flagged, and never a link: a guess is not an account.
-      await expect(cell).toContainText("Grace Hopper", { timeout: 15_000 });
-      await expect(cell).toContainText("Best guess");
+      // The remembered email, flagged, and never a link: a guess is not an account.
+      await expect(cell).toContainText("grace@example.com", { timeout: 15_000 });
+      await expect(cell).toContainText("Guest");
       await expect(cell).toContainText("1 order");
       await expect(cell.locator("a")).toHaveCount(0);
       await expect(
         page.locator(`.shopsocket-journeys [data-visitor="${v}"] title`),
       ).toHaveText(/Grace Hopper \(best guess\)/);
+
+      // Gone with a cart: the abandoned table names them the same way.
+      await addToCart(shop);
+      await shop.close();
+      const left = page.locator(`.shopsocket-abandoned [data-visitor="${v}"]`);
+      await expect(left).toContainText("grace@example.com", { timeout: 45_000 });
+      await expect(left).toContainText("1 order");
+      await expect(left.locator("a")).toHaveCount(0);
     } finally {
       await visitor.close();
       await deleteOrder(requestUtils, order.id);
+      await deleteProduct(requestUtils, product.id);
+    }
+  });
+
+  test("the shoppers table and the routes diagram are two tabs, the table in view first", async ({
+    admin,
+    page,
+    browser,
+    baseURL,
+    requestUtils,
+  }) => {
+    await admin.visitAdminPage("admin.php", PAGE);
+    await waitForLive(page);
+    const product = await createProduct(requestUtils, "E2E Panel Widget", 5);
+    const visitor = await visitorContext(browser, baseURL);
+    try {
+      const shop = await visitor.newPage();
+      await shop.goto(product.permalink);
+      await waitForLive(shop);
+      const v = await shop.evaluate(() => window.WPS?.visitorId() ?? "");
+      const row = page.locator(`.shopsocket-shoppers [data-visitor="${v}"]`);
+      const route = page.locator(`.shopsocket-journeys [data-visitor="${v}"]`);
+      const diagram = page.locator(".shopsocket-journeys svg");
+      const shoppers = page.getByRole("tab", { name: "Shoppers", exact: true });
+      const routes = page.getByRole("tab", { name: "Journeys", exact: true });
+
+      // The table is the tab in view; the diagram follows the shopper out of sight.
+      await expect(shoppers).toHaveAttribute("aria-selected", "true");
+      await expect(row).toBeVisible({ timeout: 15_000 });
+      await expect(route).toHaveCount(1);
+      await expect(diagram).toBeHidden();
+
+      // The other tab swaps them, and back again.
+      await routes.click();
+      await expect(routes).toHaveAttribute("aria-selected", "true");
+      await expect(diagram).toBeVisible();
+      await expect(row).toBeHidden();
+      await shoppers.click();
+      await expect(row).toBeVisible();
+      await expect(diagram).toBeHidden();
+    } finally {
+      await visitor.close();
       await deleteProduct(requestUtils, product.id);
     }
   });

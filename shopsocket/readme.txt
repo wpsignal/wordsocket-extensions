@@ -151,6 +151,9 @@ Anyone who can manage WooCommerce.
 = 0.8.0 =
 * New: the board's Right now card draws where each shopper came from: their route through your pages this visit, ending where they are now, with a hidden tab's route dotted and the page they are on pulsing.
 * A shopper with several tabs open is one row, every tab's page listed and a hidden tab's in a dashed border, and one shopper on the diagram with a route per tab, lit together when hovered.
+* The board's Right now figures are two cards, Shoppers on the site and Open carts, each with a bar showing how many are looking, on a hidden tab or gone.
+* The shoppers table and the routes diagram on the board are two tabs.
+* Recently abandoned names a guest the way the shoppers table does: by the email their browser remembers, once it matches a paid order.
 * New: a guest whose browser remembers the email of a past checkout is named on the board as a best guess, with the billing name and how many paid orders that email has placed here, once the email matches; the guess is kept for two days and WordPress's privacy tools export and erase it by email.
 * A shopper moving between pages no longer costs the server a request: the storefront remembers their cart for the visit and asks again only when it changed.
 * New: with WordSocket 0.31, the Moments tab knows the shop. Conditions on the cart (items, count, total, a product, a category, whether the product on the page is in it) and the WooCommerce pages, and one action: alert your team on the Realtime board

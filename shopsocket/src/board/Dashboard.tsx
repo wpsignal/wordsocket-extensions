@@ -11,7 +11,7 @@ import {
   useState,
 } from "@wordpress/element";
 import { Button, Notice, ToggleControl } from "@wordpress/components";
-import { Badge, Link, Text } from "@wordpress/ui";
+import { Badge, Link, Stack, Tabs, Text } from "@wordpress/ui";
 import { useLiveOrders, useStaffAlerts, useStockAlerts } from "./useLiveOrders";
 import { useConnectionState } from "./useConnectionState";
 import { useDashboardSnapshot } from "./useDashboardSnapshot";
@@ -25,7 +25,15 @@ import { LiveJourneys, type RouteNames } from "./LiveJourneys";
 import { useGuestNames } from "./useGuestNames";
 import { routeSteps } from "./journey";
 import { playChime } from "./chime";
-import { BoardTable, Section, Stat, productColumn, type Column } from "./ui";
+import {
+  BoardTable,
+  Section,
+  Stat,
+  StatGroup,
+  productColumn,
+  shopperColumn,
+  type Column,
+} from "./ui";
 
 const config: ShopSocketBoardConfig = window.shopSocket ?? {
   dashboardUrl: "",
@@ -134,23 +142,13 @@ export function Dashboard() {
           onDismiss={() => staffAlerts.dismiss(alert.visitor)}
         />
       ))}
-
-      <RightNow snapshot={snapshot} stale={stale} />
-      <WeekStrip strip={snapshot.strip} config={config} />
-      <AbandonedPanel
-        rows={snapshot.abandoned}
-        currencySymbol={config.currencySymbol}
-      />
-
       {alerts.length > 0 && (
-        <Notice
-          status="warning"
-          isDismissible={false}
-          className="shopsocket-board__stock"
-        >
-          <strong>{__("Stock", "shopsocket")}:</strong>{" "}
+        <Notice status="warning" className="shopsocket-board__stock">
+          <strong>{__("Stock", "shopsocket")}: </strong>
           {alerts.map((a) => (
-            <span
+            <a
+              href={`${config.adminUrl}/post.php?post=${a.product_id}&action=edit`}
+              target="_blank"
               key={`${a.product_id}-${a.variation_id}`}
               className={`shopsocket-stock-alert is-${a.kind}`}
             >
@@ -168,10 +166,17 @@ export function Dashboard() {
                     a.name,
                     a.stock_quantity ?? 0,
                   )}
-            </span>
+            </a>
           ))}
         </Notice>
       )}
+
+      <RightNow snapshot={snapshot} stale={stale} />
+      <WeekStrip strip={snapshot.strip} config={config} />
+      <AbandonedPanel
+        rows={snapshot.abandoned}
+        currencySymbol={config.currencySymbol}
+      />
 
       <Section
         title={__("Live orders", "shopsocket")}
@@ -207,7 +212,7 @@ export function Dashboard() {
 
 type CartSegment = WooDashboardSnapshot["carts"]["live"];
 
-/** "Right now": shoppers on the site, open tabs, the carts split by where their shopper is, and the products in live carts. */
+/** "Right now": the shoppers on the site and the open carts, each split by where the shopper is, then who they are, their routes and the products in live carts. */
 function RightNow({
   snapshot,
   stale,
@@ -239,11 +244,14 @@ function RightNow({
     count > 0
       ? ", " + sprintf(__("%d of them staff", "shopsocket"), count)
       : "";
-  /* translators: %d: how many shoppers have every tab hidden */
-  const awayNote = (count: number) =>
-    count > 0
-      ? ", " + sprintf(__("%d with the tab hidden", "shopsocket"), count)
-      : "";
+  const looking = Math.max(0, usersOnline - awayUsers);
+  /* Every cart not yet ordered, whoever holds it: its count and what the three kinds are worth together. */
+  const openCarts =
+    carts.live.shoppers + carts.away.shoppers + carts.abandoned.shoppers;
+  const openValue =
+    carts.live.revenue + carts.away.revenue + carts.abandoned.revenue;
+  const openCurrency =
+    carts.live.currency || carts.away.currency || carts.abandoned.currency;
   const cartDetail = (segment: CartSegment) => (
     <>
       {sprintf(
@@ -268,77 +276,186 @@ function RightNow({
         "shopsocket",
       )}
     >
-      <div className="shopsocket-stats" aria-live="polite">
-        <Stat
-          name="users"
-          value={String(usersOnline)}
-          label={__("Shoppers on the site", "shopsocket")}
-          detail={
-            __("Different people browsing now", "shopsocket") +
-            staffNote(staff.users) +
-            awayNote(awayUsers)
+      <div className="shopsocket-groups" aria-live="polite">
+        <StatGroup
+          name="shoppers"
+          summary={sprintf(
+            /* translators: 1: shoppers with a tab in view, 2: shoppers with every tab hidden */
+            __("%1$d looking now, %2$d with every tab hidden", "shopsocket"),
+            looking,
+            awayUsers,
+          )}
+          shares={[
+            {
+              name: "looking",
+              size: looking,
+              /* translators: %d: shoppers with a tab in view */
+              title: sprintf(__("Looking now: %d", "shopsocket"), looking),
+            },
+            {
+              name: "idle",
+              size: awayUsers,
+              /* translators: %d: shoppers with every tab hidden */
+              title: sprintf(__("Tab hidden: %d", "shopsocket"), awayUsers),
+            },
+          ]}
+          headline={
+            <Stat
+              name="users"
+              value={String(usersOnline)}
+              label={__("Shoppers on the site", "shopsocket")}
+              detail={
+                __("Different people browsing now", "shopsocket") +
+                staffNote(staff.users)
+              }
+            />
           }
-        />
-        <Stat
-          name="live"
-          value={String(carts.live.shoppers)}
-          label={__("Carts in use", "shopsocket")}
-          detail={cartDetail(carts.live)}
-        />
-        <Stat
-          name="away"
-          value={String(carts.away.shoppers)}
-          label={__("Carts on a hidden tab", "shopsocket")}
-          detail={cartDetail(carts.away)}
-        />
-        <Stat
-          name="abandoned"
-          value={String(carts.abandoned.shoppers)}
-          label={__("Carts left behind", "shopsocket")}
-          detail={cartDetail(carts.abandoned)}
-        />
-        <Stat
-          name="connections"
-          value={online ? String(online.active_connections) : "\u2014"}
-          label={__("Open tabs", "shopsocket")}
-          detail={
-            online
-              ? sprintf(
-                  /* translators: 1: open tabs, 2: plan connection limit */
-                  __("%1$d of %2$d on your plan", "shopsocket"),
-                  online.active_connections,
-                  online.max_connections,
-                ) + staffNote(staff.tabs)
-              : __("Browser tabs connected to your store", "shopsocket")
-          }
-        />
-      </div>
-      <Text variant="heading-md" render={<h3 />} className="shopsocket-subhead">
-        {__("Shoppers on the site right now", "shopsocket")}
-      </Text>
-      <ShoppersPanel shoppers={shoppers} names={names} />
-      {shoppers.length > 0 && (
-        <>
-          <Text
-            variant="heading-md"
-            render={<h3 />}
-            className="shopsocket-subhead"
-          >
-            {__("Where they are coming from", "shopsocket")}
-          </Text>
-          <Text variant="body-sm" className="shopsocket-muted" render={<p />}>
-            {__(
-              "Each shopper's route through your pages this visit, ending where they are now. Hover a route for the pages.",
+        >
+          <Stat
+            compact
+            swatch
+            name="looking"
+            value={String(looking)}
+            label={__("Looking now", "shopsocket")}
+            detail={__("A tab of theirs in view", "shopsocket")}
+          />
+          <Stat
+            compact
+            swatch
+            name="idle"
+            value={String(awayUsers)}
+            label={__("Tab hidden", "shopsocket")}
+            detail={__("Every tab of theirs hidden", "shopsocket")}
+          />
+          <Stat
+            compact
+            name="connections"
+            value={online ? String(online.active_connections) : "\u2014"}
+            label={__("Open tabs", "shopsocket")}
+            detail={
+              online
+                ? sprintf(
+                    /* translators: 1: open tabs, 2: plan connection limit */
+                    __("%1$d of %2$d on your plan", "shopsocket"),
+                    online.active_connections,
+                    online.max_connections,
+                  ) + staffNote(staff.tabs)
+                : __("Browser tabs connected to your store", "shopsocket")
+            }
+          />
+        </StatGroup>
+        <StatGroup
+          name="carts"
+          summary={sprintf(
+            /* translators: 1: carts in use, 2: carts on a hidden tab, 3: carts left behind */
+            __(
+              "%1$d in use, %2$d on a hidden tab, %3$d left behind",
               "shopsocket",
+            ),
+            carts.live.shoppers,
+            carts.away.shoppers,
+            carts.abandoned.shoppers,
+          )}
+          shares={[
+            {
+              name: "live",
+              size: carts.live.shoppers,
+              /* translators: %d: carts whose shopper has a tab in view */
+              title: sprintf(
+                __("In use: %d", "shopsocket"),
+                carts.live.shoppers,
+              ),
+            },
+            {
+              name: "away",
+              size: carts.away.shoppers,
+              /* translators: %d: carts whose shopper has every tab hidden */
+              title: sprintf(
+                __("On a hidden tab: %d", "shopsocket"),
+                carts.away.shoppers,
+              ),
+            },
+            {
+              name: "abandoned",
+              size: carts.abandoned.shoppers,
+              /* translators: %d: carts whose shopper has left the site */
+              title: sprintf(
+                __("Left behind: %d", "shopsocket"),
+                carts.abandoned.shoppers,
+              ),
+            },
+          ]}
+          headline={
+            <Stat
+              name="open"
+              value={String(openCarts)}
+              label={__("Open carts", "shopsocket")}
+              detail={
+                <>
+                  {__("Not yet ordered, worth", "shopsocket")}{" "}
+                  <span className="shopsocket-stat__money">
+                    {openCurrency
+                      ? money(openValue, openCurrency)
+                      : `${config.currencySymbol}0`}
+                  </span>
+                </>
+              }
+            />
+          }
+        >
+          <Stat
+            compact
+            swatch
+            name="live"
+            value={String(carts.live.shoppers)}
+            label={__("In use", "shopsocket")}
+            detail={cartDetail(carts.live)}
+          />
+          <Stat
+            compact
+            swatch
+            name="away"
+            value={String(carts.away.shoppers)}
+            label={__("Tab hidden", "shopsocket")}
+            detail={cartDetail(carts.away)}
+          />
+          <Stat
+            compact
+            swatch
+            name="abandoned"
+            value={String(carts.abandoned.shoppers)}
+            label={__("Left behind", "shopsocket")}
+            detail={cartDetail(carts.abandoned)}
+          />
+        </StatGroup>
+      </div>
+      <Tabs.Root defaultValue="shoppers" className="shopsocket-tabs">
+        <Tabs.List
+          variant="minimal"
+          aria-label={__("The shoppers on the site", "shopsocket")}
+        >
+          <Tabs.Tab value="shoppers">{__("Shoppers", "shopsocket")}</Tabs.Tab>
+          <Tabs.Tab value="routes">{__("Journeys", "shopsocket")}</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="shoppers" tabIndex={-1} keepMounted>
+          <ShoppersPanel shoppers={shoppers} names={names} />
+        </Tabs.Panel>
+        <Tabs.Panel value="routes" tabIndex={-1} keepMounted>
+          <Stack direction="column" gap="lg">
+            <Text variant="body-sm" className="shopsocket-muted" render={<p />}>
+              {shoppers.length === 0 &&
+                __("No shopper is on the site right now.", "shopsocket")}
+            </Text>
+            {shoppers.length > 0 && (
+              <LiveJourneys shoppers={shoppers} names={names} />
             )}
-          </Text>
-          <LiveJourneys shoppers={shoppers} names={names} />
-        </>
-      )}
-      <Text variant="heading-md" render={<h3 />} className="shopsocket-subhead">
+          </Stack>
+        </Tabs.Panel>
+      </Tabs.Root>
+      {/* <Text variant="heading-md" render={<h3 />} className="shopsocket-subhead">
         {__("Products in carts right now", "shopsocket")}
       </Text>
-      <LiveProductsPanel products={snapshot.liveProducts} />
+      <LiveProductsPanel products={snapshot.liveProducts} /> */}
     </Section>
   );
 }
@@ -361,7 +478,9 @@ function useShopperNames(shoppers: WooShopper[]): ShopperNames {
   /* The pages the shoppers' tabs are on first, so the table's cells are named before the routes' nodes. */
   const all = useMemo(
     () => [
-      ...shoppers.flatMap((s) => s.tabs.map((t) => ({ kind: t.kind, id: t.id }))),
+      ...shoppers.flatMap((s) =>
+        s.tabs.map((t) => ({ kind: t.kind, id: t.id })),
+      ),
       ...shoppers.flatMap((s) => s.tabs.flatMap((t) => routeSteps(t.j))),
     ],
     [shoppers],
@@ -370,7 +489,9 @@ function useShopperNames(shoppers: WooShopper[]): ShopperNames {
     () =>
       Array.from(
         new Set(
-          all.filter((s) => needsLookup(s.kind)).map((s) => `${s.kind}:${s.id}`),
+          all
+            .filter((s) => needsLookup(s.kind))
+            .map((s) => `${s.kind}:${s.id}`),
         ),
       ).slice(0, LIVE_PRODUCTS),
     [all],
@@ -388,7 +509,8 @@ function useShopperNames(shoppers: WooShopper[]): ShopperNames {
     () => ({
       label: (kind, id) =>
         pageLabel(kind, id, page(`${kind}:${id}`), product(id)),
-      url: (kind, id) => pageUrl(kind, page(`${kind}:${id}`), product(id), config),
+      url: (kind, id) =>
+        pageUrl(kind, page(`${kind}:${id}`), product(id), config),
     }),
     [page, product],
   );
@@ -410,55 +532,20 @@ function ShoppersPanel({
   const columns = useMemo<Column<WooShopper>[]>(() => {
     const label = (row: WooShopper) => names.label(row.kind, row.id);
     return [
-      {
-        id: "shopper",
-        label: __("Shopper", "shopsocket"),
-        value: (row) =>
-          row.cart?.customer ||
-          row.guess?.name ||
-          row.guess?.email ||
-          (row.staff ? __("Staff", "shopsocket") : __("Guest", "shopsocket")),
-        render: (row) => {
-          const customer = row.cart?.customer;
-          const profile =
-            customer && row.cart?.customer_url
-              ? adminUrlOrNull(row.cart.customer_url, config.adminUrl)
-              : null;
-          return (
-            <span data-visitor={row.v}>
-              {customer ? (
-                profile ? (
-                  <Link href={profile}>{customer}</Link>
-                ) : (
-                  customer
-                )
-              ) : row.guess ? (
-                <span title={row.guess.email}>
-                  {row.guess.name || row.guess.email}
-                  <span className="shopsocket-muted">
-                    {" · "}
-                    {sprintf(
-                      /* translators: %d: paid orders placed with the guessed email */
-                      _n("%d order", "%d orders", row.guess.orders, "shopsocket"),
-                      row.guess.orders,
-                    )}
-                  </span>{" "}
-                  <Badge intent="none">{__("Best guess", "shopsocket")}</Badge>
-                </span>
-              ) : (
-                <span className="shopsocket-muted">
-                  {row.staff
-                    ? __("Staff", "shopsocket")
-                    : __("Guest", "shopsocket")}
-                </span>
-              )}
-            </span>
-          );
-        },
-      },
+      shopperColumn<WooShopper>(
+        (row) => ({
+          v: row.v,
+          customer: row.cart?.customer,
+          customerUrl: row.cart?.customer_url,
+          guess: row.guess,
+          staff: row.staff,
+        }),
+        config.adminUrl,
+      ),
       {
         id: "page",
         label: __("Pages", "shopsocket"),
+        style: { width: "50%" },
         value: label,
         render: (row) => (
           <span className="shopsocket-shoppers__pages">
@@ -477,7 +564,12 @@ function ShoppersPanel({
                   }
                 >
                   {href ? (
-                    <Link href={href} openInNewTab>
+                    <Link
+                      variant="default"
+                      tone={tab.away ? "neutral" : "brand"}
+                      href={href}
+                      openInNewTab
+                    >
                       {name}
                     </Link>
                   ) : (
@@ -492,6 +584,7 @@ function ShoppersPanel({
       {
         id: "cart",
         label: __("Cart", "shopsocket"),
+        style: { width: "130px" },
         value: (row) => row.cart?.value ?? 0,
         render: (row) =>
           row.cart ? (
@@ -633,6 +726,15 @@ function AbandonedPanel({
     [rows],
   );
   const ref = useProductNames(ids, config);
+  /* A guest who left may have a best guess waiting on the server. */
+  const unnamed = useMemo(
+    () =>
+      Array.from(
+        new Set(rows.filter((r) => !r.customer && r.v).map((r) => r.v ?? "")),
+      ),
+    [rows],
+  );
+  const guests = useGuestNames(unnamed, config);
   const columns = useMemo<Column<WooAbandonedRow>[]>(() => {
     const products = (row: WooAbandonedRow) =>
       row.products
@@ -643,27 +745,15 @@ function AbandonedPanel({
         .join(", ");
     return [
       { id: "products", label: __("Cart", "shopsocket"), value: products },
-      {
-        id: "shopper",
-        label: __("Shopper", "shopsocket"),
-        value: (row) => row.customer || __("Guest", "shopsocket"),
-        render: (row) => {
-          if (!row.customer)
-            return (
-              <span className="shopsocket-muted">
-                {__("Guest", "shopsocket")}
-              </span>
-            );
-          const profile = row.customer_url
-            ? adminUrlOrNull(row.customer_url, config.adminUrl)
-            : null;
-          return profile ? (
-            <Link href={profile}>{row.customer}</Link>
-          ) : (
-            row.customer
-          );
-        },
-      },
+      shopperColumn<WooAbandonedRow>(
+        (row) => ({
+          v: row.v,
+          customer: row.customer,
+          customerUrl: row.customer_url,
+          guess: guests(row.v ?? ""),
+        }),
+        config.adminUrl,
+      ),
       {
         id: "value",
         label: __("Value", "shopsocket"),
@@ -690,7 +780,7 @@ function AbandonedPanel({
         },
       },
     ];
-  }, [ref, currencySymbol]);
+  }, [ref, currencySymbol, guests]);
   return (
     <Section
       title={__("Recently abandoned", "shopsocket")}
@@ -700,6 +790,7 @@ function AbandonedPanel({
       )}
     >
       <BoardTable
+        perPage={10}
         className="shopsocket-abandoned"
         rows={rows}
         rowId={byId}

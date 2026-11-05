@@ -4,7 +4,7 @@
  */
 import { __, _n, sprintf } from "@wordpress/i18n";
 import { useMemo } from "@wordpress/element";
-import { Link, Text } from "@wordpress/ui";
+import { Link, Stack, Text } from "@wordpress/ui";
 import { money } from "./format";
 import { useProductNames } from "./useProductNames";
 import { BoardTable, Section, Stat, productColumn, type Column } from "./ui";
@@ -125,97 +125,107 @@ export function WeekStrip({
         "shopsocket",
       )}
     >
-      <div className="shopsocket-stats">
-        <Stat
-          name="left"
-          value={String(left.count)}
-          label={__("Carts left behind", "shopsocket")}
-          compare={{ now: left.count, before: left.previous, goodWhen: "down" }}
-          days={left.days}
-          dates={strip.trend_days}
-          dayLabel={carts}
-          detail={sprintf(
-            /* translators: 1: the change against last week, 2: the value of those carts */
-            __("%1$s, %2$s in them", "shopsocket"),
-            delta(left.count, left.previous),
-            money(left.value, left.currency),
-          )}
-        />
-        <Stat
-          name="recovered"
-          value={String(recovered.count)}
-          label={__("Recovered orders", "shopsocket")}
-          compare={{
-            now: recovered.count,
-            before: recovered.previous,
-            goodWhen: "up",
-          }}
-          days={recovered.days}
-          dates={strip.trend_days}
-          dayLabel={orders}
-          detail={sprintf(
-            /* translators: 1: the value of the recovered orders, 2: the change against last week */
-            __("%1$s in orders after a moment, %2$s", "shopsocket"),
-            money(recovered.value, left.currency),
-            delta(recovered.count, recovered.previous),
-          )}
-        />
-        <Stat
-          name="conversion"
-          value={`${conversion.percent}%`}
-          label={__("Checkout conversion", "shopsocket")}
-          compare={{
-            now: conversion.percent,
-            before: conversion.previous_percent,
-            goodWhen: "up",
-          }}
-          days={conversion.days}
-          dates={strip.trend_days}
-          dayLabel={(v) => `${v}%`}
-          detail={sprintf(
-            /* translators: 1: orders, 2: shoppers who reached checkout, 3: the change against last week in points */
-            __("%1$d of %2$d who reached checkout, %3$s", "shopsocket"),
-            conversion.orders,
-            conversion.reached,
-            delta(
-              conversion.percent,
-              conversion.previous_percent,
-              __(" pts", "shopsocket"),
-            ),
-          )}
-        />
-      </div>
-      {strip.journeys === false && historyOff}
-      {leak && (
-        <Text variant="body-md" render={<p />} className="shopsocket-leak">
-          {sprintf(
-            /* translators: 1: where most leavers left from, 2: the typical time there, 3: how many, 4: their share of everyone who left */
-            __(
-              "Most shoppers who leave with a cart do so from %1$s, usually after %2$s there: %3$d this week, %4$d%% of everyone who left.",
-              "shopsocket",
-            ),
-            placeOf(leak.kind),
-            duration(leak.median_s),
-            leak.count,
-            Math.round((100 * leak.count) / Math.max(1, leak.leavers)),
-          )}{" "}
-          {config.journeysUrl && (
-            <Link href={leaversUrl(config.journeysUrl, leak.kind)}>
-              {__("See their journeys", "shopsocket")}
-            </Link>
-          )}
+      <Stack direction="column" gap="lg">
+        <div className="shopsocket-stats">
+          <Stat
+            name="left"
+            value={String(left.count)}
+            label={__("Carts left behind", "shopsocket")}
+            compare={{
+              now: left.count,
+              before: left.previous,
+              goodWhen: "down",
+            }}
+            days={left.days}
+            dates={strip.trend_days}
+            dayLabel={carts}
+            detail={sprintf(
+              /* translators: 1: the change against last week, 2: the value of those carts */
+              __("%1$s, %2$s in them", "shopsocket"),
+              delta(left.count, left.previous),
+              money(left.value, left.currency),
+            )}
+          />
+          <Stat
+            name="recovered"
+            value={String(recovered.count)}
+            label={__("Recovered orders", "shopsocket")}
+            compare={{
+              now: recovered.count,
+              before: recovered.previous,
+              goodWhen: "up",
+            }}
+            days={recovered.days}
+            dates={strip.trend_days}
+            dayLabel={orders}
+            detail={sprintf(
+              /* translators: 1: the value of the recovered orders, 2: the change against last week */
+              __("%1$s in orders after a moment, %2$s", "shopsocket"),
+              money(recovered.value, left.currency),
+              delta(recovered.count, recovered.previous),
+            )}
+          />
+          <Stat
+            name="conversion"
+            value={`${conversion.percent}%`}
+            label={__("Checkout conversion", "shopsocket")}
+            compare={{
+              now: conversion.percent,
+              before: conversion.previous_percent,
+              goodWhen: "up",
+            }}
+            days={conversion.days}
+            dates={strip.trend_days}
+            dayLabel={(v) => `${v}%`}
+            detail={sprintf(
+              /* translators: 1: orders, 2: shoppers who reached checkout, 3: the change against last week in points */
+              __("%1$d of %2$d who reached checkout, %3$s", "shopsocket"),
+              conversion.orders,
+              conversion.reached,
+              delta(
+                conversion.percent,
+                conversion.previous_percent,
+                __(" pts", "shopsocket"),
+              ),
+            )}
+          />
+        </div>
+        {strip.journeys === false && historyOff}
+        {leak && (
+          <Text variant="body-md" render={<p />} className="shopsocket-leak">
+            {sprintf(
+              /* translators: 1: where most leavers left from, 2: the typical time there, 3: how many, 4: their share of everyone who left */
+              __(
+                "Most shoppers who leave with a cart do so from %1$s, usually after %2$s there: %3$d this week, %4$d%% of everyone who left.",
+                "shopsocket",
+              ),
+              placeOf(leak.kind),
+              duration(leak.median_s),
+              leak.count,
+              Math.round((100 * leak.count) / Math.max(1, leak.leavers)),
+            )}{" "}
+            {config.journeysUrl && (
+              <Link href={leaversUrl(config.journeysUrl, leak.kind)}>
+                {__("See their journeys", "shopsocket")}
+              </Link>
+            )}
+          </Text>
+        )}
+        <Text
+          variant="heading-md"
+          render={<h3 />}
+          className="shopsocket-subhead"
+        >
+          {__("Products most abandoned", "shopsocket")}
         </Text>
-      )}
-      <Text variant="heading-md" render={<h3 />} className="shopsocket-subhead">
-        {__("Products most often left in a cart", "shopsocket")}
-      </Text>
-      <BoardTable
-        className="shopsocket-left-products"
-        rows={products}
-        rowId={byId}
-        empty={__("No cart was left behind this week.", "shopsocket")}
-        columns={columns}
-      />
+        <BoardTable
+          className="shopsocket-left-products"
+          rows={products}
+          rowId={byId}
+          empty={__("No cart was left behind this week.", "shopsocket")}
+          columns={columns}
+        />
+      </Stack>
     </Section>
   );
 }
