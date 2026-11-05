@@ -317,7 +317,26 @@ body.shopsocket-fullscreen {
   }
 }
 
-/* Where shoppers are coming from: the frame scrolls sideways under row labels pinned to its left edge (a shadow at their edge once scrolled); routes grey, the hovered one (or every one through a hovered node) dark and the rest faded, a hidden tab's route dashed; nodes by page kind, the "Now" nodes ringed. */
+/* Shoppers on the site right now: one page per open tab, a hidden tab's in a dashed border. */
+.shopsocket-shoppers__pages {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--wpds-dimension-gap-xs, 4px);
+}
+
+.shopsocket-shoppers__page {
+  display: inline-block;
+  padding: 0 var(--wpds-dimension-padding-xs, 4px);
+  border: 1px solid transparent;
+  border-radius: var(--wpds-dimension-radius-sm, 2px);
+
+  &.is-away {
+    border-color: var(--wpds-color-stroke-surface-neutral, #949494);
+    border-style: dashed;
+  }
+}
+
+/* Where shoppers are coming from: the frame scrolls sideways under row labels pinned to its left edge (a shadow at their edge once scrolled); routes grey, the hovered shopper's (every tab of theirs, or every shopper through a hovered node) dark and the rest faded, a hidden tab's route dotted; nodes by page kind, the "Now" nodes ringed. */
 .shopsocket-journeys {
   position: relative;
   display: flex;
@@ -408,8 +427,8 @@ body.shopsocket-fullscreen {
     stroke-width: 2px;
   }
 
-  .shopsocket-journeys__shopper.is-away:hover &,
-  .shopsocket-journeys__shopper.is-away.is-on & {
+  .shopsocket-journeys__shopper:hover .is-away &,
+  .shopsocket-journeys__shopper.is-on .is-away & {
     stroke-width: 2.5px;
   }
 

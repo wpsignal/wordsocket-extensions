@@ -59,40 +59,52 @@ function isAway(m: Member): boolean {
 type Roster = Omit<WooShopper, "cart">;
 
 /*
- * One entry per visitor from the members in announce order: a live visible
- * tab wins over a live hidden one, both win over a connection waiting out its
- * leave grace, and among equals the last announced wins, so a navigation shows
- * the new page the moment it joins, hidden or not. Any tab's cart id serves,
- * since a visitor's tabs share the cart.
+ * One entry per visitor from the members in announce order, every tab of
+ * theirs listed: a live visible tab leads over a live hidden one, and the last
+ * announced among equals, so a navigation shows the new page the moment it
+ * joins, hidden or not. A connection waiting out its leave grace is listed
+ * only while the visitor has no other, since a navigation's old connection
+ * would otherwise read as a second tab. Any tab's cart id serves, since a
+ * visitor's tabs share the cart.
  */
 function byVisitor(
   members: Map<string, Member>,
   leaving: Set<string>,
   staffVisitors: Set<string>,
 ): Roster[] {
-  const picked = new Map<string, Roster & { rank: number }>();
-  members.forEach((m, id) => {
+  type Ranked = { tab: WooTab; rank: number; order: number };
+  const grouped = new Map<string, { b: string | null; tabs: Ranked[] }>();
+  let order = 0;
+  members.forEach((m, key) => {
     if (!m.v) return;
     const away = isAway(m);
-    const rank = leaving.has(id) ? 0 : away ? 1 : 2;
-    const before = picked.get(m.v);
-    if (before && before.rank > rank) {
-      if (!before.b && m.b) before.b = m.b;
-      return;
-    }
     const step = openStep(m.j ?? "");
-    picked.set(m.v, {
-      v: m.v,
-      b: m.b ?? before?.b ?? null,
-      kind: step.kind,
-      id: step.id,
-      j: m.j ?? "",
-      away,
-      staff: staffVisitors.has(m.v),
-      rank,
+    const group = grouped.get(m.v) ?? { b: null, tabs: [] };
+    if (!group.b && m.b) group.b = m.b;
+    group.tabs.push({
+      tab: { key, kind: step.kind, id: step.id, j: m.j ?? "", away },
+      rank: leaving.has(key) ? 0 : away ? 1 : 2,
+      order: order++,
     });
+    grouped.set(m.v, group);
   });
-  return [...picked.values()].map(({ rank: _rank, ...shopper }) => shopper);
+  return [...grouped.entries()].map(([v, { b, tabs: ranked }]) => {
+    const live = ranked.filter((t) => t.rank > 0);
+    const tabs = (live.length > 0 ? live : ranked)
+      .sort((a, c) => c.rank - a.rank || c.order - a.order)
+      .map((t) => t.tab);
+    const lead = tabs[0];
+    return {
+      v,
+      b,
+      kind: lead.kind,
+      id: lead.id,
+      j: lead.j,
+      tabs,
+      away: tabs.every((t) => t.away),
+      staff: staffVisitors.has(v),
+    };
+  });
 }
 
 /*

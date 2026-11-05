@@ -56,7 +56,7 @@ test.describe("ShopSocket dashboard", () => {
         .locator("xpath=ancestor::tr[1]");
       await expect(row).toBeVisible({ timeout: 15_000 });
       await expect(row).toContainText("Guest");
-      await expect(row).toContainText("Live");
+      await expect(row.locator(".shopsocket-shoppers__page")).not.toHaveClass(/is-away/);
       const link = row.getByRole("link", { name: /E2E Page Widget/ });
       await expect(link).toBeVisible({ timeout: 15_000 });
       expect(new URL((await link.getAttribute("href")) ?? "").pathname).toBe(
@@ -64,7 +64,7 @@ test.describe("ShopSocket dashboard", () => {
       );
 
       // A hop to the shop, hidden at once (the merchant switching to the board): the row follows
-      // the new page well within the old connection's leave grace, and reads Hidden.
+      // the new page well within the old connection's leave grace, and the page is marked hidden.
       await shop.goto("/shop/");
       await waitForLive(shop);
       await shop.evaluate(() => {
@@ -86,11 +86,11 @@ test.describe("ShopSocket dashboard", () => {
       await expect(
         row.getByRole("link", { name: /E2E Page Widget/ }),
       ).toHaveCount(0);
-      await expect(row).toContainText("Hidden", { timeout: 3_000 });
+      await expect(row.locator(".shopsocket-shoppers__page")).toHaveClass(/is-away/, { timeout: 3_000 });
       // The routes diagram: the guest's route runs from the product to Shop, dotted while hidden.
       const route = page.locator(`.shopsocket-journeys [data-visitor="${v}"]`);
       await expect(route.locator("title")).toHaveText(/Guest \u00b7 E2E Page Widget \u203a Shop/);
-      await expect(route).toHaveClass(/is-away/);
+      await expect(route.locator(".shopsocket-journeys__tab")).toHaveClass(/is-away/);
       await shop.evaluate(() => {
         Object.defineProperty(document, "hidden", {
           configurable: true,
@@ -102,9 +102,9 @@ test.describe("ShopSocket dashboard", () => {
         });
         document.dispatchEvent(new Event("visibilitychange"));
       });
-      await expect(row).toContainText("Live", { timeout: 15_000 });
+      await expect(row.locator(".shopsocket-shoppers__page")).not.toHaveClass(/is-away/, { timeout: 15_000 });
       // Back on the same page: the route is as it was, undotted, with no step added.
-      await expect(route).not.toHaveClass(/is-away/);
+      await expect(route.locator(".shopsocket-journeys__tab")).not.toHaveClass(/is-away/);
       await expect(route.locator("title")).toHaveText(/Guest \u00b7 E2E Page Widget \u203a Shop$/);
     } finally {
       await visitor.close();
@@ -149,6 +149,65 @@ test.describe("ShopSocket dashboard", () => {
     } finally {
       await visitor.close();
       await deleteOrder(requestUtils, order.id);
+      await deleteProduct(requestUtils, product.id);
+    }
+  });
+
+  test("a shopper with two tabs is one row listing both pages, and one shopper on the diagram with two routes", async ({
+    admin,
+    page,
+    browser,
+    baseURL,
+    requestUtils,
+  }) => {
+    await admin.visitAdminPage("admin.php", PAGE);
+    await waitForLive(page);
+    const product = await createProduct(requestUtils, "E2E Tabs Widget", 5);
+    const visitor = await visitorContext(browser, baseURL);
+    try {
+      const first = await visitor.newPage();
+      await first.goto(product.permalink);
+      await waitForLive(first);
+      const v = await first.evaluate(() => window.WPS?.visitorId() ?? "");
+      const row = page
+        .locator(`.shopsocket-shoppers [data-visitor="${v}"]`)
+        .locator("xpath=ancestor::tr[1]");
+      const pages = row.locator(".shopsocket-shoppers__page");
+      await expect(pages).toHaveCount(1, { timeout: 15_000 });
+
+      // A second tab of the same browser on the shop: still one row, now with both pages.
+      const second = await visitor.newPage();
+      await second.goto("/shop/");
+      await waitForLive(second);
+      await expect(pages).toHaveCount(2, { timeout: 15_000 });
+      await expect(page.locator(`.shopsocket-shoppers [data-visitor="${v}"]`)).toHaveCount(1);
+      await expect(row.getByRole("link", { name: /E2E Tabs Widget/ })).toBeVisible();
+      await expect(row.getByRole("link", { name: "Shop" })).toBeVisible();
+      const shopper = page.locator(`.shopsocket-journeys [data-visitor="${v}"]`);
+      await expect(shopper).toHaveCount(1);
+      await expect(shopper.locator(".shopsocket-journeys__tab")).toHaveCount(2);
+
+      // The second tab hidden: its page is dashed and its route dotted, the other page as it was.
+      await second.evaluate(() => {
+        Object.defineProperty(document, "hidden", {
+          configurable: true,
+          get: () => true,
+        });
+        Object.defineProperty(document, "visibilityState", {
+          configurable: true,
+          get: () => "hidden",
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await expect(pages.filter({ hasText: "Shop" })).toHaveClass(/is-away/, { timeout: 5_000 });
+      await expect(pages.filter({ hasText: "E2E Tabs Widget" })).not.toHaveClass(/is-away/);
+      await expect(shopper.locator(".shopsocket-journeys__tab.is-away")).toHaveCount(1);
+
+      // The second tab closed: one page again once the relay's leave has passed the grace.
+      await second.close();
+      await expect(pages).toHaveCount(1, { timeout: 15_000 });
+    } finally {
+      await visitor.close();
       await deleteProduct(requestUtils, product.id);
     }
   });

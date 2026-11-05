@@ -169,8 +169,8 @@ interface WooDashboardSnapshot {
 	/** Products in live carts: how many of those carts hold each, and the units across them, unordered. */
 	liveProducts: Array< { id: number; carts: number; units: number } >;
 	/**
-	 * One row per connected visitor: the open step of their visible tab, or of the last announced tab
-	 * when every tab is hidden, and the cart row for their cart id.
+	 * One row per connected visitor: every tab of theirs, the leading one (their visible tab, or the
+	 * last announced when every tab is hidden) first, and the cart row for their cart id.
 	 *
 	 * @since 0.8.0
 	 */
@@ -178,7 +178,25 @@ interface WooDashboardSnapshot {
 }
 
 /**
- * A connected visitor as the shoppers table lists them.
+ * One open tab of a connected visitor, with the journey of its own it carries.
+ *
+ * @since 0.8.0
+ */
+interface WooTab {
+	/** The connection id the relay gave the tab. */
+	key: string;
+	/** The open step's kind, the page before `away` when the tab is hidden. */
+	kind: string;
+	/** The open step's id, 0 when the kind has none. */
+	id: number;
+	/** The journey as the tracker announced it, `kind:id:s` steps joined by `>`. */
+	j: string;
+	/** Whether the tab is hidden. */
+	away: boolean;
+}
+
+/**
+ * A connected visitor as the shoppers table lists them: `kind`, `id` and `j` are the leading tab's.
  *
  * @since 0.8.0
  */
@@ -187,16 +205,23 @@ interface WooShopper {
 	v: string;
 	/** The cart id, null without a cart. */
 	b: string | null;
-	/** The open step's kind, the page before `away` when the tab is hidden. */
+	/** The leading tab's open step kind, the page before `away` when the tab is hidden. */
 	kind: string;
-	/** The open step's id, 0 when the kind has none. */
+	/** The leading tab's open step id, 0 when the kind has none. */
 	id: number;
 	/**
-	 * The journey as the tracker announced it, `kind:id:s` steps joined by `>`.
+	 * The leading tab's journey as the tracker announced it, `kind:id:s` steps joined by `>`.
 	 *
 	 * @since 0.8.0
 	 */
 	j: string;
+	/**
+	 * Every open tab of theirs, the leading one first, then the rest by their state and then by
+	 * how recently they announced.
+	 *
+	 * @since 0.8.0
+	 */
+	tabs: WooTab[];
 	/** Whether every tab of theirs is hidden. */
 	away: boolean;
 	/** Whether the visitor is a staff member browsing the store. */

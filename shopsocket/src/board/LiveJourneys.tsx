@@ -1,8 +1,8 @@
 /*
  * "Where shoppers are coming from": every shopper on the site drawn as a route through the pages
- * they opened this visit, ending where they are now. Columns are pages back from now, rows are page
- * kinds, a node's size is the shoppers through it, and nothing moves unless hovered: a route lights
- * alone, a node lights every route through it.
+ * they opened this visit, ending where they are now, one route per open tab. Columns are pages back
+ * from now, rows are page kinds, a node's size is the shoppers through it, and nothing moves unless
+ * hovered: a route lights with the shopper's other tabs, a node lights every route through it.
  */
 import { __, _n, sprintf } from "@wordpress/i18n";
 import { memo, useCallback, useMemo, useRef, useState } from "@wordpress/element";
@@ -101,6 +101,8 @@ interface Node {
   kind: string;
   x: number;
   y: number;
+  /** The shoppers through the node, any of their tabs. */
+  visitors: Set<string>;
   count: number;
 }
 
@@ -140,16 +142,30 @@ export const LiveJourneys = memo(function LiveJourneys({
     LIVE_STEPS_MAX,
     Math.max(LIVE_STEPS_MIN, Math.floor((width - LEFT - RIGHT) / COL_W)),
   );
+  /* Each shopper with the route of every tab of theirs that has a page, dropped when none has. */
   const routes = useMemo(
     () =>
       shoppers
-        .map((shopper) => ({ shopper, steps: routeSteps(shopper.j, limit) }))
-        .filter((r) => r.steps.length > 0),
+        .map((shopper) => ({
+          shopper,
+          tabs: shopper.tabs
+            .map((tab) => ({ tab, steps: routeSteps(tab.j, limit) }))
+            .filter((t) => t.steps.length > 0),
+        }))
+        .filter((r) => r.tabs.length > 0),
     [shoppers, limit],
   );
-  const columns = Math.max(1, ...routes.map((r) => r.steps.length));
+  const columns = Math.max(
+    1,
+    ...routes.flatMap((r) => r.tabs.map((t) => t.steps.length)),
+  );
   const rows = useMemo(
-    () => orderKinds(routes.flatMap((r) => r.steps.map((s) => s.kind))),
+    () =>
+      orderKinds(
+        routes.flatMap((r) =>
+          r.tabs.flatMap((t) => t.steps.map((s) => s.kind)),
+        ),
+      ),
     [routes],
   );
   const W = Math.max(width, LEFT + RIGHT + MIN_COL_W * columns);
@@ -160,46 +176,61 @@ export const LiveJourneys = memo(function LiveJourneys({
       : LEFT + ((W - LEFT - RIGHT) * col) / (columns - 1);
   const rowY = (kind: string) => TOP + rows.indexOf(kind) * ROW_H + ROW_H / 2;
 
-  /* Every (column, kind) a route passes through, counted, and each route's path and title. */
+  /* Every (column, kind) a route passes through, counting shoppers, and each tab's path and title. */
   const { nodes, drawn, maxCount } = useMemo(() => {
     const nodes = new Map<string, Node>();
-    const drawn = routes.map(({ shopper, steps }) => {
-    const keys = new Set<string>();
-    const points = steps.map((step, k) => {
-      const col = columns - steps.length + k;
-      const key = `${col}:${step.kind}`;
-      keys.add(key);
-      const node = nodes.get(key) ?? {
-        col,
-        kind: step.kind,
-        x: colX(col),
-        y: rowY(step.kind),
-        count: 0,
-      };
-      node.count += 1;
-      nodes.set(key, node);
-      return { x: node.x, y: node.y };
-    });
-    const d = points
-      .slice(1)
-      .map((p, k) => {
-        const seg = curve(points[k], p);
-        return k === 0 ? seg : seg.slice(seg.indexOf("C"));
-      })
-      .join("");
-    const who =
-      shopper.cart?.customer ||
-      (shopper.guess
-        ? sprintf(
-            /* translators: %s: the name or email guessed for a guest */
-            __("%s (best guess)", "shopsocket"),
-            shopper.guess.name || shopper.guess.email,
-          )
-        : shopper.staff
-          ? __("Staff", "shopsocket")
-          : __("Guest", "shopsocket"));
-    const pages = steps.map((s) => names.label(s.kind, s.id)).join(" › ");
-    return { shopper, d, keys, title: `${who} · ${pages}` };
+    const drawn = routes.map(({ shopper, tabs }) => {
+      const keys = new Set<string>();
+      const who =
+        shopper.cart?.customer ||
+        (shopper.guess
+          ? sprintf(
+              /* translators: %s: the name or email guessed for a guest */
+              __("%s (best guess)", "shopsocket"),
+              shopper.guess.name || shopper.guess.email,
+            )
+          : shopper.staff
+            ? __("Staff", "shopsocket")
+            : __("Guest", "shopsocket"));
+      const paths = tabs.map(({ tab, steps }, t) => {
+        const points = steps.map((step, k) => {
+          const col = columns - steps.length + k;
+          const key = `${col}:${step.kind}`;
+          keys.add(key);
+          const node = nodes.get(key) ?? {
+            col,
+            kind: step.kind,
+            x: colX(col),
+            y: rowY(step.kind),
+            visitors: new Set<string>(),
+            count: 0,
+          };
+          node.visitors.add(shopper.v);
+          node.count = node.visitors.size;
+          nodes.set(key, node);
+          return { x: node.x, y: node.y };
+        });
+        const d = points
+          .slice(1)
+          .map((p, k) => {
+            const seg = curve(points[k], p);
+            return k === 0 ? seg : seg.slice(seg.indexOf("C"));
+          })
+          .join("");
+        const pages = steps.map((s) => names.label(s.kind, s.id)).join(" › ");
+        const title =
+          tabs.length > 1
+            ? sprintf(
+                /* translators: 1: who the shopper is, 2: which of their tabs, 3: the pages of its route */
+                __("%1$s · tab %2$d · %3$s", "shopsocket"),
+                who,
+                t + 1,
+                pages,
+              )
+            : `${who} · ${pages}`;
+        return { tab, d, title };
+      });
+      return { shopper, keys, paths };
     });
     const maxCount = Math.max(1, ...[...nodes.values()].map((n) => n.count));
     return { nodes, drawn, maxCount };
@@ -303,15 +334,24 @@ export const LiveJourneys = memo(function LiveJourneys({
                 })}
               </g>
               <g>
-                {drawn.map(({ shopper, d, keys, title }) => (
+                {drawn.map(({ shopper, keys, paths }) => (
                   <g
                     key={shopper.v}
-                    className={`shopsocket-journeys__shopper${shopper.away ? " is-away" : ""}${focus && keys.has(focus) ? " is-on" : ""}`}
+                    className={`shopsocket-journeys__shopper${focus && keys.has(focus) ? " is-on" : ""}`}
                     data-visitor={shopper.v}
                   >
-                    <title>{title}</title>
-                    {d && <path className="shopsocket-journeys__route" d={d} />}
-                    {d && <path className="shopsocket-journeys__hit" d={d} />}
+                    {paths.map(({ tab, d, title }) => (
+                      <g
+                        key={tab.key}
+                        className={`shopsocket-journeys__tab${tab.away ? " is-away" : ""}`}
+                      >
+                        <title>{title}</title>
+                        {d && (
+                          <path className="shopsocket-journeys__route" d={d} />
+                        )}
+                        {d && <path className="shopsocket-journeys__hit" d={d} />}
+                      </g>
+                    ))}
                   </g>
                 ))}
               </g>

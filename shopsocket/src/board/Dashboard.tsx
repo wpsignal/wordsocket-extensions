@@ -358,11 +358,11 @@ interface ShopperNames extends RouteNames {
  * @since 0.8.0
  */
 function useShopperNames(shoppers: WooShopper[]): ShopperNames {
-  /* The pages the shoppers are on first, so the table's cells are named before the routes' nodes. */
+  /* The pages the shoppers' tabs are on first, so the table's cells are named before the routes' nodes. */
   const all = useMemo(
     () => [
-      ...shoppers.map((s) => ({ kind: s.kind, id: s.id })),
-      ...shoppers.flatMap((s) => routeSteps(s.j)),
+      ...shoppers.flatMap((s) => s.tabs.map((t) => ({ kind: t.kind, id: t.id }))),
+      ...shoppers.flatMap((s) => s.tabs.flatMap((t) => routeSteps(t.j))),
     ],
     [shoppers],
   );
@@ -395,8 +395,8 @@ function useShopperNames(shoppers: WooShopper[]): ShopperNames {
 }
 
 /**
- * Every connected visitor: who they are when logged in, the page they are on
- * linked to it, what their cart holds, and whether their tab is hidden.
+ * Every connected visitor: who they are when logged in, the page of each of
+ * their tabs linked to it, a hidden tab's marked, and what their cart holds.
  *
  * @since 0.8.0
  */
@@ -434,7 +434,7 @@ function ShoppersPanel({
                 )
               ) : row.guess ? (
                 <span title={row.guess.email}>
-                  {row.guess.email || row.guess.name}
+                  {row.guess.name || row.guess.email}
                   <span className="shopsocket-muted">
                     {" · "}
                     {sprintf(
@@ -443,7 +443,7 @@ function ShoppersPanel({
                       row.guess.orders,
                     )}
                   </span>{" "}
-                  <Badge intent="none">{__("Guest", "shopsocket")}</Badge>
+                  <Badge intent="none">{__("Best guess", "shopsocket")}</Badge>
                 </span>
               ) : (
                 <span className="shopsocket-muted">
@@ -458,19 +458,36 @@ function ShoppersPanel({
       },
       {
         id: "page",
-        label: __("Page", "shopsocket"),
+        label: __("Pages", "shopsocket"),
         value: label,
-        render: (row) => {
-          const url = names.url(row.kind, row.id);
-          const href = url ? siteUrlOrNull(url, config.homeUrl) : null;
-          return href ? (
-            <Link href={href} openInNewTab>
-              {label(row)}
-            </Link>
-          ) : (
-            label(row)
-          );
-        },
+        render: (row) => (
+          <span className="shopsocket-shoppers__pages">
+            {row.tabs.map((tab) => {
+              const url = names.url(tab.kind, tab.id);
+              const href = url ? siteUrlOrNull(url, config.homeUrl) : null;
+              const name = names.label(tab.kind, tab.id);
+              return (
+                <span
+                  key={tab.key}
+                  className={`shopsocket-shoppers__page${tab.away ? " is-away" : ""}`}
+                  title={
+                    tab.away
+                      ? __("A hidden tab", "shopsocket")
+                      : __("The tab they are looking at", "shopsocket")
+                  }
+                >
+                  {href ? (
+                    <Link href={href} openInNewTab>
+                      {name}
+                    </Link>
+                  ) : (
+                    name
+                  )}
+                </span>
+              );
+            })}
+          </span>
+        ),
       },
       {
         id: "cart",
@@ -499,16 +516,6 @@ function ShoppersPanel({
             ""
           ),
         numeric: true,
-      },
-      {
-        id: "tab",
-        label: __("Tab", "shopsocket"),
-        value: (row) => (row.away ? "hidden" : "live"),
-        render: (row) => (
-          <Badge intent={row.away ? "none" : "stable"}>
-            {row.away ? __("Hidden", "shopsocket") : __("Live", "shopsocket")}
-          </Badge>
-        ),
       },
     ];
   }, [names]);
