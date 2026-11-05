@@ -91,6 +91,8 @@ interface WooCartRow {
 
 /** A cart whose shopper left (inc/history.php `abandoned_rows()`, its newest left journey), newest leave first. */
 interface WooAbandonedRow extends WooCartRow {
+	/** The visitor who left the cart, the id a best guess is asked by; '' when the journey names none. */
+	v?: string;
 	/** The journey the cart was left in, `kind:id:s` steps joined by `>`, the time in whole seconds. */
 	journey: string;
 	/** When the shopper left, RFC 3339 UTC. */
@@ -305,6 +307,7 @@ interface WooStockEvent {
 	/** Availability in WooCommerce's own words, and its class (`in-stock`, `out-of-stock`, ...). */
 	availability_text: string;
 	availability_class: string;
+	permalink: string;
 }
 
 /** Payload of `woo.alert`: the Alert staff rule action, published by PHP (inc/rules.php). */

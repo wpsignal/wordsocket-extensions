@@ -221,6 +221,7 @@ final class HistoryTest extends ExtensionTestCase {
 		$rows = abandoned_rows();
 		$this->assertCount( 1, $rows, 'one row per cart, from its newest leave' );
 		$this->assertSame( $id, $rows[0]['id'] );
+		$this->assertSame( self::VISITOR, $rows[0]['v'], 'the visitor who left it' );
 		$this->assertSame( array( $product->get_id() ), $rows[0]['products'] );
 		$this->assertEquals( (object) array( $product->get_id() => 1 ), $rows[0]['quantities'] );
 		$this->assertSame( 9.99, $rows[0]['value'] );
@@ -343,6 +344,8 @@ final class HistoryTest extends ExtensionTestCase {
 			'at'     => current_time( 'mysql', true ),
 		);
 		$wpdb->query( $wpdb->prepare( 'UPDATE ' . journeys_table() . ' SET firings = %s WHERE journey_id = UNHEX(%s)', Journeys::pack_firings( $firings ), Journeys::hex( self::JOURNEY ) ) );
+		// The first journey went quiet longer ago than the gap, so the next one finds it over.
+		$wpdb->query( $wpdb->prepare( 'UPDATE ' . journeys_table() . ' SET last_seen = %s WHERE journey_id = UNHEX(%s)', gmdate( 'Y-m-d H:i:s', time() - Journeys::GAP_SECONDS - 60 ), Journeys::hex( self::JOURNEY ) ) );
 		do_action( 'wpsignal_visitor_visit', $this->report( 'product:' . $product->get_id() . ':0', false, self::JOURNEY_2 ) );
 		$order = $this->make_order( $product );
 		mark_converted( $id, $order->get_id(), (float) $order->get_total() );

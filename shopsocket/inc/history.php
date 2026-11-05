@@ -530,7 +530,7 @@ function taxonomy_kind( string $kind, string $taxonomy ): string {
 add_filter( 'wpsignal_taxonomy_kind', __NAMESPACE__ . '\taxonomy_kind', 10, 2 );
 
 /**
- * The carts whose shopper left, newest leave first, for the board's "Recently abandoned" panel: one row per cart, from its newest left journey, with the order a later journey became.
+ * The carts whose shopper left, newest leave first, for the board's "Recently abandoned" panel: one row per cart, from its newest left journey, with the visitor who left it and the order a later journey became.
  *
  * Whether the shopper is back right now, and whether the leave is older than the grace, is the board's to judge: it has presence and its own clock.
  *
@@ -543,7 +543,7 @@ function abandoned_rows(): array {
 	global $wpdb;
 	$rows  = (array) $wpdb->get_results(
 		$wpdb->prepare(
-			'SELECT ref, user_id, value, journey, outcome, last_seen, data FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' ORDER BY last_seen DESC LIMIT %d",
+			'SELECT ref, user_id, HEX(visitor) AS visitor, value, journey, outcome, last_seen, data FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' ORDER BY last_seen DESC LIMIT %d",
 			ABANDONED_SCAN
 		),
 		ARRAY_A
@@ -591,6 +591,7 @@ function abandoned_rows(): array {
 		$user_id   = (int) $cart['user_id'];
 		$out[]     = array(
 			'id'           => $ref,
+			'v'            => Journeys::uuid( (string) ( $left['visitor'] ?? '' ) ),
 			'products'     => array_keys( $items ),
 			'quantities'   => (object) $items,
 			'value'        => round( (float) ( $left['value'] ?? 0 ), 2 ),
