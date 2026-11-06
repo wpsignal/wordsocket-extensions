@@ -150,3 +150,7 @@ require_once DIR . 'inc/guests.php';
 if ( is_admin() ) {
 	require_once DIR . 'inc/admin-board.php';
 }
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	require_once DIR . 'inc/cli.php';
+	register_cli();
+}
