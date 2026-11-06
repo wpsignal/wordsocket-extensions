@@ -1,5 +1,5 @@
 /**
- * Live orders as a board table: newest activity first.
+ * Live orders as a board table: the orders the board holds, newest activity first.
  *
  * - Searchable by order number and customer, filterable by status, sortable by column.
  * - The order number and customer share the first column.
@@ -9,6 +9,7 @@ import { __, sprintf } from "@wordpress/i18n";
 import { useMemo } from "@wordpress/element";
 import type { OrderRow } from "./useLiveOrders";
 import { adminUrlOrNull } from "./trust";
+import { price } from "./format";
 import { BoardTable, useNarrow, type Column } from "./ui";
 
 /** How long a row that just changed stays marked, in milliseconds. */
@@ -26,22 +27,6 @@ type Props = {
   currencySymbol: string;
   adminUrl: string;
 };
-
-/** An amount in the browser's locale, or symbol plus two decimals when the currency is unknown. */
-function formatMoney(
-  amount: number,
-  currency: string,
-  fallbackSymbol: string,
-): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-    }).format(amount);
-  } catch {
-    return `${fallbackSymbol}${amount.toFixed(2)}`;
-  }
-}
 
 /**
  * When the order was placed: the time today, the date and time otherwise
@@ -139,7 +124,7 @@ export function LiveOrders({
         narrow: { width: "6em", align: "end" },
         render: (row) => (
           <span className="shopsocket-order__total">
-            {formatMoney(row.total, row.currency, currencySymbol)}
+            {price(row.total, row.currency, currencySymbol)}
           </span>
         ),
       },
@@ -180,7 +165,7 @@ export function LiveOrders({
         if (url) window.location.assign(url);
       }}
       empty={__(
-        "No orders yet. New orders appear here the moment they are placed.",
+        "No recent orders. New orders appear here the moment they are placed.",
         "shopsocket",
       )}
       noMatch={sprintf(

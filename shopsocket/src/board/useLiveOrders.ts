@@ -3,7 +3,13 @@
  * woo.order.* events from window.WPS. Newest first; a row moves to the top
  * when it changes so a busy board always shows the latest activity.
  */
-import { useCallback, useEffect, useRef, useState } from "@wordpress/element";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "@wordpress/element";
 
 /**
  * An order on the board; `updatedAt` is 0 for the server-rendered rows and drives the "fresh" flash.
@@ -13,6 +19,9 @@ import { useCallback, useEffect, useRef, useState } from "@wordpress/element";
 export type OrderRow = WooOrderEvent & { updatedAt: number };
 
 const MAX_ROWS = 100;
+
+/** How often the orders' window is read again, in milliseconds. */
+const WINDOW_TICK_MS = 60_000;
 
 /** Put the event's order at the top, replacing its existing row, capped at MAX_ROWS. */
 function upsert(rows: OrderRow[], event: WooOrderEvent): OrderRow[] {
@@ -55,16 +64,17 @@ function missed(
 type Channels = ShopSocketBoardConfig["channels"];
 
 /**
- * Order rows kept current by `woo.order.*` events on the staff feed, and
- * `reconcile` to merge in what a refresh found; `onNewOrder` fires for each
- * order created, heard live or recovered.
+ * The orders placed in the last `hours`, kept current by `woo.order.*` events on the staff feed, and
+ * `reconcile` to merge in what a refresh found; `onNewOrder` fires for each order created, heard live or recovered.
  *
  * @since 0.1.1
+ * @since 0.8.0 Takes `hours` and returns only the orders placed within them.
  */
 export function useLiveOrders(
   initial: WooOrderEvent[],
   onNewOrder: (order: WooOrderEvent) => void,
   channels: Channels,
+  hours: number,
 ) {
   const [rows, setRows] = useState<OrderRow[]>(() =>
     initial.map((o) => ({ ...o, updatedAt: 0 })),
@@ -112,47 +122,86 @@ export function useLiveOrders(
     return () => offs.forEach((off) => off());
   }, [onNewOrder, channels.orders]);
 
-  return { rows, reconcile };
+  /* An order leaves the board once it is older than the window, whatever happens to it later. */
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), WINDOW_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+  const recent = useMemo(() => {
+    const floor = now - hours * 3_600_000;
+    return rows.filter(
+      (row) => !(row.created_at && Date.parse(row.created_at) < floor),
+    );
+  }, [rows, now, hours]);
+
+  return { rows: recent, reconcile };
 }
 
 /**
- * Low-stock and out-of-stock products, most recent first, deduplicated per product/variation.
+ * An alert on the board: a new order, a product low on or out of stock, or a shopper a moment asked staff to look at.
  *
- * @since 0.1.1
+ * @since 0.8.0
  */
-export function useStockAlerts(channels: Channels) {
-  const [alerts, setAlerts] = useState<
-    Array<WooStockEvent & { kind: "low" | "out" }>
-  >([]);
+export type BoardAlert =
+  | { id: string; type: "order"; event: WooOrderEvent }
+  | {
+      id: string;
+      type: "stock";
+      event: WooStockEvent & { kind: "low" | "out" };
+    }
+  | { id: string; type: "staff"; event: WooAlertEvent };
+
+/** The alerts of each type the board holds at most. */
+const ALERT_CAPS = { order: 10, stock: 20, staff: 10 } as const;
+
+/** The id a product's stock alert goes by. */
+const stockId = (event: WooStockEvent) =>
+  `stock:${event.product_id}-${event.variation_id}`;
+
+/** `alerts` with `alert` on top in place of the one of its id, its type kept within its cap. */
+function put(alerts: BoardAlert[], alert: BoardAlert): BoardAlert[] {
+  const rest = alerts.filter((a) => a.id !== alert.id);
+  const kept = rest
+    .filter((a) => a.type === alert.type)
+    .slice(0, ALERT_CAPS[alert.type] - 1);
+  return [
+    alert,
+    ...rest.filter((a) => a.type !== alert.type || kept.includes(a)),
+  ];
+}
+
+/**
+ * The board's alerts, newest first and one per order, product or shopper: an order handed to
+ * `orderPlaced`, stock running low or out (a restock clears it) and the Alert staff moment action's,
+ * each dismissed by its id until its next event.
+ *
+ * @since 0.8.0
+ */
+export function useBoardAlerts(channels: Channels) {
+  const [alerts, setAlerts] = useState<BoardAlert[]>([]);
 
   useEffect(() => {
     const wps = window.WPS;
     if (!wps) return undefined;
-    // A handler that files the event as an alert of `kind`, replacing any for the same product.
-    const add =
+    // A handler that files the event as a stock alert of `kind`.
+    const stock =
       (kind: "low" | "out") =>
       (data: Record<string, unknown>, channel: string) => {
         if (!wps.onChannel(channel, channels.orders)) return;
         const event = data as unknown as WooStockEvent;
         setAlerts((current) =>
-          [
-            { ...event, kind },
-            ...current.filter(
-              (a) =>
-                !(
-                  a.product_id === event.product_id &&
-                  a.variation_id === event.variation_id
-                ),
-            ),
-          ].slice(0, 20),
+          put(current, {
+            id: stockId(event),
+            type: "stock",
+            event: { ...event, kind },
+          }),
         );
       };
     const offs = [
-      wps.on("woo.stock.low", add("low")),
-      wps.on("woo.stock.out", add("out")),
-    ];
-    // A restock clears the alert: stock changes are public events staff also receive.
-    offs.push(
+      wps.on("woo.stock.low", stock("low")),
+      wps.on("woo.stock.out", stock("out")),
+      // A restock clears the alert: stock changes are public events staff also receive.
       wps.on("woo.stock.changed", (data, channel) => {
         if (!wps.onChannel(channel, channels.stock)) return;
         const event = data as unknown as WooStockEvent;
@@ -161,46 +210,37 @@ export function useStockAlerts(channels: Channels) {
           (event.stock_quantity ?? 0) > 0
         ) {
           setAlerts((current) =>
-            current.filter(
-              (a) =>
-                !(
-                  a.product_id === event.product_id &&
-                  a.variation_id === event.variation_id
-                ),
-            ),
+            current.filter((a) => a.id !== stockId(event)),
           );
         }
       }),
-    );
+      // Published by PHP on the orders feed, which only PHP writes.
+      wps.on("woo.alert", (data, channel) => {
+        if (!wps.onChannel(channel, channels.orders)) return;
+        const event = data as unknown as WooAlertEvent;
+        setAlerts((current) =>
+          put(current, { id: `staff:${event.visitor}`, type: "staff", event }),
+        );
+      }),
+    ];
     return () => offs.forEach((off) => off());
   }, [channels.orders, channels.stock]);
 
-  return alerts;
-}
-
-/**
- * Alerts the Alert staff rule action raised: published by PHP on the orders
- * feed (which only PHP writes), newest first, at most ten, each dismissible.
- *
- * @since 0.8.0
- */
-export function useStaffAlerts(channels: Channels) {
-  const [alerts, setAlerts] = useState<WooAlertEvent[]>([]);
-  useEffect(() => {
-    const wps = window.WPS;
-    if (!wps) return undefined;
-    return wps.on("woo.alert", (data, channel) => {
-      if (!wps.onChannel(channel, channels.orders)) return;
-      const event = data as unknown as WooAlertEvent;
+  const dismiss = useCallback(
+    (id: string) =>
+      setAlerts((current) => current.filter((a) => a.id !== id)),
+    [],
+  );
+  const orderPlaced = useCallback(
+    (order: WooOrderEvent) =>
       setAlerts((current) =>
-        [event, ...current.filter((a) => a.visitor !== event.visitor)].slice(
-          0,
-          10,
-        ),
-      );
-    });
-  }, [channels.orders]);
-  const dismiss = (visitor: string) =>
-    setAlerts((current) => current.filter((a) => a.visitor !== visitor));
-  return { alerts, dismiss };
+        put(current, {
+          id: `order:${order.order_id}`,
+          type: "order",
+          event: order,
+        }),
+      ),
+    [],
+  );
+  return { alerts, dismiss, orderPlaced };
 }

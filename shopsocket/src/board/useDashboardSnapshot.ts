@@ -24,9 +24,17 @@ const PRESENCE_EVENT = "wps.presence";
  */
 const LEAVE_GRACE_MS = 6_000;
 
+/** An hour, in milliseconds. */
+const HOUR_MS = 3_600_000;
+
 type Config = Pick<
   ShopSocketBoardConfig,
-  "dashboardUrl" | "nonce" | "snapshot" | "channels"
+  | "dashboardUrl"
+  | "nonce"
+  | "snapshot"
+  | "channels"
+  | "boardHours"
+  | "abandonedHours"
 >;
 
 /*
@@ -108,15 +116,14 @@ function byVisitor(
 }
 
 /*
- * Cross the cart rows with presence into three segments: live (a visible tab),
- * away (present, every tab hidden), abandoned (gone). Live carts per product
- * count the first two, since the shopper is still on the site.
+ * Cross the cart rows with presence into the carts of connected shoppers:
+ * live (a visible tab) and away (every tab hidden).
  */
 function splitCarts(
   rows: WooCartRow[],
   present: Set<string>,
   awayIds: Set<string>,
-): Pick<WooDashboardSnapshot, "carts" | "liveProducts"> {
+): Pick<WooDashboardSnapshot, "carts"> {
   const live = {
     shoppers: 0,
     products: new Set<number>(),
@@ -129,28 +136,13 @@ function splitCarts(
     revenue: 0,
     currency: "",
   };
-  const abandoned = {
-    shoppers: 0,
-    products: new Set<number>(),
-    revenue: 0,
-    currency: "",
-  };
-  const liveCounts = new Map<number, { carts: number; units: number }>();
   for (const row of rows) {
-    const isLive = present.has(row.id);
-    const seg = isLive ? (awayIds.has(row.id) ? away : live) : abandoned;
+    if (!present.has(row.id)) continue;
+    const seg = awayIds.has(row.id) ? away : live;
     seg.shoppers += 1;
     seg.revenue += row.value;
     seg.currency = seg.currency || row.currency;
-    row.products.forEach((id) => {
-      seg.products.add(id);
-      if (isLive) {
-        const count = liveCounts.get(id) ?? { carts: 0, units: 0 };
-        count.carts += 1;
-        count.units += Math.max(1, Number(row.quantities?.[id]) || 1);
-        liveCounts.set(id, count);
-      }
-    });
+    row.products.forEach((id) => seg.products.add(id));
   }
   // Close a segment: distinct products, revenue rounded to cents.
   const finish = (s: typeof live): WooCartSegment => ({
@@ -163,25 +155,91 @@ function splitCarts(
     carts: {
       live: finish(live),
       away: finish(away),
-      abandoned: finish(abandoned),
     },
-    liveProducts: [...liveCounts].map(([id, count]) => ({ id, ...count })),
   };
 }
 
 /*
- * The left carts the panel shows: the shopper is not present (a present one
- * is back, and a live or away cart again) and the leave is older than the
- * grace, so a navigation never flashes a cart through the panel.
+ * The left carts the board lists: the shopper is not present (a present one is back, and a live or
+ * away cart again), the leave is older than the grace, so a navigation never flashes a cart through
+ * the list, and no older than the time frame.
  */
 function recentlyAbandoned(
   rows: WooAbandonedRow[],
   present: Set<string>,
   now: number,
+  windowMs: number,
 ): WooAbandonedRow[] {
-  return rows.filter(
-    (row) =>
-      !present.has(row.id) && now - Date.parse(row.left_at) >= LEAVE_GRACE_MS,
+  return rows.filter((row) => {
+    const ago = now - Date.parse(row.left_at);
+    return !present.has(row.id) && ago >= LEAVE_GRACE_MS && ago < windowMs;
+  });
+}
+
+/** The carts among `rows` not ordered since they were left: how many, their distinct products and what they are worth. */
+function unordered(rows: WooAbandonedRow[]): WooCartSegment {
+  const open = rows.filter((row) => !row.order_id);
+  return {
+    shoppers: open.length,
+    products: new Set(open.flatMap((row) => row.products)).size,
+    revenue: open.reduce((sum, row) => sum + row.value, 0),
+    currency: open[0]?.currency ?? "",
+  };
+}
+
+/** The carts the server counted beyond the rows it listed whose shopper is present: how many, and what they were worth. */
+function backBeyond(
+  listed: WooAbandonedRow[],
+  returning: WooAbandonedReturning,
+  present: Set<string>,
+  now: number,
+  windowMs: number,
+): { carts: number; value: number } {
+  const rows = new Set(listed.map((row) => row.id));
+  const back = { carts: 0, value: 0 };
+  present.forEach((id) => {
+    const cart = returning[id];
+    if (!cart || rows.has(id) || now - Date.parse(cart.left_at) >= windowMs)
+      return;
+    back.carts += 1;
+    back.value += cart.value;
+  });
+  return back;
+}
+
+/*
+ * The carts left behind: those shown, plus what the server counted beyond the rows it listed, less
+ * those of them whose shopper is `back`. A listed row that is not shown, its shopper back or its
+ * leave within the grace, is not counted.
+ */
+function leftBehind(
+  shown: WooAbandonedRow[],
+  listed: WooAbandonedRow[],
+  total: WooAbandonedTotals[string] | undefined,
+  back: { carts: number; value: number },
+): WooCartSegment {
+  const seen = unordered(shown);
+  const all = unordered(listed);
+  const beyond = Math.max(0, (total?.carts ?? 0) - all.shoppers - back.carts);
+  const worth =
+    seen.revenue +
+    (beyond ? Math.max(0, (total?.value ?? 0) - all.revenue - back.value) : 0);
+  return {
+    shoppers: seen.shoppers + beyond,
+    products: beyond ? (total?.products ?? seen.products) : seen.products,
+    revenue: Math.round(worth * 100) / 100,
+    currency: seen.currency || total?.currency || "",
+  };
+}
+
+/** The rows held with a relay frame's rows over them: a frame names the carts left in the last `boardHours` only. */
+function withFrame(
+  held: WooAbandonedRow[],
+  frame: WooAbandonedRow[],
+): WooAbandonedRow[] {
+  const named = new Set(frame.map((row) => row.id));
+  return [...frame, ...held.filter((row) => !named.has(row.id))].sort(
+    (a, b) => Date.parse(b.left_at) - Date.parse(a.left_at),
   );
 }
 
@@ -193,9 +251,10 @@ type OnOrders = (
 ) => void;
 
 /**
- * The board's tile figures, and whether the last fetch of them failed.
+ * The board's tile figures, whether the last fetch of them failed, and the abandoned carts' time frame with its setter.
  *
  * @since 0.1.1
+ * @since 0.8.0 Returns `hours` and `setHours`.
  *
  * @param config - The board configuration.
  * @param onOrders - A callback to call with the orders that changed since the last refresh.
@@ -207,26 +266,50 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
   const [abandoned, setAbandoned] = useState<WooAbandonedRow[]>(
     config.snapshot.abandoned ?? [],
   );
+  const [totals, setTotals] = useState<WooAbandonedTotals>(
+    config.snapshot.abandoned_totals ?? {},
+  );
+  const [returning, setReturning] = useState<WooAbandonedReturning>(
+    config.snapshot.abandoned_returning ?? {},
+  );
+  const [abandonment, setAbandonment] = useState<WooAbandonment | null>(
+    config.snapshot.abandonment ?? null,
+  );
+  /* The time frame chosen, and the one the rows held are of: they differ while a choice is being fetched. */
+  const [hours, setHours] = useState(config.boardHours);
+  const [heldHours, setHeldHours] = useState(config.boardHours);
+  const hoursRef = useRef(hours);
+  hoursRef.current = hours;
+  const heldHoursRef = useRef(heldHours);
+  heldHoursRef.current = heldHours;
+  const scheduleRef = useRef<(ms: number) => void>();
+  useEffect(() => {
+    if (hours !== heldHoursRef.current) scheduleRef.current?.(0);
+  }, [hours]);
+  const windowMs = heldHours * HOUR_MS;
   const [awayUsers, setAwayUsers] = useState(0);
   const [awayIds, setAwayIds] = useState<Set<string>>(() => new Set());
   const [roster, setRoster] = useState<Roster[]>([]);
-  // Re-evaluated when the youngest leave crosses the grace, so a row appears without a refresh.
+  // Re-evaluated when the next leave crosses the grace or a time frame, so a row comes and goes without a refresh.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const pending = abandoned
-      .map((row) => Date.parse(row.left_at) + LEAVE_GRACE_MS - Date.now())
+    const waits = abandoned
+      .flatMap((row) => {
+        const left = Date.parse(row.left_at) - Date.now();
+        return [
+          left + LEAVE_GRACE_MS,
+          ...config.abandonedHours.map((frame) => left + frame * HOUR_MS),
+        ];
+      })
       .filter((ms) => ms > 0);
-    if (pending.length === 0) return undefined;
-    const timer = setTimeout(
-      () => setNow(Date.now()),
-      Math.min(...pending) + 50,
-    );
+    if (waits.length === 0) return undefined;
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(...waits) + 50);
     return () => clearTimeout(timer);
-  }, [abandoned, now]);
+  }, [abandoned, now, config.abandonedHours]);
   const [online, setOnline] = useState<WooDashboardData["online"]>(
     config.snapshot.online,
   );
-  const [strip, setStrip] = useState<WooWeekStrip | null>(
+  const [strip, setStrip] = useState<WooDayStrip | null>(
     config.snapshot.strip ?? null,
   );
   const [present, setPresent] = useState<Set<string>>(() => new Set());
@@ -266,22 +349,32 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
      */
     let since = config.snapshot.as_of;
 
-    // Fetch the cart rows, connection count and changed orders, one request at a time.
-    const refresh = async () => {
-      if (inflight) return;
+    // Fetch the cart rows, connection count and changed orders, one request at a time; true when the time frame changed meanwhile.
+    const refresh = async (): Promise<boolean> => {
+      if (inflight) return false;
       inflight = true;
+      const frame = hoursRef.current;
       try {
         const asked = since;
         const startedAt = Date.now();
         const url = new URL(config.dashboardUrl, window.location.href);
         if (asked !== undefined) url.searchParams.set("since", String(asked));
+        url.searchParams.set("hours", String(frame));
         const fresh = await apiFetch<WooDashboardData>({
           url: url.toString(),
           headers: { "X-WP-Nonce": config.nonce },
         });
         if (alive) {
           setRows(fresh.carts);
-          if (fresh.abandoned) setAbandoned(fresh.abandoned);
+          if (fresh.abandoned_totals) setTotals(fresh.abandoned_totals);
+          if (fresh.abandoned_returning)
+            setReturning(fresh.abandoned_returning);
+          if (frame === hoursRef.current) {
+            if (fresh.abandoned) setAbandoned(fresh.abandoned);
+            if (fresh.abandonment !== undefined)
+              setAbandonment(fresh.abandonment);
+            setHeldHours(frame);
+          }
           if (fresh.strip !== undefined) setStrip(fresh.strip);
           if (fresh.online) showOnline(fresh.online);
           else setOnline(fresh.online);
@@ -295,15 +388,17 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
       } finally {
         inflight = false;
       }
+      return frame !== hoursRef.current;
     };
 
-    // Refresh after `ms`, then keep polling; a new call replaces the pending one.
+    // Refresh after `ms`, then keep polling, at once when the time frame changed meanwhile; a new call replaces the pending one.
     const schedule = (ms: number) => {
       clearTimeout(timer);
       timer = setTimeout(() => {
-        refresh().then(() => alive && schedule(POLL_MS));
+        refresh().then((again) => alive && schedule(again ? 0 : POLL_MS));
       }, ms);
     };
+    scheduleRef.current = schedule;
 
     schedule(POLL_MS);
 
@@ -437,12 +532,24 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
           const payload = data as {
             carts?: WooCartRow[];
             abandoned?: WooAbandonedRow[];
+            abandoned_totals?: WooAbandonedTotals;
+            abandoned_returning?: WooAbandonedReturning;
           };
           if (Array.isArray(payload.carts)) {
             setRows(payload.carts);
             setStale(false);
           }
-          if (Array.isArray(payload.abandoned)) setAbandoned(payload.abandoned);
+          if (payload.abandoned_totals) setTotals(payload.abandoned_totals);
+          if (payload.abandoned_returning)
+            setReturning(payload.abandoned_returning);
+          const frame = payload.abandoned;
+          if (Array.isArray(frame)) {
+            setAbandoned((held) =>
+              heldHoursRef.current === config.boardHours
+                ? frame
+                : withFrame(held, frame),
+            );
+          }
         }),
       );
       offs.push(
@@ -481,6 +588,7 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
     config.nonce,
     config.channels,
     config.snapshot.as_of,
+    config.boardHours,
   ]);
 
   /* The roster joined to the cart rows by cart id, kept while neither changes. */
@@ -494,12 +602,38 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
     [roster, byCart],
   );
   const snapshot = useMemo<WooDashboardSnapshot>(() => {
+    const shown = recentlyAbandoned(abandoned, present, now, windowMs);
+    const recovered = abandoned.filter(
+      (row) => row.order_id && now - Date.parse(row.left_at) < windowMs,
+    );
     return {
       ...splitCarts(rows, present, awayIds),
       usersOnline,
       staff: staffShare,
       awayUsers,
-      abandoned: recentlyAbandoned(abandoned, present, now),
+      abandonedHours: heldHours,
+      abandoned: shown.filter((row) => !row.order_id),
+      recovered,
+      recoveredCount: Math.max(
+        recovered.length,
+        totals[String(heldHours)]?.recovered ?? 0,
+      ),
+      leftBehind: config.abandonedHours.map((frame) => {
+        const ms = frame * HOUR_MS;
+        const listed = abandoned.filter(
+          (row) => now - Date.parse(row.left_at) < ms,
+        );
+        return {
+          hours: frame,
+          ...leftBehind(
+            recentlyAbandoned(listed, present, now, ms),
+            listed,
+            totals[String(frame)],
+            backBeyond(listed, returning, present, now, ms),
+          ),
+        };
+      }),
+      abandonment,
       online,
       strip,
       shoppers,
@@ -512,11 +646,17 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
     staffShare,
     awayUsers,
     abandoned,
+    abandonment,
+    totals,
+    returning,
+    config.abandonedHours,
+    heldHours,
     now,
+    windowMs,
     online,
     strip,
     shoppers,
   ]);
 
-  return { snapshot, stale };
+  return { snapshot, stale, hours, setHours };
 }

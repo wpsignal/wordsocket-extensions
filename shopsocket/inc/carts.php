@@ -177,16 +177,19 @@ function count_in_carts( int $product_id, string $exclude_ref = '' ): int {
 }
 
 /**
- * Publish the open and recently abandoned rows to staff when they differ from the last publish.
+ * Publish the open rows, the carts left behind, their full count and those whose shopper may be back to staff when they differ from the last publish.
  *
  * @since 0.4.0
  *
  * @return void
  */
 function publish_carts_changed(): void {
+	$count   = abandoned_count();
 	$payload = array(
-		'carts'     => cart_rows(),
-		'abandoned' => abandoned_rows(),
+		'carts'               => cart_rows(),
+		'abandoned'           => abandoned_rows(),
+		'abandoned_totals'    => $count['totals'],
+		'abandoned_returning' => (object) $count['returning'],
 	);
 	$hash    = md5( (string) wp_json_encode( $payload ) );
 	if ( recall( CARTS_PUB_HASH ) === $hash ) {

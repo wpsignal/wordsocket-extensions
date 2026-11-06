@@ -10,15 +10,32 @@ import {
   useRef,
   useState,
 } from "@wordpress/element";
-import { Button, Notice, ToggleControl } from "@wordpress/components";
-import { Badge, Link, Stack, Tabs, Text } from "@wordpress/ui";
-import { useLiveOrders, useStaffAlerts, useStockAlerts } from "./useLiveOrders";
+import { Notice, ToggleControl } from "@wordpress/components";
+import {
+  fullscreen as fullscreenIcon,
+  fullscreenExit,
+  bellUnread,
+  bell,
+} from "@wordpress/icons";
+import {
+  Badge,
+  Link,
+  Stack,
+  Tabs,
+  Text,
+  Button,
+  IconButton,
+  Icon,
+} from "@wordpress/ui";
+import { useBoardAlerts, useLiveOrders } from "./useLiveOrders";
 import { useConnectionState } from "./useConnectionState";
 import { useDashboardSnapshot } from "./useDashboardSnapshot";
-import { productLabel, useProductNames } from "./useProductNames";
+import { LIVE_PRODUCTS, useProductNames } from "./useProductNames";
 import { needsLookup, pageLabel, pageUrl, usePageNames } from "./usePageNames";
-import { money } from "./format";
-import { WeekStrip } from "./WeekStrip";
+import { money, price } from "./format";
+import { DayStrip } from "./DayStrip";
+import { AbandonedCarts } from "./AbandonedCarts";
+import { TopNow } from "./TopNow";
 import { adminUrlOrNull, siteUrlOrNull } from "./trust";
 import { LiveOrders } from "./LiveOrders";
 import { LiveJourneys, type RouteNames } from "./LiveJourneys";
@@ -30,7 +47,6 @@ import {
   Section,
   Stat,
   StatGroup,
-  productColumn,
   shopperColumn,
   type Column,
 } from "./ui";
@@ -48,6 +64,8 @@ const config: ShopSocketBoardConfig = window.shopSocket ?? {
   journeysUrl: "",
   nonce: "",
   orders: [],
+  boardHours: 24,
+  abandonedHours: [24],
   statuses: [],
   snapshot: { carts: [], abandoned: [], online: null },
   currencySymbol: "",
@@ -55,6 +73,17 @@ const config: ShopSocketBoardConfig = window.shopSocket ?? {
 };
 
 const SOUND_KEY = "shopsocket-sound";
+
+const ALERTS_KEY = "shopsocket-alerts-min";
+
+/** The alerts are listed until this browser minimizes them. */
+function readMinimized(): boolean {
+  try {
+    return window.localStorage.getItem(ALERTS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 /** The chime is on until this browser turns it off. */
 function readSound(): boolean {
@@ -67,7 +96,7 @@ function readSound(): boolean {
 }
 
 /**
- * The board: header controls, tiles, the stock strip, and the live orders table.
+ * The board: header controls, the alerts (listed, or minimized to their count), the figures, and the live orders table.
  *
  * @since 0.1.1
  */
@@ -77,30 +106,42 @@ export function Dashboard() {
   const soundRef = useRef(sound);
   soundRef.current = sound;
 
-  const onNewOrder = useCallback(() => {
-    if (soundRef.current) playChime();
-  }, []);
+  const [minimized, setMinimized] = useState(readMinimized);
+  const { alerts, dismiss, orderPlaced } = useBoardAlerts(config.channels);
+  const onNewOrder = useCallback(
+    (order: WooOrderEvent) => {
+      if (soundRef.current) playChime();
+      orderPlaced(order);
+    },
+    [orderPlaced],
+  );
 
   const { rows, reconcile } = useLiveOrders(
     config.orders,
     onNewOrder,
     config.channels,
+    config.boardHours,
   );
-  const alerts = useStockAlerts(config.channels);
-  const staffAlerts = useStaffAlerts(config.channels);
-  /* One lookup for every alert's products, rather than a request per notice. */
+  /* One lookup for every staff alert's products, rather than a request per notice. */
   const alertProducts = useProductNames(
     useMemo(
       () =>
         Array.from(
-          new Set(staffAlerts.alerts.flatMap((alert) => alert.products)),
+          new Set(
+            alerts.flatMap((alert) =>
+              alert.type === "staff" ? alert.event.products : [],
+            ),
+          ),
         ).slice(0, LIVE_PRODUCTS),
-      [staffAlerts.alerts],
+      [alerts],
     ),
     config,
   );
   const connection = useConnectionState();
-  const { snapshot, stale } = useDashboardSnapshot(config, reconcile);
+  const { snapshot, stale, hours, setHours } = useDashboardSnapshot(
+    config,
+    reconcile,
+  );
 
   useEffect(() => {
     try {
@@ -109,6 +150,14 @@ export function Dashboard() {
       // Storage unavailable: the toggle still works for this page.
     }
   }, [sound]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(ALERTS_KEY, minimized ? "1" : "0");
+    } catch {
+      // Storage unavailable: the alerts still minimize for this page.
+    }
+  }, [minimized]);
 
   useEffect(() => {
     document.body.classList.toggle("shopsocket-fullscreen", fullscreen);
@@ -126,56 +175,90 @@ export function Dashboard() {
             checked={sound}
             onChange={setSound}
           />
-          <Button variant="secondary" onClick={() => setFullscreen((f) => !f)}>
-            {fullscreen
-              ? __("Exit full screen", "shopsocket")
-              : __("Full screen", "shopsocket")}
+          <Button
+            variant="minimal"
+            size="small"
+            className="shopsocket-board__alerts-toggle"
+            aria-expanded={!minimized}
+            disabled={!alerts.length}
+            aria-label={sprintf(
+              minimized
+                ? /* translators: %d: alerts */
+                  _n(
+                    "Show %d alert",
+                    "Show %d alerts",
+                    alerts.length,
+                    "shopsocket",
+                  )
+                : /* translators: %d: alerts */
+                  _n(
+                    "Hide %d alert",
+                    "Hide %d alerts",
+                    alerts.length,
+                    "shopsocket",
+                  ),
+              alerts.length,
+            )}
+            onClick={() => setMinimized((m) => !m)}
+          >
+            <Icon icon={alerts.length ? bellUnread : bell} />{" "}
+            {minimized && alerts.length ? `(${alerts.length})` : ""}
           </Button>
+          <IconButton
+            variant="minimal"
+            size="small"
+            icon={fullscreen ? fullscreenExit : fullscreenIcon}
+            onClick={() => setFullscreen((f) => !f)}
+            label={
+              fullscreen
+                ? __("Exit full screen", "shopsocket")
+                : __("Full screen", "shopsocket")
+            }
+          />
         </div>
       </div>
 
-      {staffAlerts.alerts.map((alert) => (
-        <AlertNotice
-          key={alert.visitor}
-          alert={alert}
-          name={(id) => alertProducts(id)?.name ?? `#${id}`}
-          onDismiss={() => staffAlerts.dismiss(alert.visitor)}
-        />
-      ))}
-      {alerts.length > 0 && (
-        <Notice status="warning" className="shopsocket-board__stock">
-          <strong>{__("Stock", "shopsocket")}: </strong>
-          {alerts.map((a) => (
-            <a
-              href={`${config.adminUrl}/post.php?post=${a.product_id}&action=edit`}
-              target="_blank"
-              key={`${a.product_id}-${a.variation_id}`}
-              className={`shopsocket-stock-alert is-${a.kind}`}
-            >
-              {a.kind === "out"
-                ? sprintf(
-                    /* translators: %s: product name */ __(
-                      "%s is out of stock",
-                      "shopsocket",
-                    ),
-                    a.name,
-                  )
-                : sprintf(
-                    /* translators: 1: product name, 2: quantity */
-                    __("%1$s is low (%2$d left)", "shopsocket"),
-                    a.name,
-                    a.stock_quantity ?? 0,
-                  )}
-            </a>
-          ))}
-        </Notice>
-      )}
+      <Stack
+        direction="column"
+        gap="sm"
+        className="shopsocket-board__alerts"
+        style={{ display: alerts.length > 0 && !minimized ? "flex" : "none" }}
+      >
+        {!minimized &&
+          alerts.map((alert) =>
+            alert.type === "staff" ? (
+              <AlertNotice
+                key={alert.id}
+                alert={alert.event}
+                name={(id) => alertProducts(id)?.name ?? `#${id}`}
+                onDismiss={() => dismiss(alert.id)}
+              />
+            ) : alert.type === "order" ? (
+              <OrderNotice
+                key={alert.id}
+                order={
+                  rows.find((row) => row.order_id === alert.event.order_id) ??
+                  alert.event
+                }
+                onDismiss={() => dismiss(alert.id)}
+              />
+            ) : (
+              <StockNotice
+                key={alert.id}
+                alert={alert.event}
+                onDismiss={() => dismiss(alert.id)}
+              />
+            ),
+          )}
+      </Stack>
 
       <RightNow snapshot={snapshot} stale={stale} />
-      <WeekStrip strip={snapshot.strip} config={config} />
-      <AbandonedPanel
-        rows={snapshot.abandoned}
-        currencySymbol={config.currencySymbol}
+      <DayStrip strip={snapshot.strip} config={config} />
+      <AbandonedCarts
+        snapshot={snapshot}
+        config={config}
+        hours={hours}
+        onHours={setHours}
       />
 
       <Section
@@ -194,9 +277,13 @@ export function Dashboard() {
             )}
           </Badge>
         }
-        lede={__(
-          "New orders appear here the moment they are placed.",
-          "shopsocket",
+        description={sprintf(
+          /* translators: %d: hours */
+          __(
+            "Orders placed in the last %d hours. New ones appear here the moment they are placed.",
+            "shopsocket",
+          ),
+          config.boardHours,
         )}
       >
         <LiveOrders
@@ -210,9 +297,7 @@ export function Dashboard() {
   );
 }
 
-type CartSegment = WooDashboardSnapshot["carts"]["live"];
-
-/** "Right now": the shoppers on the site and the open carts, each split by where the shopper is, then who they are, their routes and the products in live carts. */
+/** "Right now": the shoppers on the site split by where they are, what their carts are worth, the pages and products they are on most, then who they are and their routes. */
 function RightNow({
   snapshot,
   stale,
@@ -245,33 +330,15 @@ function RightNow({
       ? ", " + sprintf(__("%d of them staff", "shopsocket"), count)
       : "";
   const looking = Math.max(0, usersOnline - awayUsers);
-  /* Every cart not yet ordered, whoever holds it: its count and what the three kinds are worth together. */
-  const openCarts =
-    carts.live.shoppers + carts.away.shoppers + carts.abandoned.shoppers;
-  const openValue =
-    carts.live.revenue + carts.away.revenue + carts.abandoned.revenue;
-  const openCurrency =
-    carts.live.currency || carts.away.currency || carts.abandoned.currency;
-  const cartDetail = (segment: CartSegment) => (
-    <>
-      {sprintf(
-        /* translators: %d: products in those carts */
-        _n("%d product", "%d products", segment.products, "shopsocket"),
-        segment.products,
-      )}
-      {", "}
-      <span className="shopsocket-stat__money">
-        {segment.currency
-          ? money(segment.revenue, segment.currency)
-          : `${config.currencySymbol}0`}
-      </span>
-    </>
-  );
+  /* What the carts of the shoppers connected now hold between them. */
+  const heldCarts = carts.live.shoppers + carts.away.shoppers;
+  const heldValue = carts.live.revenue + carts.away.revenue;
+  const heldCurrency = carts.live.currency || carts.away.currency;
   return (
     <Section
       title={__("Right now", "shopsocket")}
       className={stale ? "is-stale" : undefined}
-      lede={__(
+      description={__(
         "Who is in your store this minute and what their carts hold.",
         "shopsocket",
       )}
@@ -343,91 +410,23 @@ function RightNow({
                 : __("Browser tabs connected to your store", "shopsocket")
             }
           />
-        </StatGroup>
-        <StatGroup
-          name="carts"
-          summary={sprintf(
-            /* translators: 1: carts in use, 2: carts on a hidden tab, 3: carts left behind */
-            __(
-              "%1$d in use, %2$d on a hidden tab, %3$d left behind",
-              "shopsocket",
-            ),
-            carts.live.shoppers,
-            carts.away.shoppers,
-            carts.abandoned.shoppers,
-          )}
-          shares={[
-            {
-              name: "live",
-              size: carts.live.shoppers,
-              /* translators: %d: carts whose shopper has a tab in view */
-              title: sprintf(
-                __("In use: %d", "shopsocket"),
-                carts.live.shoppers,
-              ),
-            },
-            {
-              name: "away",
-              size: carts.away.shoppers,
-              /* translators: %d: carts whose shopper has every tab hidden */
-              title: sprintf(
-                __("On a hidden tab: %d", "shopsocket"),
-                carts.away.shoppers,
-              ),
-            },
-            {
-              name: "abandoned",
-              size: carts.abandoned.shoppers,
-              /* translators: %d: carts whose shopper has left the site */
-              title: sprintf(
-                __("Left behind: %d", "shopsocket"),
-                carts.abandoned.shoppers,
-              ),
-            },
-          ]}
-          headline={
-            <Stat
-              name="open"
-              value={String(openCarts)}
-              label={__("Open carts", "shopsocket")}
-              detail={
-                <>
-                  {__("Not yet ordered, worth", "shopsocket")}{" "}
-                  <span className="shopsocket-stat__money">
-                    {openCurrency
-                      ? money(openValue, openCurrency)
-                      : `${config.currencySymbol}0`}
-                  </span>
-                </>
-              }
-            />
-          }
-        >
           <Stat
             compact
-            swatch
-            name="live"
-            value={String(carts.live.shoppers)}
-            label={__("In use", "shopsocket")}
-            detail={cartDetail(carts.live)}
-          />
-          <Stat
-            compact
-            swatch
-            name="away"
-            value={String(carts.away.shoppers)}
-            label={__("Tab hidden", "shopsocket")}
-            detail={cartDetail(carts.away)}
-          />
-          <Stat
-            compact
-            swatch
-            name="abandoned"
-            value={String(carts.abandoned.shoppers)}
-            label={__("Left behind", "shopsocket")}
-            detail={cartDetail(carts.abandoned)}
+            name="revenue"
+            value={
+              heldCurrency
+                ? money(heldValue, heldCurrency)
+                : `${config.currencySymbol}0`
+            }
+            label={__("Revenue in carts", "shopsocket")}
+            detail={sprintf(
+              /* translators: %d: carts held by shoppers on the site */
+              _n("%d cart held", "%d carts held", heldCarts, "shopsocket"),
+              heldCarts,
+            )}
           />
         </StatGroup>
+        <TopNow shoppers={shoppers} names={names} config={config} />
       </div>
       <Tabs.Root defaultValue="shoppers" className="shopsocket-tabs">
         <Tabs.List
@@ -452,10 +451,6 @@ function RightNow({
           </Stack>
         </Tabs.Panel>
       </Tabs.Root>
-      {/* <Text variant="heading-md" render={<h3 />} className="shopsocket-subhead">
-        {__("Products in carts right now", "shopsocket")}
-      </Text>
-      <LiveProductsPanel products={snapshot.liveProducts} /> */}
     </Section>
   );
 }
@@ -463,8 +458,12 @@ function RightNow({
 /** A shopper's visitor id as their row key. */
 const byVisitorId = (row: WooShopper) => row.v;
 
-/** Names and links for every page in the shoppers' routes. */
-interface ShopperNames extends RouteNames {
+/**
+ * Names and links for every page in the shoppers' routes.
+ *
+ * @since 0.8.0
+ */
+export interface ShopperNames extends RouteNames {
   url: (kind: string, id: number) => string | null;
 }
 
@@ -623,181 +622,69 @@ function ShoppersPanel({
   );
 }
 
-const LIVE_PRODUCTS = 100;
-
-/** A row's id as its table key. */
-const byId = (row: { id: number | string }) => String(row.id);
-
-/** Products in live carts, most held first, at most LIVE_PRODUCTS of them, each linking to its edit screen. */
-function LiveProductsPanel({
-  products,
+/** An order just placed, as the board holds it now: its number linked to its edit screen, who placed it, how many items and what it came to. */
+function OrderNotice({
+  order,
+  onDismiss,
 }: {
-  products: WooDashboardSnapshot["liveProducts"];
+  order: WooOrderEvent;
+  onDismiss: () => void;
 }) {
-  // Rank by live carts before asking for names, so the fetch stays bounded.
-  const top = useMemo(
-    () =>
-      [...products]
-        .sort((a, b) => b.carts - a.carts || b.units - a.units || a.id - b.id)
-        .slice(0, LIVE_PRODUCTS),
-    [products],
-  );
-  const ref = useProductNames(
-    useMemo(() => top.map((p) => p.id), [top]),
-    config,
-  );
-  const rows = useMemo(
-    () =>
-      [...top].sort((a, b) => {
-        if (a.carts !== b.carts) return b.carts - a.carts;
-        if (a.units !== b.units) return b.units - a.units;
-        const an = ref(a.id)?.name;
-        const bn = ref(b.id)?.name;
-        if (an && bn) return an.localeCompare(bn);
-        if (an || bn) return an ? -1 : 1;
-        return a.id - b.id;
-      }),
-    [top, ref],
-  );
-
-  const columns = useMemo<Column<(typeof rows)[number]>[]>(
-    () => [
-      productColumn(ref, config.adminUrl),
-      {
-        id: "carts",
-        label: __("Carts", "shopsocket"),
-        value: (row) => row.carts,
-        numeric: true,
-      },
-      {
-        id: "units",
-        label: __("Units", "shopsocket"),
-        value: (row) => row.units,
-        numeric: true,
-      },
-    ],
-    [ref],
+  const href = adminUrlOrNull(order.edit_url, config.adminUrl);
+  const total = price(order.total, order.currency, config.currencySymbol);
+  const items = sprintf(
+    /* translators: %d: items in the order */
+    _n("%d item", "%d items", order.item_count, "shopsocket"),
+    order.item_count,
   );
   return (
-    <BoardTable
-      className="shopsocket-live-products"
-      rows={rows}
-      rowId={byId}
-      empty={__(
-        "No shopper with a cart is on the site right now.",
-        "shopsocket",
-      )}
-      columns={columns}
-    />
-  );
-}
-
-/** When a cart was left, in the browser's locale, with the date only when it is not today. */
-function leftAt(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  const today = new Date().toDateString() === date.toDateString();
-  return new Intl.DateTimeFormat(
-    undefined,
-    today
-      ? { timeStyle: "short" }
-      : { dateStyle: "medium", timeStyle: "short" },
-  ).format(date);
-}
-
-/**
- * Carts whose shopper left and is not back, newest first: what they held, who
- * they are when logged in, the value, when, and the order when one followed. The historical record next to the live
- * split above; with history off it empties as sessions expire.
- */
-function AbandonedPanel({
-  rows,
-  currencySymbol,
-}: {
-  rows: WooAbandonedRow[];
-  currencySymbol: string;
-}) {
-  const ids = useMemo(
-    () =>
-      Array.from(new Set(rows.flatMap((r) => r.products))).slice(
-        0,
-        LIVE_PRODUCTS,
-      ),
-    [rows],
-  );
-  const ref = useProductNames(ids, config);
-  /* A guest who left may have a best guess waiting on the server. */
-  const unnamed = useMemo(
-    () =>
-      Array.from(
-        new Set(rows.filter((r) => !r.customer && r.v).map((r) => r.v ?? "")),
-      ),
-    [rows],
-  );
-  const guests = useGuestNames(unnamed, config);
-  const columns = useMemo<Column<WooAbandonedRow>[]>(() => {
-    const products = (row: WooAbandonedRow) =>
-      row.products
-        .map(
-          (id) =>
-            `${productLabel(ref(id), id)}${(row.quantities?.[id] ?? 1) > 1 ? ` \u00d7${row.quantities[id]}` : ""}`,
-        )
-        .join(", ");
-    return [
-      { id: "products", label: __("Cart", "shopsocket"), value: products },
-      shopperColumn<WooAbandonedRow>(
-        (row) => ({
-          v: row.v,
-          customer: row.customer,
-          customerUrl: row.customer_url,
-          guess: guests(row.v ?? ""),
-        }),
-        config.adminUrl,
-      ),
-      {
-        id: "value",
-        label: __("Value", "shopsocket"),
-        value: (row) => row.value,
-        render: (row) => money(row.value, row.currency || currencySymbol),
-        numeric: true,
-      },
-      {
-        id: "left",
-        label: __("Left", "shopsocket"),
-        value: (row) => row.left_at,
-        render: (row) => <span title={row.left_at}>{leftAt(row.left_at)}</span>,
-      },
-      {
-        id: "order",
-        label: __("Ordered later", "shopsocket"),
-        value: (row) => row.order_id ?? 0,
-        render: (row) => {
-          const href = row.order_url
-            ? adminUrlOrNull(row.order_url, config.adminUrl)
-            : null;
-          const label = row.order_id ? `#${row.order_id}` : "";
-          return href ? <Link href={href}>{label}</Link> : label;
-        },
-      },
-    ];
-  }, [ref, currencySymbol, guests]);
-  return (
-    <Section
-      title={__("Recently abandoned", "shopsocket")}
-      lede={__(
-        "Shoppers who left with something in their cart and have not come back, newest first.",
-        "shopsocket",
-      )}
+    <Notice
+      status="success"
+      className="shopsocket-board__order"
+      onRemove={onDismiss}
     >
-      <BoardTable
-        perPage={10}
-        className="shopsocket-abandoned"
-        rows={rows}
-        rowId={byId}
-        empty={__("No shopper has left a cart behind recently.", "shopsocket")}
-        columns={columns}
-      />
-    </Section>
+      <strong>{__("New order", "shopsocket")}: </strong>
+      {href ? <a href={href}>#{order.number}</a> : `#${order.number}`}{" "}
+      {[order.customer, items, total].filter(Boolean).join(", ")}
+    </Notice>
+  );
+}
+
+/** A product low on or out of stock, linked to its edit screen. */
+function StockNotice({
+  alert,
+  onDismiss,
+}: {
+  alert: WooStockEvent & { kind: "low" | "out" };
+  onDismiss: () => void;
+}) {
+  return (
+    <Notice
+      status="warning"
+      className="shopsocket-board__stock"
+      onRemove={onDismiss}
+    >
+      <strong>{__("Stock", "shopsocket")}: </strong>
+      <a
+        href={`${config.adminUrl}post.php?post=${alert.product_id}&action=edit`}
+        target="_blank"
+        rel="noreferrer"
+        className={`shopsocket-stock-alert is-${alert.kind}`}
+      >
+        {alert.kind === "out"
+          ? sprintf(
+              /* translators: %s: product name */
+              __("%s is out of stock", "shopsocket"),
+              alert.name,
+            )
+          : sprintf(
+              /* translators: 1: product name, 2: quantity */
+              __("%1$s is low (%2$d left)", "shopsocket"),
+              alert.name,
+              alert.stock_quantity ?? 0,
+            )}
+      </a>
+    </Notice>
   );
 }
 
@@ -860,26 +747,28 @@ function AlertNotice({
 function ConnectionBadge({ state }: { state: WPSConnectionState | null }) {
   if (!state) {
     return (
-      <span className="shopsocket-conn is-off">
+      <span className="shopsocket-connection-badge is-off">
         {__("Realtime client not loaded", "shopsocket")}
       </span>
     );
   }
   if (state.connected) {
     return (
-      <span className="shopsocket-conn is-on">{__("Live", "shopsocket")}</span>
+      <span className="shopsocket-connection-badge is-on">
+        {__("Live", "shopsocket")}
+      </span>
     );
   }
   if (state.error?.code === "authentication-failed") {
     return (
-      <span className="shopsocket-conn is-off">
+      <span className="shopsocket-connection-badge is-off">
         {__("Not delivering: reconnect WordSocket", "shopsocket")}
       </span>
     );
   }
   if (state.retryInMs) {
     return (
-      <span className="shopsocket-conn is-off">
+      <span className="shopsocket-connection-badge is-off">
         {sprintf(
           /* translators: %d: seconds */
           __("Reconnecting in %ds", "shopsocket"),
@@ -889,7 +778,7 @@ function ConnectionBadge({ state }: { state: WPSConnectionState | null }) {
     );
   }
   return (
-    <span className="shopsocket-conn is-off">
+    <span className="shopsocket-connection-badge is-off">
       {__("Connecting", "shopsocket")}
     </span>
   );

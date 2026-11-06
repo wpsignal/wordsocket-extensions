@@ -47,7 +47,7 @@ Each shopper feature can be switched off site-wide, per category, or per product
 
 *See which carts were left behind.* A cart turns abandoned the moment its shopper leaves, with the revenue still in it, so you know what walked away and when.
 
-*Spot what is about to sell.* The products sitting in live carts, most held first, with the number of carts and units for each, one click from the product's edit screen.
+*Spot what is about to sell.* The products sitting in the carts of shoppers on your site, most held first, with the number of carts holding each, one click from the product's edit screen.
 
 *Catch stock problems as they happen.* Low-stock and out-of-stock alerts reach the board at once, and the product page itself updates: the stock text changes and the add-to-cart button follows, with no reload. A shopper holding a product that sells out hears straight away, and their cart shows WooCommerce's own notice.
 
@@ -151,9 +151,13 @@ Anyone who can manage WooCommerce.
 = 0.8.0 =
 * New: the board's Right now card draws where each shopper came from: their route through your pages this visit, ending where they are now, with a hidden tab's route dotted and the page they are on pulsing.
 * A shopper with several tabs open is one row, every tab's page listed and a hidden tab's in a dashed border, and one shopper on the diagram with a route per tab, lit together when hovered.
-* The board's Right now figures are two cards, Shoppers on the site and Open carts, each with a bar showing how many are looking, on a hidden tab or gone.
-* The shoppers table and the routes diagram on the board are two tabs.
-* Recently abandoned names a guest the way the shoppers table does: by the email their browser remembers, once it matches a paid order.
+* The board's Right now figures are two cards: Shoppers on the site, with a bar showing how many are looking or on a hidden tab and what their carts are worth, and the top pages and top products in carts this minute.
+* The shoppers table and the routes diagram on the board are two tabs: Shoppers and Journeys.
+* New: the board's Abandoned carts card keeps everything about a cart left behind in one place: how many were left and not ordered since and what they are worth, where shoppers leave from, the carts left with the order when one followed, and the products left most often. The figure is shown for the last 24 hours, 48 hours and 7 days side by side, and choosing one sets the time frame for the rest: the carts still left, the carts an order recovered, the products left most often and the pages shoppers most often left from, each under a line saying what it lists. A guest there is named the way the shoppers table does: by the email their browser remembers, once it matches a paid order.
+* Each low or out of stock product is a notice of its own on the board, and every notice can be dismissed.
+* A new order is an alert at the top of the board too, and the alerts minimize to a count beside the Live badge.
+* Live orders lists the orders placed in the last 24 hours, so the board stays on what is happening now.
+* New for developers: `wp shopsocket journeys seed` fills a test site with made-up shopper journeys and carts, and `wp wordsocket journeys unseed` removes them.
 * New: a guest whose browser remembers the email of a past checkout is named on the board as a best guess, with the billing name and how many paid orders that email has placed here, once the email matches; the guess is kept for two days and WordPress's privacy tools export and erase it by email.
 * A shopper moving between pages no longer costs the server a request: the storefront remembers their cart for the visit and asks again only when it changed.
 * New: with WordSocket 0.31, the Moments tab knows the shop. Conditions on the cart (items, count, total, a product, a category, whether the product on the page is in it) and the WooCommerce pages, and one action: alert your team on the Realtime board
@@ -162,9 +166,9 @@ Anyone who can manage WooCommerce.
 * Nothing changes on WordSocket 0.30: the rules pieces load only when the engine is there
 * Faster pages on WordSocket 0.31: the shopper's cart state comes back in the visit report WordSocket already sends, so a page load makes one request instead of two; the cart-id route still serves cart changes and reconnects. A visitor without a cart makes none at all, since there is nothing to record for them yet.
 * New: on WordSocket 0.31, the Moments tab shows what each moment has done over your stored journeys, orders included, beside the builder.
-* New: the journeys of logged-in shoppers are linked to their account, so the Recently abandoned table and a staff alert name the customer with a link to their profile; WordPress's privacy tools export and erase those journeys with the carts. The `shopsocket_cart_left` hook tells other plugins when a cart is first left behind, with its items and its customer, so your email plugin can send the reminder.
+* New: the journeys of logged-in shoppers are linked to their account, so the Abandoned carts card and a staff alert name the customer with a link to their profile; WordPress's privacy tools export and erase those journeys with the carts. The `shopsocket_cart_left` hook tells other plugins when a cart is first left behind, with its items and its customer, so your email plugin can send the reminder.
 * Carts are WordSocket's journeys now: switch on History on its Journeys tab and every visit is kept there with the cart it was made with, so that tab's visuals show orders a day, carts left behind a day and where carted shoppers leave from, and the board's leak sentence links straight into them. ShopSocket keeps no table of its own any more: the cart tables, the days setting and its own privacy exporter are gone (the carts go out and away with WordSocket's journeys), the "in carts" counter counts the carts History keeps and so needs it on, and the shopper's cart reaches their journey through WordSocket's own visit report, one request a page.
-* New: the board opens with this week's figures when history is on: carts left behind and what they hold, orders recovered after a moment fired, checkout conversion, where shoppers with a cart leave from and how long they stay there first, and the products most often left behind.
+* New: the board opens with the last 24 hours when history is on, each figure against its average day over the last seven and drawn day by day: sales, carts left behind and what they hold, orders recovered after a moment fired and checkout conversion.
 * With history on, an order is credited to the moments that fired for that cart in the past week, even when the shopper came back later in a new visit, and each firing records how far into its page it happened, whether the shopper came back to the tab, dismissed the prompt or clicked something inside it.
 * The History settings warn when your site has no persistent object cache, since with history on every page a shopper with a cart opens writes to the database; Redis or Memcached is recommended on a busy store.
 * New: the Realtime board lists every shopper on the site with the page they are on, what their cart holds and whether their tab is hidden; a logged-in shopper is named with a link to their profile. A search shows as "Search", never what was searched for.

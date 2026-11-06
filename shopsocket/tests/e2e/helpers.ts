@@ -71,6 +71,17 @@ export const stat = (
   part: "value" | "detail" | "money" = "value",
 ) => page.locator(`.shopsocket-stat.is-${name} .shopsocket-stat__${part}`);
 
+/** The visitor id a storefront page's browser holds. */
+export const visitorOf = (page: Page): Promise<string> =>
+  page.evaluate(() => window.WPS?.visitorId() ?? "");
+
+/** A visitor's row in the board's shoppers table while they hold a cart: gone when they leave or the cart empties. */
+export const shopperCart = (page: Page, v: string): Locator =>
+  page.locator(".shopsocket-shoppers tbody tr", {
+    has: page.locator(`[data-visitor="${v}"]`),
+    hasText: /\d+ products?, /,
+  });
+
 /** The number in a tile or cell (digits and dots only, so "$1,234" reads as 1234), as a poll callback. */
 export const num = (loc: Locator) => async () =>
   Number((await loc.textContent())?.replace(/[^\d.]/g, "") || 0);
@@ -91,6 +102,40 @@ export function clearCarts(productId?: number): void {
     `global $wpdb; $journeys = ${ns}\\journeys_table(); ` +
       `$wpdb->query("DELETE FROM $journeys WHERE ${where}"); ` +
       `${ns}\\forget('carts_pub');`,
+  );
+}
+
+/**
+ * `count` carts each holding one of `productId` whose shopper left `hoursAgo`
+ * hours ago, written straight to WordSocket's journeys, under the cart id `ref`
+ * when one is given; `clearCarts( productId )` removes them.
+ */
+export function leaveCart(
+  productId: number,
+  hoursAgo: number,
+  count = 1,
+  ref = "",
+): void {
+  const id = ref ? `'${ref}'` : `'e2e' . wp_generate_password( 12, false )`;
+  wp(
+    "eval",
+    `for ( $i = 0; $i < ${count}; $i++ ) \\WPSignal\\Journeys::insert_row( array( ` +
+      `'journey_id' => wp_generate_uuid4(), 'visitor' => wp_generate_uuid4(), ` +
+      `'ref' => ${id}, ` +
+      `'journey' => 'product:${productId}:30', 'outcome' => 'left', 'value' => 20, ` +
+      `'data' => array( 'c' => get_woocommerce_currency(), 'i' => array( '${productId}' => 1 ) ), ` +
+      `'started_at' => gmdate( 'Y-m-d H:i:s', time() - ${hoursAgo} * HOUR_IN_SECONDS ) ) );`,
+  );
+}
+
+/** The cart id on a visitor's newest journey that has one, '' when none does. */
+export function cartOf(visitor: string): string {
+  return wp(
+    "eval",
+    `global $wpdb; echo (string) $wpdb->get_var( $wpdb->prepare( ` +
+      `'SELECT ref FROM ' . \\WPSignal\\Extensions\\ShopSocket\\journeys_table() . ` +
+      `' WHERE visitor = UNHEX(%s) AND ref IS NOT NULL ORDER BY id DESC LIMIT 1', ` +
+      `\\WPSignal\\Journeys::hex( '${visitor}' ) ) );`,
   );
 }
 

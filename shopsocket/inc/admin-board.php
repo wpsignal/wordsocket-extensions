@@ -160,6 +160,8 @@ function render_dashboard(): void {
 				'journeysUrl'    => admin_url( 'admin.php?page=wordsocket&tab=journeys' ),
 				'nonce'          => wp_create_nonce( 'wp_rest' ),
 				'orders'         => board_orders(),
+				'boardHours'     => BOARD_HOURS,
+				'abandonedHours' => ABANDONED_WINDOWS,
 				'statuses'       => order_statuses(),
 				'snapshot'       => dashboard_snapshot(),
 				'currencySymbol' => html_entity_decode( get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8' ),

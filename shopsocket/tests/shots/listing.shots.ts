@@ -102,7 +102,7 @@ test("stage the listing screenshots", async ({ admin, page, browser, baseURL, re
     await page.addStyleTag({ content: CHROME });
     await expect(page.getByRole("heading", { name: "ShopSocket", level: 1 })).toBeVisible();
     await waitForLive(page);
-    await expect(page.locator(".shopsocket-conn")).toHaveText("Live");
+    await expect(page.locator(".shopsocket-connection-badge")).toHaveText("Live");
     await expect(stat(page, "connections")).toHaveText(/^\d+$/);
 
     // 1: the board before the first shopper arrives.
@@ -159,9 +159,9 @@ test("stage the listing screenshots", async ({ admin, page, browser, baseURL, re
     await admin.visitAdminPage("admin.php", "page=shopsocket");
     await page.addStyleTag({ content: CHROME });
     await waitForLive(page);
-    await expect.poll(num(stat(page, "live")), { timeout: 30_000 }).toBe(LIVE_CARTS.filter((c) => c.length).length);
-    await expect.poll(num(stat(page, "abandoned")), { timeout: 30_000 }).toBe(ABANDONED_CARTS.length);
-    await expect(page.locator(".shopsocket-live-products a").first()).toBeVisible({ timeout: 15_000 });
+    await expect.poll(num(stat(page, "revenue", "detail")), { timeout: 30_000 }).toBe(LIVE_CARTS.filter((c) => c.length).length);
+    await expect.poll(num(stat(page, "abandoned-24")), { timeout: 30_000 }).toBe(ABANDONED_CARTS.length);
+    await expect(page.locator(".shopsocket-shoppers tbody tr").first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(`${ORDERS[0].first} ${ORDERS[0].last.charAt(0)}.`)).toBeVisible();
     await page.waitForTimeout(1_500);
     await showFreePlanLimit(page);

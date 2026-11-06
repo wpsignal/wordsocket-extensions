@@ -1,8 +1,8 @@
 /*
  * The board's building blocks, in the look of WordSocket's settings tabs.
  *
- * - `Section`: a card with a title, an optional aside, a one-sentence lede and its content.
- * - `Stat`: one figure with its label, an arrow when it moved against last week, a detail line and a sparkline.
+ * - `Section`: a card with a title, an optional aside, a one-sentence description and its content.
+ * - `Stat`: one figure with its label, an arrow when it is above or below its average, a detail line and a sparkline.
  * - `StatGroup`: a card of figures that belong together, a headline over a bar split into its parts.
  * - `BoardTable`: a sortable DataViews table, paged, with a message when it is empty; search, a filter, a phone layout and rows that open on request.
  * - `useNarrow`: whether the screen is a phone's width.
@@ -22,20 +22,20 @@ import { adminUrlOrNull } from "./trust";
 import { productLabel } from "./useProductNames";
 
 /**
- * A card on the board: its title, an aside beside the title, the lede, then the content.
+ * A card on the board: its title, an aside beside the title, the description, then the content.
  *
  * @since 0.8.0
  */
 export function Section({
   title,
   aside,
-  lede,
+  description,
   className,
   children,
 }: {
   title: string;
   aside?: React.ReactNode;
-  lede?: string;
+  description?: string;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -56,13 +56,13 @@ export function Section({
               <Text variant="heading-xl" render={<h2 />}>
                 {title}
               </Text>
-              {lede && (
+              {description && (
                 <Text
                   variant="body-sm"
                   className="shopsocket-muted"
                   render={<p />}
                 >
-                  {lede}
+                  {description}
                 </Text>
               )}
             </Stack>
@@ -79,17 +79,16 @@ export function Section({
 const SPARK_W = 140;
 const SPARK_H = 28;
 const SPARK_PAD = 3;
-/** A day of the series, named on the UTC calendar the server bucketed it on. */
+/** A day of the series, named by when it ended on the browser's clock. */
 const DAY_FORMAT = new Intl.DateTimeFormat(undefined, {
   weekday: "short",
   day: "numeric",
   month: "short",
-  timeZone: "UTC",
 });
 
 /**
- * A two-week sparkline under a figure: last week in grey, this week in the accent, ending in a dot;
- * each day's value in a tooltip.
+ * A sparkline under a figure, a point a day: the days before in grey, the step into the last day in the
+ * accent, ending in a dot; each day's value in a tooltip.
  *
  * @since 0.8.0
  */
@@ -118,19 +117,22 @@ function Sparkline({
       .slice(from, to + 1)
       .map((v, k) => `${k === 0 ? "M" : "L"}${x(from + k)},${y(v)}`)
       .join("");
-  const half = Math.floor(n / 2);
   const dayName = (i: number) =>
-    dates[i] ? DAY_FORMAT.format(new Date(`${dates[i]}T00:00:00Z`)) : "";
+    i === n - 1
+      ? __("Last 24 hours", "shopsocket")
+      : dates[i]
+        ? DAY_FORMAT.format(new Date(dates[i]))
+        : "";
   return (
     <svg
       className="shopsocket-spark"
       viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
       preserveAspectRatio="none"
       role="img"
-      aria-label={__("The last two weeks, day by day", "shopsocket")}
+      aria-label={__("The last seven days, day by day", "shopsocket")}
     >
-      <path className="shopsocket-spark__before" d={line(0, half)} />
-      <path className="shopsocket-spark__now" d={line(half, n - 1)} />
+      <path className="shopsocket-spark__before" d={line(0, n - 2)} />
+      <path className="shopsocket-spark__now" d={line(n - 2, n - 1)} />
       <path
         className="shopsocket-spark__end"
         d={`M${x(n - 1)},${y(days[n - 1])}h0`}
@@ -152,7 +154,7 @@ function Sparkline({
 }
 
 /**
- * How a figure compares with last week: both numbers and which way is better.
+ * How a figure compares with its daily average: both numbers and which way is better.
  *
  * @since 0.8.0
  */
@@ -164,9 +166,10 @@ export interface Compare {
 
 /**
  * One figure: its label, a chip with an arrow when `compare` says it moved (green when that is for the
- * better, red otherwise, the detail line toned the same), the value, a detail line, and a two-week
+ * better, red otherwise, the detail line toned the same), the value, a detail line, and a
  * sparkline when `days` are given over `dates`; `name` marks the tile as `is-<name>`, `compact` draws
- * a smaller figure and `swatch` a square of its share's fill by the label.
+ * a smaller figure, `swatch` a square of its share's fill by the label and `lead` an element of the
+ * caller's before it.
  *
  * @since 0.8.0
  */
@@ -181,6 +184,7 @@ export function Stat({
   dayLabel,
   compact,
   swatch,
+  lead,
 }: {
   name: string;
   value: string;
@@ -192,6 +196,7 @@ export function Stat({
   dayLabel?: (value: number) => string;
   compact?: boolean;
   swatch?: boolean;
+  lead?: React.ReactNode;
 }) {
   const trend =
     !compare || compare.now === compare.before
@@ -211,6 +216,7 @@ export function Stat({
   return (
     <div className={`shopsocket-stat is-${name}`}>
       <Stack direction="row" gap="xs" align="center">
+        {lead}
         {swatch && (
           <span className="shopsocket-stat__swatch" aria-hidden="true" />
         )}
@@ -222,8 +228,8 @@ export function Stat({
             className={`shopsocket-stat__chip is-${tone}`}
             aria-label={
               trend === "up"
-                ? __("Up on last week", "shopsocket")
-                : __("Down on last week", "shopsocket")
+                ? __("Above the 7-day average", "shopsocket")
+                : __("Below the 7-day average", "shopsocket")
             }
           >
             {trend === "up" ? "\u2197" : "\u2198"}

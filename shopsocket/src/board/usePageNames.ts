@@ -29,6 +29,7 @@ const KNOWN: Record<string, { label: () => string; url?: keyof Config }> = {
   other: { label: () => __("Another page", "shopsocket") },
   admin: { label: () => __("Admin", "shopsocket") },
   away: { label: () => __("Away", "shopsocket") },
+  deleted: { label: () => __("Pages since removed", "shopsocket") },
 };
 
 /** The kinds the diagram rows by that the table resolves to a page instead. */
@@ -160,9 +161,9 @@ export function usePageNames(steps: string[], config: Config) {
       clearTimeout(timer);
       if (!fired) missing.forEach((s) => pending.current.delete(s));
     };
-    // The steps are keyed by their joined string so a new array with the same steps does not refetch.
+    // The steps are keyed by their joined string so a new array with the same steps does not refetch; an answered batch asks for the next.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, config.pagesUrl, config.nonce]);
+  }, [key, version, config.pagesUrl, config.nonce]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => (step: string) => cache.current.get(step), [version]);

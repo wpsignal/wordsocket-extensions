@@ -16,7 +16,8 @@
     "svn": "bash ../bin/svn.sh shopsocket",
     "release": "bash ../bin/release.sh shopsocket",
     "test:e2e:http": "SHOPSOCKET_HTTP=1 wp-scripts test-playwright",
-    "shots": "SHOPSOCKET_HTTP=1 wp-scripts test-playwright --config playwright.shots.config.ts"
+    "shots": "SHOPSOCKET_HTTP=1 wp-scripts test-playwright --config playwright.shots.config.ts",
+    "rehearse": "node bin/rehearse.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -32,6 +33,7 @@
     "@wordpress/dataviews": "^19.0.0",
     "@wordpress/element": "^6.0.0",
     "@wordpress/i18n": "^5.0.0",
+    "@wordpress/icons": "^20.0.0",
     "@wordpress/theme": "^2.3.0",
     "@wordpress/ui": "^0.24.0"
   },

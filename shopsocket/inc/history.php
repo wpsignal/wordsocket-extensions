@@ -31,18 +31,39 @@ const DB_VERSION        = '5';
 const DB_VERSION_OPTION = 'shopsocket_db_version';
 
 /**
- * Rows the board lists under "Recently abandoned".
+ * Rows each table of the board's abandoned carts lists for each BOARD_HOURS of its time frame.
  *
  * @since 0.7.0
  */
 const BOARD_ABANDONED = 50;
 
 /**
- * Non-open journeys read to find the latest abandoned carts, newest first.
+ * Non-open journeys read to find the latest abandoned carts, newest first, for each BOARD_HOURS of the time frame.
  *
  * @since 0.8.0
  */
 const ABANDONED_SCAN = 200;
+
+/**
+ * The time frames the board's abandoned carts offer, in hours.
+ *
+ * @since 0.8.0
+ */
+const ABANDONED_WINDOWS = array( 24, 48, 168 );
+
+/**
+ * Journeys with a cart read to count the carts left behind, newest first.
+ *
+ * @since 0.8.0
+ */
+const ABANDONED_COUNTED = 20000;
+
+/**
+ * Counted carts the board is told of one by one, since their shopper may be back.
+ *
+ * @since 0.8.0
+ */
+const ABANDONED_RETURNING = 200;
 
 /**
  * Non-open journeys the strip's cart measures read, newest first.
@@ -181,7 +202,7 @@ function data_field( ?string $json, string $key ) {
 }
 
 /**
- * The non-open journeys carrying a cart since a moment, newest first, one per cart (its newest):
+ * The non-open journeys carrying a cart since a moment, newest first, one per cart (its newest, the later row of two in one second):
  * `{ ref, outcome, value, last_seen, items, currency, user_id, journey, order }`.
  *
  * @since 0.8.0
@@ -193,7 +214,7 @@ function cart_journeys_since( string $since ): array {
 	global $wpdb;
 	$rows = (array) $wpdb->get_results(
 		$wpdb->prepare(
-			'SELECT ref, outcome, value, last_seen, data, user_id, journey FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' AND last_seen >= %s ORDER BY last_seen DESC LIMIT %d",
+			'SELECT ref, outcome, value, last_seen, data, user_id, journey FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' AND last_seen >= %s ORDER BY last_seen DESC, id DESC LIMIT %d",
 			$since,
 			STRIP_CARTS
 		),
@@ -530,24 +551,14 @@ function taxonomy_kind( string $kind, string $taxonomy ): string {
 add_filter( 'wpsignal_taxonomy_kind', __NAMESPACE__ . '\taxonomy_kind', 10, 2 );
 
 /**
- * The carts whose shopper left, newest leave first, for the board's "Recently abandoned" panel: one row per cart, from its newest left journey, with the visitor who left it and the order a later journey became.
+ * Journey rows carrying a cart, newest first, as one entry per cart: its newest leave with items in the cart, the order journey that followed it, and the account seen on any of them.
  *
- * Whether the shopper is back right now, and whether the leave is older than the grace, is the board's to judge: it has presence and its own clock.
+ * @since 0.8.0
  *
- * @since 0.7.0
- * @since 0.8.0 Read from WordSocket's journeys.
- *
- * @return array<int, array<string, mixed>>
+ * @param array<int, array<string, mixed>> $rows Rows with `ref`, `outcome`, `last_seen` and `data`, newest first.
+ * @return array<string, array{left: array<string, mixed>|null, converted: array<string, mixed>|null, user_id: int}>
  */
-function abandoned_rows(): array {
-	global $wpdb;
-	$rows  = (array) $wpdb->get_results(
-		$wpdb->prepare(
-			'SELECT ref, user_id, HEX(visitor) AS visitor, value, journey, outcome, last_seen, data FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' ORDER BY last_seen DESC LIMIT %d",
-			ABANDONED_SCAN
-		),
-		ARRAY_A
-	);
+function carts_by_leave( array $rows ): array {
 	$carts = array();
 	foreach ( $rows as $row ) {
 		$ref  = (string) $row['ref'];
@@ -575,19 +586,145 @@ function abandoned_rows(): array {
 		}
 		$carts[ $ref ] = $cart;
 	}
-	$names = customer_names( array_column( $carts, 'user_id' ) );
-	$out   = array();
+	return $carts;
+}
+
+/**
+ * The order a left cart became, 0 when it has none.
+ *
+ * @since 0.8.0
+ *
+ * @param array{converted: array<string, mixed>|null} $cart One entry of `carts_by_leave()`.
+ * @return int
+ */
+function order_after( array $cart ): int {
+	return null === $cart['converted'] ? 0 : (int) ( data_field( $cart['converted']['data'], 'o' ) ?? 0 );
+}
+
+/**
+ * The carts left, counted in full: `totals` for each time frame the board offers, those not ordered since with their products and value and those `recovered` by an order, and `returning`, the carts not ordered whose shopper has a journey that has not ended, by cart id.
+ *
+ * @since 0.8.0
+ *
+ * @return array{totals: array<int, array{carts: int, products: int, value: float, currency: string, recovered: int}>, returning: array<string, array{left_at: string, value: float}>}
+ */
+function abandoned_count(): array {
+	global $wpdb;
+	$now     = time();
+	$rows    = (array) $wpdb->get_results(
+		$wpdb->prepare(
+			'SELECT ref, outcome, value, last_seen, data FROM ' . journeys_table() . ' WHERE ref IS NOT NULL AND data IS NOT NULL AND last_seen >= %s ORDER BY last_seen DESC, id DESC LIMIT %d',
+			gmdate( 'Y-m-d H:i:s', $now - max( ABANDONED_WINDOWS ) * HOUR_IN_SECONDS ),
+			ABANDONED_COUNTED
+		),
+		ARRAY_A
+	);
+	$unended = array();
+	foreach ( $rows as $row ) {
+		if ( 'left' !== $row['outcome'] && 'converted' !== $row['outcome'] ) {
+			$unended[ (string) $row['ref'] ] = true;
+		}
+	}
+	$totals    = array();
+	$products  = array();
+	$returning = array();
+	foreach ( ABANDONED_WINDOWS as $hours ) {
+		$totals[ $hours ]   = array(
+			'carts'     => 0,
+			'products'  => 0,
+			'value'     => 0.0,
+			'currency'  => get_woocommerce_currency(),
+			'recovered' => 0,
+		);
+		$products[ $hours ] = array();
+	}
+	foreach ( carts_by_leave( $rows ) as $ref => $cart ) {
+		if ( null === $cart['left'] ) {
+			continue;
+		}
+		$ordered = order_after( $cart ) > 0;
+		if ( ! $ordered && isset( $unended[ $ref ] ) && count( $returning ) < ABANDONED_RETURNING ) {
+			$returning[ $ref ] = array(
+				'left_at' => datetime_to_rfc3339( (string) $cart['left']['last_seen'] ),
+				'value'   => round( (float) ( $cart['left']['value'] ?? 0 ), 2 ),
+			);
+		}
+		$ago = $now - (int) strtotime( $cart['left']['last_seen'] . ' UTC' );
+		foreach ( ABANDONED_WINDOWS as $hours ) {
+			if ( $ago > $hours * HOUR_IN_SECONDS ) {
+				continue;
+			}
+			if ( $ordered ) {
+				++$totals[ $hours ]['recovered'];
+				continue;
+			}
+			++$totals[ $hours ]['carts'];
+			$totals[ $hours ]['value'] += (float) ( $cart['left']['value'] ?? 0 );
+			$products[ $hours ]        += items_of( $cart['left']['data'] );
+		}
+	}
+	foreach ( ABANDONED_WINDOWS as $hours ) {
+		$totals[ $hours ]['products'] = count( $products[ $hours ] );
+		$totals[ $hours ]['value']    = round( $totals[ $hours ]['value'], 2 );
+	}
+	return array(
+		'totals'    => $totals,
+		'returning' => $returning,
+	);
+}
+
+/**
+ * The most rows a table of the board's abandoned carts lists for a time frame: BOARD_ABANDONED for each BOARD_HOURS of it.
+ *
+ * @since 0.8.0
+ *
+ * @param int $hours The time frame, in hours.
+ * @return int
+ */
+function abandoned_limit( int $hours ): int {
+	return max( 1, intdiv( $hours, BOARD_HOURS ) ) * BOARD_ABANDONED;
+}
+
+/**
+ * The carts whose shopper left in the last `$hours`, newest leave first, for the board's abandoned carts: one row per cart, from its newest left journey, with the visitor who left it and the order a later journey became; `abandoned_limit()` at most of those not ordered since, and as many of those an order followed.
+ *
+ * Whether the shopper is back right now, and whether the leave is older than the grace, is the board's to judge: it has presence and its own clock.
+ *
+ * @since 0.7.0
+ * @since 0.8.0 Read from WordSocket's journeys; takes `$hours`.
+ *
+ * @param int $hours The time frame, in hours.
+ * @return array<int, array<string, mixed>>
+ */
+function abandoned_rows( int $hours = BOARD_HOURS ): array {
+	global $wpdb;
+	$days   = max( 1, intdiv( $hours, BOARD_HOURS ) );
+	$rows   = (array) $wpdb->get_results(
+		$wpdb->prepare(
+			'SELECT ref, user_id, HEX(visitor) AS visitor, value, journey, outcome, last_seen, data FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' AND last_seen >= %s ORDER BY last_seen DESC, id DESC LIMIT %d",
+			gmdate( 'Y-m-d H:i:s', time() - $hours * HOUR_IN_SECONDS ),
+			$days * ABANDONED_SCAN
+		),
+		ARRAY_A
+	);
+	$carts  = carts_by_leave( $rows );
+	$names  = customer_names( array_column( $carts, 'user_id' ) );
+	$limit  = abandoned_limit( $hours );
+	$listed = array( 0, 0 );
+	$out    = array();
 	foreach ( $carts as $ref => $cart ) {
 		$left = $cart['left'];
 		if ( null === $left ) {
 			continue;
 		}
-		$items = items_of( $left['data'] );
-		if ( empty( $items ) ) {
+		$order_id = order_after( $cart );
+		$ordered  = $order_id > 0 ? 1 : 0;
+		if ( $listed[ $ordered ] >= $limit ) {
 			continue;
 		}
+		++$listed[ $ordered ];
+		$items     = items_of( $left['data'] );
 		$converted = $cart['converted'];
-		$order_id  = null === $converted ? 0 : (int) ( data_field( $converted['data'], 'o' ) ?? 0 );
 		$user_id   = (int) $cart['user_id'];
 		$out[]     = array(
 			'id'           => $ref,
@@ -601,13 +738,11 @@ function abandoned_rows(): array {
 			'converted_at' => null === $converted ? null : datetime_to_rfc3339( (string) $converted['last_seen'] ),
 			'order_id'     => $order_id > 0 ? $order_id : null,
 			'order_url'    => $order_id > 0 ? order_edit_url( $order_id ) : '',
+			'order_value'  => $order_id > 0 ? round( (float) ( $converted['value'] ?? 0 ), 2 ) : null,
 			'user_id'      => $user_id > 0 ? $user_id : null,
 			'customer'     => $names[ $user_id ] ?? null,
 			'customer_url' => $user_id > 0 ? customer_edit_url( $user_id ) : '',
 		);
-		if ( count( $out ) >= BOARD_ABANDONED ) {
-			break;
-		}
 	}
 	$journeys = Journeys::unpack_journeys( array_column( $out, 'journey' ) );
 	foreach ( $out as $i => $cart ) {

@@ -34,6 +34,13 @@ const BOARD_LIVE_PRODUCTS = 100;
 const BOARD_ORDERS = 50;
 
 /**
+ * How far back the board's lists go, in hours: its orders, and the carts left behind until the board asks for another time frame.
+ *
+ * @since 0.8.0
+ */
+const BOARD_HOURS = 24;
+
+/**
  * Browsers connected to the site right now, from the WPSignal server through
  * WordSocket (0.22+). Null when WordSocket is older or the server is unreachable.
  *
@@ -51,41 +58,48 @@ function online_now(): ?array {
 }
 
 /**
- * The open rows, the recently abandoned ones, this week's strip and the online count; the board
- * splits open rows into live and abandoned itself.
+ * The open rows, the carts left behind in the last `$hours` with what they tell, their full count for every time frame, this day's strip and the online count; the board
+ * crosses the open rows with presence itself.
  * `as_of` is this server's clock when the figures were read: the board sends
  * it back as `since` on its next refresh.
  *
  * @since 0.1.1
- * @since 0.8.0 Adds `strip`.
+ * @since 0.8.0 Adds `strip`, `abandonment`, `abandoned_totals` and `abandoned_returning`; takes `$hours`.
  *
- * @return array{carts: array<int, array<string, mixed>>, abandoned: array<int, array<string, mixed>>, online: array{active_connections: int, max_connections: int}|null, as_of: int}
+ * @param int $hours The abandoned carts' time frame, in hours.
+ * @return array{carts: array<int, array<string, mixed>>, abandoned: array<int, array<string, mixed>>, abandoned_totals: array<int, array<string, mixed>>, abandoned_returning: object, abandonment: array<string, mixed>|null, strip: array<string, mixed>|null, online: array{active_connections: int, max_connections: int}|null, as_of: int}
  */
-function dashboard_snapshot(): array {
+function dashboard_snapshot( int $hours = BOARD_HOURS ): array {
+	$count = abandoned_count();
 	return array(
-		'carts'     => cart_rows(),
-		'abandoned' => abandoned_rows(),
-		'strip'     => week_strip(),
-		'online'    => online_now(),
-		'as_of'     => time(),
+		'carts'               => cart_rows(),
+		'abandoned'           => abandoned_rows( $hours ),
+		'abandoned_totals'    => $count['totals'],
+		'abandoned_returning' => (object) $count['returning'],
+		'abandonment'         => abandonment( $hours ),
+		'strip'               => day_strip(),
+		'online'              => online_now(),
+		'as_of'               => time(),
 	);
 }
 
 /**
- * Orders for the board, newest first: the latest BOARD_ORDERS, or with
- * `$since` only those created or changed at or after that moment.
+ * Orders placed in the last BOARD_HOURS for the board, newest first, BOARD_ORDERS at most; with
+ * `$since` only those of them created or changed at or after that moment.
  *
  * @since 0.5.1
+ * @since 0.8.0 Lists only the orders placed in the last BOARD_HOURS.
  *
- * @param int $since Unix timestamp, or 0 for the latest orders regardless.
+ * @param int $since Unix timestamp, or 0 for every order in the window.
  * @return array<int, array<string, mixed>>
  */
 function board_orders( int $since = 0 ): array {
 	$args = array(
-		'limit'   => BOARD_ORDERS,
-		'orderby' => 'date',
-		'order'   => 'DESC',
-		'type'    => 'shop_order',
+		'limit'        => BOARD_ORDERS,
+		'orderby'      => 'date',
+		'order'        => 'DESC',
+		'type'         => 'shop_order',
+		'date_created' => '>=' . ( time() - BOARD_HOURS * HOUR_IN_SECONDS ),
 	);
 	if ( $since > 0 ) {
 		$args['date_modified'] = '>=' . $since;
@@ -95,16 +109,19 @@ function board_orders( int $since = 0 ): array {
 }
 
 /**
- * The `/dashboard` response: the snapshot, plus the orders changed since
- * `since` when the board names one.
+ * The `/dashboard` response: the snapshot with the abandoned carts of the
+ * time frame `hours` names, plus the orders changed since `since` when the
+ * board names one.
  *
  * @since 0.5.1
+ * @since 0.8.0 Reads `hours`.
  *
  * @param \WP_REST_Request $request The request.
  * @return \WP_REST_Response|\WP_Error
  */
 function dashboard_response( \WP_REST_Request $request ) {
-	$data = dashboard_snapshot();
+	$hours = (int) $request->get_param( 'hours' );
+	$data  = dashboard_snapshot( in_array( $hours, ABANDONED_WINDOWS, true ) ? $hours : BOARD_HOURS );
 	if ( $request->has_param( 'since' ) ) {
 		$data['orders'] = board_orders( max( 1, (int) $request->get_param( 'since' ) ) );
 	}
@@ -133,8 +150,8 @@ function parse_product_ids( string $ids ): array {
 
 /**
  * Name, edit link and permalink for each product that still exists, for the board's
- * live-products list. The board alone knows which carts are live, so it
- * picks the ids and asks here for the words.
+ * tables. The board alone knows which products it is showing, so it picks the ids
+ * and asks here for the words.
  *
  * @since 0.1.1
  * @since 0.8.0 Adds `url`, the storefront page.
@@ -317,6 +334,10 @@ add_action(
 					'since' => array(
 						'type'    => 'integer',
 						'minimum' => 0,
+					),
+					'hours' => array(
+						'type' => 'integer',
+						'enum' => ABANDONED_WINDOWS,
 					),
 				),
 				'callback'            => __NAMESPACE__ . '\\dashboard_response',

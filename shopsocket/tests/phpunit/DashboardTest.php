@@ -3,6 +3,7 @@
  * Dashboard: cart rows for the board and "online now" from the stats request.
  */
 
+use function WPSignal\Extensions\ShopSocket\board_orders;
 use function WPSignal\Extensions\ShopSocket\cart_rows;
 use function WPSignal\Extensions\ShopSocket\dashboard_snapshot;
 use function WPSignal\Extensions\ShopSocket\enqueue_settings_panel;
@@ -137,8 +138,16 @@ final class DashboardTest extends ExtensionTestCase {
 			$this->assertSame( 'aaa', $data['carts'][0]['id'] );
 			$this->assertSame( 20.0, $data['carts'][0]['value'] );
 			$this->assertSame( array( 'active_connections' => 12, 'max_connections' => 500 ), $data['online'] );
-			$this->assertSame( array( 'carts', 'abandoned', 'strip', 'online', 'as_of' ), array_keys( $data ), 'no orders unless the board names a moment' );
+			$this->assertSame( array( 'carts', 'abandoned', 'abandoned_totals', 'abandoned_returning', 'abandonment', 'strip', 'online', 'as_of' ), array_keys( $data ), 'no orders unless the board names a moment' );
 			$this->assertSame( array(), $data['abandoned'], 'nobody has left yet' );
+			$this->assertSame( array( 24, 48, 168 ), array_keys( $data['abandoned_totals'] ) );
+			$this->assertSame( 0, $data['abandoned_totals'][24]['carts'] );
+			// The abandoned carts' time frame is one the board offers, or the request is refused.
+			foreach ( array( 24 => 200, 48 => 200, 168 => 200, 12 => 400 ) as $hours => $status ) {
+				$request = new WP_REST_Request( 'GET', '/' . REST_NS . '/dashboard' );
+				$request->set_query_params( array( 'hours' => $hours ) );
+				$this->assertSame( $status, rest_do_request( $request )->get_status(), "hours=$hours" );
+			}
 			$this->assertEqualsWithDelta( time(), $data['as_of'], 5, 'the server clock the board sends back as since' );
 		} finally {
 			remove_filter( 'pre_http_request', $stats, 5 );
@@ -164,6 +173,11 @@ final class DashboardTest extends ExtensionTestCase {
 		$untouched->set_date_modified( time() - 3 * HOUR_IN_SECONDS );
 		$untouched->save();
 
+		$stale = $this->make_order( $product );
+		$stale->set_date_created( time() - 2 * DAY_IN_SECONDS );
+		$stale->set_date_modified( time() - 2 * DAY_IN_SECONDS );
+		$stale->save();
+
 		$since  = time() - HOUR_IN_SECONDS;
 		$missed = $this->make_order( $product, 2 );
 
@@ -183,11 +197,18 @@ final class DashboardTest extends ExtensionTestCase {
 			$this->assertNotContains( $earlier->get_id(), $found, 'one from before it does not' );
 			$this->assertNotContains( $untouched->get_id(), $found );
 
-			// A status change made while the board was away counts too, on an order of any age.
+			// A status change made while the board was away counts too, on an order placed within the board's day.
 			$earlier->update_status( 'completed' );
+			$stale->update_status( 'completed' );
 			$found = $ids( $since );
-			$this->assertContains( $earlier->get_id(), $found, 'an old order changed after the moment comes back' );
+			$this->assertContains( $earlier->get_id(), $found, 'an earlier order changed after the moment comes back' );
 			$this->assertNotContains( $untouched->get_id(), $found );
+			$this->assertNotContains( $stale->get_id(), $found, 'one placed before the last day does not, whatever happened to it since' );
+
+			// The board's first paint lists the day's orders and nothing older.
+			$listed = array_column( board_orders(), 'order_id' );
+			$this->assertContains( $untouched->get_id(), $listed );
+			$this->assertNotContains( $stale->get_id(), $listed );
 
 			$request = new WP_REST_Request( 'GET', '/' . REST_NS . '/dashboard' );
 			$request->set_query_params( array( 'since' => $since ) );

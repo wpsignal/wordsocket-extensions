@@ -3,7 +3,7 @@
 interface ShopSocketBoardConfig {
 	/** `GET` here returns fresh WooDashboardData (inc/dashboard.php). */
 	dashboardUrl: string;
-	/** `GET ?ids=1,2,3` here returns `{ products: WooProductRef[] }` for the live-products list. */
+	/** `GET ?ids=1,2,3` here returns `{ products: WooProductRef[] }` for the board's tables. */
 	productsUrl: string;
 	/**
 	 * `GET ?steps=page:3,category:7` here returns `{ pages: WooPageRef[] }` for the shoppers table.
@@ -48,8 +48,12 @@ interface ShopSocketBoardConfig {
 	nonce: string;
 	/** The channel each event is trusted from (inc/channels.php). */
 	channels: { orders: string; stock: string; presence: string; staff: string; connections: string };
-	/** Orders to render before the first live event. */
+	/** Orders to render before the first live event: those placed in the last `boardHours`. */
 	orders: WooOrderEvent[];
+	/** How far back the board's orders go, and its abandoned carts until another time frame is chosen, in hours (0.8). */
+	boardHours: number;
+	/** The time frames the abandoned carts offer, in hours (0.8). */
+	abandonedHours: number[];
 	/** Statuses the board shows, in display order. */
 	statuses: Array< { slug: string; label: string } >;
 	/** Figures rendered on first paint (cart rows + online). */
@@ -89,7 +93,7 @@ interface WooCartRow {
 	customer_url?: string;
 }
 
-/** A cart whose shopper left (inc/history.php `abandoned_rows()`, its newest left journey), newest leave first. */
+/** A cart whose shopper left in the time frame asked for (inc/history.php `abandoned_rows()`, its newest left journey), newest leave first. */
 interface WooAbandonedRow extends WooCartRow {
 	/** The visitor who left the cart, the id a best guess is asked by; '' when the journey names none. */
 	v?: string;
@@ -102,15 +106,23 @@ interface WooAbandonedRow extends WooCartRow {
 	order_id: number | null;
 	/** The order's edit screen, built without loading the order; followed only into this site's admin. */
 	order_url: string;
+	/** What that order was worth, null without one; absent on a payload from before 0.8. */
+	order_value?: number | null;
 }
 
 /** The raw dashboard payload from the server (rows + online). */
 interface WooDashboardData {
 	carts: WooCartRow[];
-	/** The latest carts whose shopper left at some point, newest leave first; absent on a payload from before 0.7. */
+	/** The carts whose shopper left in the time frame the request named, `boardHours` when it named none, newest leave first; absent on a payload from before 0.7. */
 	abandoned?: WooAbandonedRow[];
-	/** This week's strip (inc/strip.php); null with history off, absent on a payload from before 0.8. */
-	strip?: WooWeekStrip | null;
+	/** The carts left and not ordered since, counted in full, by time frame in hours (inc/history.php `abandoned_count()`); absent on a payload from before 0.8. */
+	abandoned_totals?: WooAbandonedTotals;
+	/** Those of the counted carts whose shopper has a journey that has not ended, by cart id; absent on a payload from before 0.8. */
+	abandoned_returning?: WooAbandonedReturning;
+	/** What those carts tell (inc/strip.php `abandonment()`); null with history off, absent on a payload from before 0.8. */
+	abandonment?: WooAbandonment | null;
+	/** This day's strip (inc/strip.php); null with history off, absent on a payload from before 0.8. */
+	strip?: WooDayStrip | null;
 	/** Null when WordSocket is older than 0.22 or the server could not be reached. */
 	online: { active_connections: number; max_connections: number } | null;
 	/** The server's clock (Unix seconds) when the figures were read; sent back as `since` on the next refresh. */
@@ -119,24 +131,44 @@ interface WooDashboardData {
 	orders?: WooOrderEvent[];
 }
 
-/** The board's "This week" strip (inc/strip.php `week_strip()`): the last seven days against the seven before. */
-interface WooWeekStrip {
+/** The board's "This day" strip (inc/strip.php `day_strip()`): the last 24 hours, each figure against its daily average over the last seven days. */
+interface WooDayStrip {
 	/** Start of the window, RFC 3339 UTC. */
 	since: string;
-	/** Whether WordSocket keeps the journeys the leak, the conversion and the recovered orders read (0.8). */
+	/** Whether WordSocket keeps the journeys the conversion and the recovered orders read (0.8). */
 	journeys: boolean;
-	/** The UTC days each figure's `days` series covers, `Y-m-d`, oldest first, today last. */
+	/** When each day of the figures' `days` series ends, RFC 3339 UTC, oldest first: a day is the 24 hours up to then, the last one up to now. */
 	trend_days: string[];
-	/** Carts whose shopper left and that never became an order; `days` is the count per day over two weeks, today last. */
-	left: { count: number; value: number; currency: string; previous: number; days: number[] };
-	/** Orders credited to a moment that fired, with the count per day over two weeks. */
-	recovered: { count: number; value: number; previous: number; days: number[] };
-	/** Orders against journeys that reached checkout, as a percentage, with the percentage per day over two weeks. */
-	conversion: { reached: number; orders: number; percent: number; previous_percent: number; days: number[] };
+	/** Paid orders placed in the last day and what they came to; `average` and `days` are what a day came to. */
+	sales: { count: number; value: number; currency: string; average: number; days: number[] };
+	/** Carts whose shopper left and that never became an order; `average` is the count a day over the series, `days` the count per day. */
+	left: { count: number; value: number; currency: string; average: number; days: number[] };
+	/** Orders credited to a moment that fired, with the count a day over the series and per day. */
+	recovered: { count: number; value: number; average: number; days: number[] };
+	/** Orders against journeys that reached checkout, as a percentage, with the percentage over the whole series and per day. */
+	conversion: { reached: number; orders: number; percent: number; average_percent: number; days: number[] };
+}
+
+/** The carts left, by time frame in hours: those not ordered since (how many, their distinct products, what they are worth, the shop's currency) and how many an order recovered. */
+type WooAbandonedTotals = Record< string, { carts: number; products: number; value: number; currency: string; recovered?: number } >;
+
+/** Counted carts whose shopper may be back, by cart id: when each was left (RFC 3339 UTC) and what it was worth. */
+type WooAbandonedReturning = Record< string, { left_at: string; value: number } >;
+
+/** What the carts left in a time frame tell the board (inc/strip.php `abandonment()`). */
+interface WooAbandonment {
+	/** The time frame, in hours. */
+	hours: number;
 	/** Where most carted leavers left from; null when nobody left. */
 	leak: { kind: string; count: number; leavers: number; median_s: number } | null;
+	/** The pages most leavers left from, with how many left from each and the median time there; pages that are gone are one row, `deleted` with id 0. */
+	pages?: Array< { kind: string; id: number; left: number; median_s: number } >;
+	/** How many pages leavers left from, listed above or not. */
+	pages_total?: number;
 	/** The products most often in a left cart, with how many carts bought each. */
 	products: Array< { id: number; left: number; bought: number } >;
+	/** How many products were in a left cart, listed above or not. */
+	products_total?: number;
 }
 
 /** One cart segment, computed on the board by crossing rows with presence. */
@@ -147,15 +179,18 @@ interface WooCartSegment {
 	currency: string;
 }
 
-/** What the board renders: rows split into live and abandoned. */
+/** The carts left behind in one time frame, in hours. */
+interface WooLeftBehind extends WooCartSegment {
+	hours: number;
+}
+
+/** What the board renders: the open rows of connected shoppers split by whether a tab is in view, and the carts left behind. */
 interface WooDashboardSnapshot {
 	carts: {
 		/** Carts whose shopper has a visible tab right now. */
 		live: WooCartSegment;
 		/** Carts whose shopper is connected but has every tab hidden. */
 		away: WooCartSegment;
-		/** Carts still held by a shopper who has left the site. */
-		abandoned: WooCartSegment;
 	};
 	/** Distinct storefront visitors connected right now (deduped by visitor id across tabs). */
 	usersOnline: number;
@@ -163,13 +198,21 @@ interface WooDashboardSnapshot {
 	staff: { users: number; tabs: number };
 	/** Connected visitors whose every tab is hidden. */
 	awayUsers: number;
-	/** Left carts whose shopper is not back and whose leave is older than the grace, newest first. */
+	/** The time frame the abandoned carts below are of, in hours. */
+	abandonedHours: number;
+	/** Carts left in that time frame and not ordered since, whose shopper is not back and whose leave is older than the grace, newest first. */
 	abandoned: WooAbandonedRow[];
+	/** Carts left in that time frame that an order followed, newest leave first. */
+	recovered: WooAbandonedRow[];
+	/** How many carts left in that time frame an order followed, listed above or not. */
+	recoveredCount: number;
+	/** For each time frame the board offers: every cart left in it and not ordered since, listed above or not, whose shopper is not back. */
+	leftBehind: WooLeftBehind[];
+	/** What those carts tell; null with history off. */
+	abandonment: WooAbandonment | null;
 	online: { active_connections: number; max_connections: number } | null;
-	/** This week's strip; null with history off. */
-	strip: WooWeekStrip | null;
-	/** Products in live carts: how many of those carts hold each, and the units across them, unordered. */
-	liveProducts: Array< { id: number; carts: number; units: number } >;
+	/** This day's strip; null with history off. */
+	strip: WooDayStrip | null;
 	/**
 	 * One row per connected visitor: every tab of theirs, the leading one (their visible tab, or the
 	 * last announced when every tab is hidden) first, and the cart row for their cart id.

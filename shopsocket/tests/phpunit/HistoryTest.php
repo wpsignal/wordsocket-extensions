@@ -4,7 +4,6 @@
  * reads, the counts, the cart-left hook, the conversion, the strip, and the page steps.
  */
 
-use function WPSignal\Extensions\ShopSocket\abandoned_rows;
 use function WPSignal\Extensions\ShopSocket\cart_id;
 use function WPSignal\Extensions\ShopSocket\cart_rows;
 use function WPSignal\Extensions\ShopSocket\count_in_carts;
@@ -16,7 +15,14 @@ use WPSignal\WPS;
 use function WPSignal\Extensions\ShopSocket\mark_converted;
 use function WPSignal\Extensions\ShopSocket\on_order_created;
 use function WPSignal\Extensions\ShopSocket\page_step;
-use function WPSignal\Extensions\ShopSocket\week_strip;
+use function WPSignal\Extensions\ShopSocket\abandoned_rows;
+use function WPSignal\Extensions\ShopSocket\abandoned_count;
+use function WPSignal\Extensions\ShopSocket\abandoned_limit;
+use function WPSignal\Extensions\ShopSocket\abandonment;
+use function WPSignal\Extensions\ShopSocket\carts_left;
+use function WPSignal\Extensions\ShopSocket\day_strip;
+use function WPSignal\Extensions\ShopSocket\sales;
+use function WPSignal\Extensions\ShopSocket\seed_journeys;
 use const WPSignal\Extensions\ShopSocket\DB_VERSION;
 use const WPSignal\Extensions\ShopSocket\DB_VERSION_OPTION;
 use const WPSignal\Extensions\ShopSocket\ORDERS_CHANNEL;
@@ -90,7 +96,7 @@ final class HistoryTest extends ExtensionTestCase {
 		do_action( 'wpsignal_visitor_visit', $this->report( 'product:' . $product->get_id() . ':0', false ) );
 		$this->assertSame( array(), $this->journeys(), 'nothing is written' );
 		$this->assertSame( array(), cart_rows() );
-		$this->assertNull( week_strip() );
+		$this->assertNull( day_strip() );
 		$this->assertFalse( in_carts_enabled( $product->get_id() ), 'the counter needs the carts, which need History' );
 		$this->set_history( true );
 		$this->assertTrue( in_carts_enabled( $product->get_id() ) );
@@ -228,9 +234,100 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertContains( $rows[0]['journey'], array( 'cart:0:2000', $page . ':3000' ), 'the newest leave, both within the same second here' );
 		$this->assertMatchesRegularExpression( '/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/', $rows[0]['left_at'] );
 		$this->assertNull( $rows[0]['order_id'] );
+		$this->assertNull( $rows[0]['order_value'] );
 		$this->assertSame( $user, $rows[0]['user_id'] );
 		$this->assertSame( get_userdata( $user )->display_name, $rows[0]['customer'] );
 		$this->assertStringContainsString( 'user-edit.php?user_id=' . $user, $rows[0]['customer_url'] );
+	}
+
+	public function test_the_board_lists_only_the_carts_left_in_its_last_day(): void {
+		$this->set_history( true );
+		$this->seed_cart( 'bbbb000000000001', array( 9001 ), 10.0, array(), 'left', 2 * HOUR_IN_SECONDS );
+		$this->seed_cart( 'bbbb000000000002', array( 9002 ), 10.0, array(), 'left', 30 * HOUR_IN_SECONDS );
+		$this->assertSame( array( 'bbbb000000000001' ), array_column( abandoned_rows(), 'id' ), 'a cart left thirty hours ago is off the board' );
+		$this->assertSame( array( 'bbbb000000000001', 'bbbb000000000002' ), array_column( abandoned_rows( 48 ), 'id' ), 'and on it over 48 hours, newest leave first' );
+		$this->assertCount( 2, abandoned_rows( 168 ) );
+		$total = static fn( int $carts, int $products, float $value ): array => array(
+			'carts'     => $carts,
+			'products'  => $products,
+			'value'     => $value,
+			'currency'  => get_woocommerce_currency(),
+			'recovered' => 0,
+		);
+		$this->assertSame(
+			array(
+				24  => $total( 1, 1, 10.0 ),
+				48  => $total( 2, 2, 20.0 ),
+				168 => $total( 2, 2, 20.0 ),
+			),
+			abandoned_count()['totals'],
+			'the full count by time frame'
+		);
+	}
+
+	public function test_the_carts_left_are_counted_in_full_past_the_rows_the_board_lists(): void {
+		$this->set_history( true );
+		for ( $i = 0; $i < 60; $i++ ) {
+			$this->seed_cart( sprintf( 'cccc%012d', $i ), array( 9001 + $i % 3 ), 10.0, array(), 'left', HOUR_IN_SECONDS + $i );
+		}
+		// One more left and ordered since, and one left with nothing in it: neither is a cart left behind.
+		$this->seed_cart( 'dddd000000000001', array( 9009 ), 10.0, array(), 'left', 2 * HOUR_IN_SECONDS );
+		$ordered = $this->seed_cart( 'dddd000000000001', array( 9009 ), 10.0, array(), 'converted', HOUR_IN_SECONDS );
+		$GLOBALS['wpdb']->query( $GLOBALS['wpdb']->prepare( 'UPDATE ' . journeys_table() . ' SET data = %s WHERE journey_id = UNHEX(%s)', wp_json_encode( array( 'c' => get_woocommerce_currency(), 'i' => array( '9009' => 1 ), 'o' => 77 ) ), Journeys::hex( $ordered ) ) );
+		$this->seed_cart( 'dddd000000000002', array(), 0.0, array(), 'left', HOUR_IN_SECONDS );
+		$rows = abandoned_rows();
+		$this->assertCount( 50, array_filter( $rows, static fn( array $row ): bool => null === $row['order_id'] ), 'the board lists the newest fifty not ordered' );
+		$this->assertCount( 51, $rows, 'and the one ordered since beside them' );
+		$this->assertSame( 77, array_column( $rows, 'order_id', 'id' )['dddd000000000001'] ?? null );
+		$count = abandoned_count();
+		$day   = $count['totals'][24];
+		$this->assertSame( 60, $day['carts'], 'and counts every one not ordered' );
+		$this->assertSame( 1, $day['recovered'], 'the one ordered since is counted apart' );
+		$this->assertSame( 3, $day['products'] );
+		$this->assertSame( 600.0, $day['value'] );
+		$this->assertSame( array(), $count['returning'], 'none of them has a journey that has not ended' );
+		// The shopper of the oldest cart, past the rows listed, is on the site again.
+		$this->seed_cart( sprintf( 'cccc%012d', 59 ), array( 9003 ), 10.0, array(), 'open', 60 );
+		$count = abandoned_count();
+		$this->assertSame( 60, $count['totals'][24]['carts'], 'the count holds: presence is the board\'s to read' );
+		$this->assertSame( array( sprintf( 'cccc%012d', 59 ) ), array_keys( $count['returning'] ), 'and the cart is named for the board to take out' );
+		$this->assertSame( 10.0, $count['returning'][ sprintf( 'cccc%012d', 59 ) ]['value'] );
+		$this->assertCount( 51, abandoned_rows(), 'an open journey lists nothing' );
+		$this->assertNotContains( sprintf( 'cccc%012d', 59 ), array_column( abandoned_rows(), 'id' ) );
+	}
+
+	public function test_every_table_of_the_abandoned_carts_lists_fifty_rows_for_each_day_and_says_how_many_there_are(): void {
+		global $wpdb;
+		$this->set_history( true );
+		// 55 carts left, each holding a product of its own on that product's page, and 52 more left and ordered since.
+		for ( $i = 0; $i < 55; $i++ ) {
+			$product = $this->make_product( 10 )->get_id();
+			$this->seed_cart( sprintf( 'eeee%012d', $i ), array( $product ), 10.0, array(), 'left', HOUR_IN_SECONDS + $i, 0, 'home:1:5>product:' . $product . ':9' );
+		}
+		for ( $i = 0; $i < 52; $i++ ) {
+			$this->seed_cart( sprintf( 'ffff%012d', $i ), array( 9009 ), 10.0, array(), 'left', 3 * HOUR_IN_SECONDS + $i, 0, 'cart:0:9' );
+			$this->seed_cart( sprintf( 'ffff%012d', $i ), array( 9009 ), 25.0, array(), 'converted', 2 * HOUR_IN_SECONDS + $i );
+		}
+		$wpdb->query( $wpdb->prepare( 'UPDATE ' . journeys_table() . ' SET data = %s WHERE outcome = %s', wp_json_encode( array( 'c' => get_woocommerce_currency(), 'i' => array( '9009' => 1 ), 'o' => 77 ) ), 'converted' ) );
+		foreach ( array( 24, 48 ) as $hours ) {
+			wp_cache_delete( 'abandonment_' . $hours, 'shopsocket' );
+		}
+		$this->assertSame( 50, abandoned_limit( 24 ) );
+		$this->assertSame( 350, abandoned_limit( 168 ) );
+		$ordered = static fn( array $rows ): int => count( array_filter( $rows, static fn( array $row ): bool => null !== $row['order_id'] ) );
+		$rows    = abandoned_rows();
+		$this->assertSame( array( 50, 50 ), array( count( $rows ) - $ordered( $rows ), $ordered( $rows ) ), 'fifty of each a day' );
+		$total = abandoned_count()['totals'][24];
+		$this->assertSame( array( 55, 52 ), array( $total['carts'], $total['recovered'] ), 'counted in full' );
+		$day = abandonment();
+		$this->assertSame( array( 50, 55 ), array( count( $day['products'] ), $day['products_total'] ) );
+		$this->assertSame( array( 50, 56 ), array( count( $day['pages'] ), $day['pages_total'] ), 'a page for each product and the cart' );
+		$this->assertSame( array( 'cart', 52 ), array( $day['pages'][0]['kind'], $day['pages'][0]['left'] ), 'the most left from first' );
+		// Over 48 hours each table has room for a hundred.
+		$rows = abandoned_rows( 48 );
+		$this->assertSame( array( 55, 52 ), array( count( $rows ) - $ordered( $rows ), $ordered( $rows ) ) );
+		$two_days = abandonment( 48 );
+		$this->assertSame( array( 55, 56 ), array( count( $two_days['products'] ), count( $two_days['pages'] ) ) );
 	}
 
 	public function test_a_visitor_starts_at_most_thirty_journeys_an_hour_and_a_stranger_cannot_change_one(): void {
@@ -256,7 +353,7 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertSame( $id, $by_id[ $known ]['ref'] );
 	}
 
-	public function test_a_conversion_ends_the_open_journey_with_the_order_on_it_and_shows_on_the_abandoned_row(): void {
+	public function test_a_conversion_ends_the_open_journey_with_the_order_on_it_and_shows_on_the_left_cart(): void {
 		$this->set_history( true );
 		$product = $this->make_product( 10 );
 		WC()->cart->add_to_cart( $product->get_id(), 1 );
@@ -267,6 +364,7 @@ final class HistoryTest extends ExtensionTestCase {
 		$by_id = array_column( $this->journeys(), null, 'journey_id' );
 		$this->assertSame( 'left', $by_id[ self::JOURNEY ]['outcome'] );
 		$this->assertSame( 'open', $by_id[ self::JOURNEY_2 ]['outcome'] );
+		$this->assertSame( 1, carts_left( time() )['count'], 'the cart is left behind until it is ordered' );
 		$this->assertCount( 1, abandoned_rows() );
 		$this->assertNull( abandoned_rows()[0]['order_id'] );
 		// Both checkouts hand their order to the same listener.
@@ -283,23 +381,29 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertSame( 'left', $by_id[ self::JOURNEY ]['outcome'], 'the journey already left stays left' );
 		$this->assertSame( array(), cart_rows(), 'a converted journey is not a live cart' );
 		$this->assertNotEmpty( $this->events_on( ORDERS_CHANNEL, 'woo.carts' ), 'staff hear about the conversion' );
+		$this->assertSame( $id, $by_id[ self::JOURNEY_2 ]['ref'] );
+		$this->assertSame( 0, carts_left( time() )['count'], 'a cart that became an order is not left behind' );
 		$rows = abandoned_rows();
 		$this->assertCount( 1, $rows );
 		$this->assertSame( $id, $rows[0]['id'] );
 		$this->assertSame( $order->get_id(), $rows[0]['order_id'], 'the left cart shows the order it became' );
 		$this->assertNotNull( $rows[0]['converted_at'] );
 		$this->assertStringContainsString( (string) $order->get_id(), $rows[0]['order_url'] );
+		$this->assertSame( round( (float) $order->get_total(), 2 ), $rows[0]['order_value'], 'with what the order was worth' );
+		$day = abandoned_count()['totals'][24];
+		$this->assertSame( array( 0, 1 ), array( $day['carts'], $day['recovered'] ), 'counted as recovered, not as left behind' );
 		// A later leave cannot relabel the converted journey, though the journey itself still grows.
 		do_action( 'wpsignal_visitor_leave', $this->report( 'product:' . $product->get_id() . ':5000>thanks:0:0', true, self::JOURNEY_2 ) );
 		$by_id = array_column( $this->journeys(), null, 'journey_id' );
 		$this->assertSame( 'converted', $by_id[ self::JOURNEY_2 ]['outcome'] );
 		$this->assertSame( 'product:' . $product->get_id() . ':5000>thanks:0:0', $by_id[ self::JOURNEY_2 ]['journey'] );
-		// The thank-you page's tab closes with the cart emptied: that leave is nobody's cart left behind, and the row keeps its order.
+		// The thank-you page's tab closes with the cart emptied: that leave is nobody's cart left behind.
 		WC()->cart->empty_cart();
 		do_action( 'wpsignal_visitor_visit', $this->report( 'thanks:0:0', false, self::JOURNEY_3 ) );
 		do_action( 'wpsignal_visitor_leave', $this->report( 'thanks:0:4000', true, self::JOURNEY_3 ) );
+		$this->assertSame( 0, carts_left( time() )['count'] );
 		$rows = abandoned_rows();
-		$this->assertCount( 1, $rows );
+		$this->assertCount( 1, $rows, 'and the left cart keeps its order' );
 		$this->assertSame( $order->get_id(), $rows[0]['order_id'] );
 		$this->assertSame( array( $product->get_id() ), $rows[0]['products'] );
 	}
@@ -366,18 +470,19 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertTrue( $replay['home:2:1200']['has_ref'] );
 	}
 
-	public function test_the_week_strip_reads_left_carts_recovered_orders_conversion_the_leak_and_the_products(): void {
+	public function test_the_day_strip_reads_left_carts_recovered_orders_and_conversion_and_a_time_frame_its_leak_and_products(): void {
 		global $wpdb;
-		$this->assertNull( week_strip(), 'history off: no strip' );
+		$this->assertNull( day_strip(), 'history off: no strip' );
+		$this->assertNull( abandonment(), 'nor what the left carts tell' );
 		$this->set_history( true );
 		$now   = current_time( 'mysql', true );
-		$early = gmdate( 'Y-m-d H:i:s', time() - 10 * DAY_IN_SECONDS );
-		// Carts on journeys: three left this week (two hold 9001), one converted this week holding 9001, one left last week; two journeys without a cart reached checkout.
+		$early = gmdate( 'Y-m-d H:i:s', time() - 30 * HOUR_IN_SECONDS );
+		// Carts on journeys: three left this day (two hold 9001), one converted this day holding 9001, one left the day before; two journeys without a cart reached checkout.
 		$this->seed_cart( 'aaaa000000000001', array( 9001, 9002 ), 10.0, array(), 'left', 0, 0, 'home:1:1>cart:0:48>away:0:5' );
 		$this->seed_cart( 'aaaa000000000002', array( 9001 ), 10.0, array(), 'left', 0, 0, 'product:9001:9>cart:0:30' );
 		$this->seed_cart( 'aaaa000000000003', array( 9003 ), 10.0, array(), 'left', 0, 0, 'home:1:1>product:9003:7' );
 		$this->seed_cart( 'aaaa000000000004', array( 9001 ), 50.0, array(), 'converted', 0, 0, 'cart:0:1>checkout:0:20>thanks:0:1' );
-		$this->seed_cart( 'aaaa000000000005', array( 9002 ), 10.0, array(), 'left', 10 * DAY_IN_SECONDS );
+		$this->seed_cart( 'aaaa000000000005', array( 9002 ), 10.0, array(), 'left', 30 * HOUR_IN_SECONDS );
 		foreach ( array( array( 'af405b6c-7d8e-4f90-b1a2-3d4e5f607182', $now ), array( 'c1627d8e-9f00-4b12-d3c4-5f6071829304', $early ) ) as list( $jid, $started ) ) {
 			Journeys::insert_row(
 				array(
@@ -389,7 +494,7 @@ final class HistoryTest extends ExtensionTestCase {
 				)
 			);
 		}
-		// One cart's moment credited with this week's order, another cart's with an order from last week.
+		// One cart's moment credited with this day's order, another cart's with an order from the day before.
 		foreach ( array(
 			array( 'aaaa000000000001', $now, 77, 50.0 ),
 			array( 'aaaa000000000005', $early, 66, 20.0 ),
@@ -416,17 +521,24 @@ final class HistoryTest extends ExtensionTestCase {
 				)
 			);
 		}
-		wp_cache_delete( 'week_strip', 'shopsocket' );
-		$strip = week_strip();
+		wp_cache_delete( 'day_strip', 'shopsocket' );
+		wp_cache_delete( 'abandonment_24', 'shopsocket' );
+		wp_cache_delete( 'abandonment_48', 'shopsocket' );
+		$strip = day_strip();
+		$day   = abandonment();
+		$this->assertSame( array( 'since', 'journeys', 'trend_days', 'sales', 'left', 'recovered', 'conversion' ), array_keys( $strip ) );
+		$this->assertSame( 24, $day['hours'] );
 		$this->assertTrue( $strip['journeys'] );
-		$this->assertCount( 14, $strip['trend_days'] );
-		$this->assertSame( gmdate( 'Y-m-d' ), $strip['trend_days'][13], 'UTC days, today last' );
-		// Fourteen days, oldest first: ten days ago is the fourth, today the last.
-		$series = static fn( int $early, int $today ): array => array_replace(
-			array_fill( 0, 14, 0 ),
+		$this->assertCount( 7, $strip['trend_days'] );
+		$this->assertMatchesRegularExpression( '/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/', $strip['trend_days'][6] );
+		$this->assertLessThanOrEqual( 5, time() - strtotime( $strip['trend_days'][6] ), 'the last day ends now' );
+		$this->assertSame( DAY_IN_SECONDS, strtotime( $strip['trend_days'][6] ) - strtotime( $strip['trend_days'][5] ), 'each day is 24 hours' );
+		// Seven days of 24 hours, oldest first: thirty hours ago is in the sixth, now in the last.
+		$series = static fn( int $early, int $now ): array => array_replace(
+			array_fill( 0, 7, 0 ),
 			array(
-				3  => $early,
-				13 => $today,
+				5 => $early,
+				6 => $now,
 			)
 		);
 		$this->assertSame(
@@ -434,27 +546,27 @@ final class HistoryTest extends ExtensionTestCase {
 				'count'    => 3,
 				'value'    => 30.0,
 				'currency' => get_woocommerce_currency(),
-				'previous' => 1,
+				'average'  => 0.6,
 				'days'     => $series( 1, 3 ),
 			),
 			$strip['left']
 		);
 		$this->assertSame(
 			array(
-				'count'    => 1,
-				'value'    => 50.0,
-				'previous' => 1,
-				'days'     => $series( 1, 1 ),
+				'count'   => 1,
+				'value'   => 50.0,
+				'average' => 0.3,
+				'days'    => $series( 1, 1 ),
 			),
 			$strip['recovered']
 		);
 		$this->assertSame(
 			array(
-				'reached'          => 2,
-				'orders'           => 1,
-				'percent'          => 50,
-				'previous_percent' => 0,
-				'days'             => $series( 0, 50 ),
+				'reached'         => 2,
+				'orders'          => 1,
+				'percent'         => 50,
+				'average_percent' => 33,
+				'days'            => $series( 0, 50 ),
 			),
 			$strip['conversion']
 		);
@@ -465,9 +577,28 @@ final class HistoryTest extends ExtensionTestCase {
 				'leavers'  => 3,
 				'median_s' => 39,
 			),
-			$strip['leak'],
+			$day['leak'],
 			'the last step that is not away, median of the two cart leavers'
 		);
+		$this->assertSame(
+			array(
+				array(
+					'kind'     => 'cart',
+					'id'       => 0,
+					'left'     => 2,
+					'median_s' => 39,
+				),
+				array(
+					'kind'     => 'deleted',
+					'id'       => 0,
+					'left'     => 1,
+					'median_s' => 7,
+				),
+			),
+			$day['pages'],
+			'the pages most left from, a page that is gone as one row'
+		);
+		$this->assertSame( array( 2, 3 ), array( $day['pages_total'], $day['products_total'] ), 'with how many there are of each' );
 		$this->assertSame(
 			array(
 				array(
@@ -486,9 +617,81 @@ final class HistoryTest extends ExtensionTestCase {
 					'bought' => 0,
 				),
 			),
-			$strip['products']
+			$day['products']
 		);
-		$this->assertSame( $strip, week_strip(), 'served from the cache' );
+		$this->assertSame( $strip, day_strip(), 'served from the cache' );
+		$this->assertSame( $day, abandonment(), 'and so is a time frame' );
+		// Over 48 hours the cart left thirty hours ago counts too.
+		$two_days = abandonment( 48 );
+		$this->assertSame( 48, $two_days['hours'] );
+		$this->assertSame(
+			array(
+				9001 => 2,
+				9002 => 2,
+				9003 => 1,
+			),
+			array_column( $two_days['products'], 'left', 'id' )
+		);
+	}
+
+	public function test_the_seed_command_writes_shopper_journeys_with_carts_under_wordsockets_seed_prefix(): void {
+		require_once dirname( __DIR__, 2 ) . '/inc/cli.php';
+		$this->set_history( true );
+		$product   = $this->make_product( 10 );
+		$catalogue = array(
+			'products' => array( $product->get_id() ),
+			'prices'   => array( $product->get_id() => 9.99 ),
+			'terms'    => array(),
+		);
+		$made      = seed_journeys( 60, 7, 7, $catalogue );
+		$rows      = $this->journeys();
+		$this->assertSame( 60, $made['journeys'] );
+		$this->assertCount( 60, $rows );
+		$this->assertGreaterThan( 0, $made['carts'] );
+		$this->assertCount( $made['carts'], array_filter( $rows, static fn( array $row ): bool => null !== $row['ref'] ) );
+		foreach ( $rows as $row ) {
+			$this->assertStringStartsWith( \WPSignal\Cli::SEED_PREFIX, $row['visitor'], 'so wp wordsocket journeys unseed removes it' );
+			$this->assertContains( $row['outcome'], array( 'left', 'converted' ), 'nothing seeded is live' );
+			$this->assertGreaterThanOrEqual( time() - 7 * DAY_IN_SECONDS - MINUTE_IN_SECONDS, strtotime( $row['started_at'] . ' UTC' ) );
+			$this->assertLessThanOrEqual( time(), strtotime( $row['last_seen'] . ' UTC' ) );
+			foreach ( explode( '>', $row['journey'] ) as $step ) {
+				$seconds = (int) explode( ':', $step )[2];
+				$this->assertGreaterThanOrEqual( 1, $seconds, $step );
+				$this->assertLessThanOrEqual( 900, $seconds, $step );
+			}
+			if ( null !== $row['ref'] ) {
+				$this->assertSame( array( $product->get_id() ), array_keys( $this->data_of( $row )['i'] ) );
+				$this->assertGreaterThanOrEqual( 9.99, (float) $row['value'] );
+			}
+		}
+		// The board's day reads them: the seven days' carts left behind are the carts that were not ordered.
+		wp_cache_delete( 'day_strip', 'shopsocket' );
+		$this->assertSame( $made['carts'] - $made['orders'], array_sum( day_strip()['left']['days'] ) );
+	}
+
+	public function test_the_day_strip_counts_paid_orders_placed_in_the_last_day_as_sales(): void {
+		$product = $this->make_product( 10 );
+		$now     = time();
+		$before  = sales( $now );
+		$this->assertCount( 7, $before['days'] );
+		$this->assertSame( $before['value'], $before['days'][6], 'the last day of the series is the figure' );
+
+		// A paid order now, one two days ago, and one not yet paid: other orders on the site are left alone, so deltas.
+		$paid = $this->make_order( $product, 2 );
+		$paid->update_status( 'processing' );
+		$older = $this->make_order( $product );
+		$older->set_date_created( $now - 2 * DAY_IN_SECONDS - HOUR_IN_SECONDS );
+		$older->set_status( 'completed' );
+		$older->save();
+		$this->make_order( $product );
+
+		$after = sales( $now + 1 );
+		$this->assertSame( $before['count'] + 1, $after['count'], 'the pending order is not a sale' );
+		$this->assertEqualsWithDelta( $before['value'] + (float) $paid->get_total(), $after['value'], 0.01 );
+		$this->assertEqualsWithDelta( $before['days'][4] + (float) $older->get_total(), $after['days'][4], 0.01, 'two days ago is the fifth day' );
+		$this->assertSame( $after['value'], $after['days'][6] );
+		$this->assertSame( round( array_sum( $after['days'] ) / 7, 1 ), $after['average'] );
+		$this->assertSame( get_woocommerce_currency(), $after['currency'] );
 	}
 
 	public function test_woocommerce_pages_are_named_as_journey_steps(): void {

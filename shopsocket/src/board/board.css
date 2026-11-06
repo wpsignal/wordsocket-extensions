@@ -32,10 +32,6 @@
   }
 }
 
-.shopsocket-subhead {
-  margin: var(--wpds-dimension-gap-sm, 8px) 0 0;
-}
-
 /* Tabs inside a section: the list, then the panel in view. */
 .shopsocket-tabs {
   display: flex;
@@ -44,8 +40,44 @@
   padding: 0 var(--wpds-dimension-padding-2xl, 1.5rem) var(--wpds-dimension-gap-2xl, 1.5rem);
 }
 
+/* Abandoned carts: a figure for each time frame, then the sentence about where leavers leave from. */
+.shopsocket-abandoned-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wpds-dimension-gap-lg, 16px);
+  margin-bottom: var(--wpds-dimension-gap-2xl, 1.5rem);
+}
+
 .shopsocket-leak {
   margin: 0;
+}
+
+/* The time frames, and the progress bar under them while the chosen one is fetched: it takes no room of its own. */
+.shopsocket-frames {
+  position: relative;
+}
+
+.shopsocket-frames .shopsocket-frames__loading {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% + var(--wpds-dimension-gap-xs, 4px));
+  width: auto;
+}
+
+/* The line above a tab's table. */
+.shopsocket-caption {
+  margin: 0 0 var(--wpds-dimension-gap-sm, 8px);
+}
+
+/* A time frame's figure, an inset card: a click anywhere on it chooses it, and the chosen one is outlined. */
+.shopsocket-frame {
+  display: grid;
+  cursor: pointer;
+
+  &.is-chosen .shopsocket-stat {
+    border-color: var(--wp-admin-theme-color, #3858e9);
+    box-shadow: 0 0 0 1px var(--wp-admin-theme-color, #3858e9);
+  }
 }
 
 /* Stat tiles: as many to a row as fit, one column on a phone. */
@@ -136,7 +168,7 @@
   }
 }
 
-/* Right now: two cards side by side, each a headline figure over a bar split into its parts and the parts as inset figures. */
+/* Right now: two cards side by side, the shoppers' headline figure over a bar split into its parts with the parts as inset figures, and the top lists. */
 .shopsocket-groups {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
@@ -154,7 +186,7 @@
   border: 1px solid var(--wpds-color-stroke-surface-neutral, #e0e0e0);
   border-radius: var(--wpds-border-radius-lg, 8px);
 
-  /* The fill of each share: solid for a tab in view, hatched for a hidden one, amber for a cart left behind. */
+  /* The fill of each share: solid for a tab in view, hatched for a hidden one. */
   --shopsocket-people: var(--wp-admin-theme-color, #3858e9);
   --shopsocket-held: var(--wpds-color-foreground-content-success-weak, #008030);
 
@@ -168,22 +200,6 @@
       var(--shopsocket-people) 0 2px,
       color-mix(in srgb, var(--shopsocket-people) 25%, transparent) 2px 5px
     );
-  }
-
-  & .is-live {
-    --shopsocket-fill: var(--shopsocket-held);
-  }
-
-  & .is-away {
-    --shopsocket-fill: repeating-linear-gradient(
-      135deg,
-      var(--shopsocket-held) 0 2px,
-      color-mix(in srgb, var(--shopsocket-held) 25%, transparent) 2px 5px
-    );
-  }
-
-  & .is-abandoned {
-    --shopsocket-fill: #eda100;
   }
 }
 
@@ -214,7 +230,7 @@
 .shopsocket-group__parts {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--wpds-dimension-gap-sm, 8px);
 
   & .shopsocket-stat {
@@ -223,10 +239,98 @@
   }
 }
 
-@container (max-width: 420px) {
+.shopsocket-frame .shopsocket-stat {
+  border: 1px solid var(--wpds-color-stroke-surface-neutral, #e0e0e0);
+  padding: var(--wpds-dimension-padding-md, 12px) var(--wpds-dimension-padding-lg, 16px);
+}
+
+@container (max-width: 560px) {
+  .shopsocket-group__parts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 300px) {
   .shopsocket-group__parts {
     grid-template-columns: 1fr;
   }
+}
+
+/* The top lists: two side by side in their card, one over the other when it is narrow. */
+.shopsocket-group.is-top {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: var(--wpds-dimension-gap-2xl, 24px);
+
+  & .is-pages {
+    --shopsocket-fill: var(--shopsocket-people);
+  }
+
+  & .is-products {
+    --shopsocket-fill: var(--shopsocket-held);
+  }
+}
+
+@container (max-width: 420px) {
+  .shopsocket-top {
+    grid-column: 1 / -1;
+  }
+}
+
+.shopsocket-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wpds-dimension-gap-sm, 8px);
+  min-width: 0;
+
+  & h3,
+  & p {
+    margin: 0;
+  }
+}
+
+.shopsocket-top__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--wpds-dimension-gap-sm, 8px);
+}
+
+.shopsocket-top__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  /* Each row over a bar as wide as its count among the others. */
+  & li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--wpds-dimension-gap-md, 12px);
+    margin: 0;
+    padding: var(--wpds-dimension-padding-xs, 4px) var(--wpds-dimension-padding-sm, 8px);
+    border-radius: var(--wpds-border-radius-sm, 4px);
+    background: linear-gradient(
+        color-mix(in srgb, var(--shopsocket-fill) 12%, transparent) 0 0
+      )
+      no-repeat left / calc(var(--shopsocket-share, 0) * 100%) 100%;
+  }
+}
+
+.shopsocket-top__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shopsocket-top__count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
 }
 
 .shopsocket-stat__swatch {
@@ -277,7 +381,8 @@
 }
 
 .shopsocket-board__stock,
-.shopsocket-board__alert {
+.shopsocket-board__alert,
+.shopsocket-board__order {
   margin: 0;
 }
 
@@ -322,7 +427,7 @@
   }
 }
 
-.shopsocket-conn {
+.shopsocket-connection-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -330,6 +435,7 @@
   padding: 2px 10px;
   border-radius: 999px;
   border: 1px solid #c3c4c7;
+  margin-right: auto;
 
   &::before {
     content: "";
@@ -414,14 +520,22 @@ body.shopsocket-fullscreen {
   }
 
   #wpcontent {
-    margin-left: 0;
+    margin: 0;
     padding: 0;
+  }
+
+  #wpbody-content {
+    padding: 0;
+  }
+
+  .wrap {
+    margin: 0;
   }
 
   .shopsocket-board {
     max-width: none;
     padding: 24px;
-    font-size: 18px;
+    margin-top: calc(var(--wpds-dimension-gap-2xl, 1.5rem) * -1);
   }
 }
 

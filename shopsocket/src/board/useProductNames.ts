@@ -14,6 +14,13 @@ const BATCH = 100;
 type Config = Pick<ShopSocketBoardConfig, "productsUrl" | "nonce">;
 
 /**
+ * The most products one board table asks names for.
+ *
+ * @since 0.8.0
+ */
+export const LIVE_PRODUCTS = 100;
+
+/**
  * What a product cell says: the name, "Product #N (removed)" for a ref of null, "#N" while unknown.
  *
  * @since 0.8.0
@@ -77,9 +84,9 @@ export function useProductNames(ids: number[], config: Config) {
       clearTimeout(timer);
       if (!fired) missing.forEach((id) => pending.current.delete(id));
     };
-    // The ids are keyed by their joined string so a new array with the same ids does not refetch.
+    // The ids are keyed by their joined string so a new array with the same ids does not refetch; an answered batch asks for the next.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, config.productsUrl, config.nonce]);
+  }, [key, version, config.productsUrl, config.nonce]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => (id: number) => cache.current.get(id), [version]);
