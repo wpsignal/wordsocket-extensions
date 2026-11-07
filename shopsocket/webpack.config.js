@@ -35,6 +35,17 @@ module.exports = {
 		 */
 		clean: { keep: /^(fonts|images|storefront)\// },
 	},
+	module: {
+		...defaultConfig.module,
+		rules: [
+			...defaultConfig.module.rules,
+			/*
+			 * These packages declare no side effects, which would drop the stylesheets the board imports:
+			 * the theme's tokens, the components' and DataViews' styles.
+			 */
+			{ test: /@wordpress[\\/](theme|components|dataviews)[\\/].*\.css$/, sideEffects: true },
+		],
+	},
 	plugins: [
 		...defaultConfig.plugins.filter(
 			( plugin ) => plugin.constructor.name !== 'DependencyExtractionWebpackPlugin'

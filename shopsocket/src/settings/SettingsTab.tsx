@@ -1,20 +1,23 @@
 /**
- * The ShopSocket tab on WordSocket's settings page: the site-wide switches
- * for the shopper-facing features and the categories they skip. Reads and
- * writes the `shopsocket_storefront` option through `/wp/v2/settings`.
+ * The ShopSocket tab on WordSocket's settings page: the site-wide switches, the categories they
+ * skip and the cart history, read and written as the `shopsocket_storefront` option through
+ * `/wp/v2/settings`.
  *
- * Controls come from core's `wp.components` global rather than the
- * `@wordpress/components` this repo bundles for the board (the board needs a
- * newer version than core ships, at about 2 MB). WordSocket's settings page
- * loads core's copy, so the tab uses it and stays small. A save runs through
- * WordSocket's `useTask` (0.29), which shows the "Settings saved." toast or
- * the red error in WordSocket's own snackbar list.
+ * - Layout, text, cards, the notice, the spinner and the save button are `@wordpress/ui`.
+ * - The form controls come from core's `wp.components` global, which the settings page loads.
+ * - A save runs through WordSocket's `useTask`, which shows the toast or the error.
  */
 import { useEffect, useState } from "@wordpress/element";
 import { __ } from "@wordpress/i18n";
 import apiFetch from "@wordpress/api-fetch";
-import { CollapsibleCard, Card, Stack } from "@wordpress/ui";
-import { Flex, FlexItem } from "@wordpress/components";
+import {
+  Button,
+  CollapsibleCard,
+  Card,
+  Spinner,
+  Stack,
+  Text,
+} from "@wordpress/ui";
 
 type Components = typeof import("@wordpress/components");
 type Term = { id: number; name: string };
@@ -24,9 +27,6 @@ const DEFAULTS: ShopSocketStorefrontSettings = {
   activity_enabled: true,
   in_carts_excluded_categories: [],
   activity_excluded_categories: [],
-  history_enabled: false,
-  history_retention_days: 30,
-  journeys_retention_months: 12,
 };
 
 type ExclusionKey =
@@ -38,13 +38,36 @@ function coreComponents(): Components {
     .components;
 }
 
+/**
+ * The ShopSocket settings tab.
+ *
+ * @since 0.5.0
+ * @since 0.8.0 Laid out with `@wordpress/ui`.
+ */
 export function SettingsTab() {
-  const { ToggleControl, FormTokenField, Button, Spinner, TextControl } = coreComponents();
+  const { ToggleControl, FormTokenField, TextControl, Icon, Tooltip } =
+    coreComponents();
   const [settings, setSettings] = useState<ShopSocketStorefrontSettings>(
     window.shopSocketSettings?.storefront ?? DEFAULTS,
   );
   const [terms, setTerms] = useState<Term[] | null>(null);
   const [dirty, setDirty] = useState(false);
+  /*
+   * Whether the object cache outlives a request, asked twice: the first call plants a marker, and
+   * only a persistent cache still holds it for the second. Null until both answers are in.
+   */
+  const [cache, setCache] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const probe = () =>
+      apiFetch<{ persistent: boolean }>({ path: "/shopsocket/v1/cache" });
+    probe()
+      .then((first) =>
+        first.persistent ? true : probe().then((second) => second.persistent),
+      )
+      .then(setCache)
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     /*
@@ -102,7 +125,7 @@ export function SettingsTab() {
         onChange={onCategoriesChange(key)}
         placeholder={__("Choose or type a category", "shopsocket")}
         __experimentalExpandOnFocus
-        __experimentalShowHowTo={false}
+        help=""
       />
     );
   };
@@ -126,155 +149,92 @@ export function SettingsTab() {
   );
 
   return (
-    <div className="shopsocket-tab">
-      <h2>{__("ShopSocket", "shopsocket")}</h2>
-      <p>
-        {__(
-          "What shoppers see on the storefront. The board under WooCommerce is unaffected by these settings.",
-          "shopsocket",
-        )}
-      </p>
-
-      <h4>{__("Storefront settings", "shopsocket")}</h4>
-
-      <Flex direction="column" gap={4}>
-        <FlexItem>
-          <CollapsibleCard.Root defaultOpen>
-            <CollapsibleCard.Header>
-              <Stack align="center" justify="space-between">
-                <Card.Title>{__("In-cart count", "shopsocket")}</Card.Title>
-              </Stack>
-            </CollapsibleCard.Header>
-            <CollapsibleCard.Content>
-              <Flex direction="column" gap={4} align="stretch">
-                <FlexItem>
-                  <ToggleControl
-                    label={__(
-                      "Enable",
-                      "shopsocket",
-                    )}
-                    help={__(
-                      'Shoppers see "N shoppers have this in their cart right now" under the price.',
-                      "shopsocket",
-                    )}
-                    checked={settings.in_carts_enabled}
-                    onChange={(value: boolean) =>
-                      update({ in_carts_enabled: value })
-                    }
-                  />
-                </FlexItem>
-                <FlexItem>
-                  {exclusions(
-                    "in_carts_excluded_categories",
-                    settings.in_carts_enabled,
-                    __("Except in these categories", "shopsocket"),
-                  )}
-                </FlexItem>
-              </Flex>
-            </CollapsibleCard.Content>
-          </CollapsibleCard.Root>
-        </FlexItem>
-        <FlexItem>
-          <CollapsibleCard.Root defaultOpen>
-            <CollapsibleCard.Header>
-              <Card.Title>
-                {__("Added-to-cart notification", "shopsocket")}
-              </Card.Title>
-            </CollapsibleCard.Header>
-            <CollapsibleCard.Content>
-              <Flex direction="column" gap={4} align="stretch">
-                <FlexItem>
-                  <ToggleControl
-                    label={__("Show added-to-cart notifications", "shopsocket")}
-                    help={__(
-                      'Shoppers who hold the same product see "Someone just added this to their cart".',
-                      "shopsocket",
-                    )}
-                    checked={settings.activity_enabled}
-                    onChange={(value: boolean) =>
-                      update({ activity_enabled: value })
-                    }
-                  />
-                </FlexItem>
-                <FlexItem>
-                  {exclusions(
-                    "activity_excluded_categories",
-                    settings.activity_enabled,
-                    __("Except in these categories", "shopsocket"),
-                  )}
-                </FlexItem>
-              </Flex>
-            </CollapsibleCard.Content>
-          </CollapsibleCard.Root>
-        </FlexItem>
-        <FlexItem>
-          <CollapsibleCard.Root defaultOpen>
-            <CollapsibleCard.Header>
-              <Card.Title>{__("Cart history", "shopsocket")}</Card.Title>
-            </CollapsibleCard.Header>
-            <CollapsibleCard.Content>
-              <Flex direction="column" gap={4} align="stretch">
-                <FlexItem>
-                  <ToggleControl
-                    label={__("Keep a history of carts", "shopsocket")}
-                    help={__(
-                      "Off: a cart is forgotten with its session, as before. On: each cart stays on your site with what it held, when its shopper left and whether it became an order, and the pages they visited are kept as a journey. Nothing leaves your site.",
-                      "shopsocket",
-                    )}
-                    checked={settings.history_enabled}
-                    onChange={(value: boolean) => update({ history_enabled: value })}
-                  />
-                </FlexItem>
-                {settings.history_enabled && (
-                  <FlexItem>
-                    <Flex gap={4} align="flex-start" wrap>
-                      <FlexItem>
-                        <TextControl
-                          type="number"
-                          min={1}
-                          max={365}
-                          label={__("Keep carts for (days)", "shopsocket")}
-                          help={__("A cart's products, value and outcome, linked to the shopper's account when they were logged in.", "shopsocket")}
-                          value={String(settings.history_retention_days)}
-                          onChange={(value: string) => update({ history_retention_days: Math.min(365, Math.max(1, Number(value) || 1)) })}
-                        />
-                      </FlexItem>
-                      <FlexItem>
-                        <TextControl
-                          type="number"
-                          min={1}
-                          max={36}
-                          label={__("Keep journeys for (months)", "shopsocket")}
-                          help={__("The pages a shopper opened, as ids and durations, under a random browser id and never under an account.", "shopsocket")}
-                          value={String(settings.journeys_retention_months)}
-                          onChange={(value: string) => update({ journeys_retention_months: Math.min(36, Math.max(1, Number(value) || 1)) })}
-                        />
-                      </FlexItem>
-                    </Flex>
-                  </FlexItem>
-                )}
-              </Flex>
-            </CollapsibleCard.Content>
-          </CollapsibleCard.Root>
-        </FlexItem>
-        <FlexItem>
-          <p className="description shopsocket-tab__note">
-            {__(
-              "A product set to On or Off on its own edit screen (Product data, ShopSocket tab) keeps that choice whatever these settings say.",
+    <Stack direction="column" gap="lg" className="shopsocket-tab">
+      <Stack direction="column" gap="sm">
+        <Text variant="heading-xl" render={<h2 />}>
+          <Tooltip
+            text={__(
+              "What shoppers see on the storefront. The board under WooCommerce is unaffected by these settings.",
               "shopsocket",
             )}
-          </p>
-
-          <Button
-            variant="primary"
-            onClick={() => save.run()}
-            isBusy={save.isPending}
-            disabled={save.isPending || !dirty}
           >
-            {__("Save changes", "shopsocket")}
-          </Button>
-        </FlexItem>
-      </Flex>
-    </div>
+            <span tabIndex={0}>
+              <Icon size={16} icon="editor-help" />
+            </span>
+          </Tooltip>{" "}
+          {__("ShopSocket", "shopsocket")}
+        </Text>
+      </Stack>
+
+      <Text variant="heading-sm" render={<h4 />}>
+        {__("Storefront settings", "shopsocket")}
+      </Text>
+      <Stack gap="lg" align="start" className="shopsocket-settings-cards">
+        <CollapsibleCard.Root>
+          <CollapsibleCard.Header>
+            <Card.Title>{__("In-cart count", "shopsocket")}</Card.Title>
+          </CollapsibleCard.Header>
+          <CollapsibleCard.Content>
+            <Stack direction="column" gap="md" align="stretch">
+              <ToggleControl
+                label={__("Enable", "shopsocket")}
+                help={__(
+                  'Shoppers see "N shoppers have this in their cart right now" under the price. Counts the carts WordSocket\'s History keeps, so it needs that on.',
+                  "shopsocket",
+                )}
+                checked={settings.in_carts_enabled}
+                onChange={(value: boolean) =>
+                  update({ in_carts_enabled: value })
+                }
+              />
+              {exclusions(
+                "in_carts_excluded_categories",
+                settings.in_carts_enabled,
+                __("Except in these categories", "shopsocket"),
+              )}
+            </Stack>
+          </CollapsibleCard.Content>
+        </CollapsibleCard.Root>
+        <CollapsibleCard.Root>
+          <CollapsibleCard.Header>
+            <Card.Title>
+              {__("Added-to-cart notification", "shopsocket")}
+            </Card.Title>
+          </CollapsibleCard.Header>
+          <CollapsibleCard.Content>
+            <Stack direction="column" gap="md" align="stretch">
+              <ToggleControl
+                label={__("Enable", "shopsocket")}
+                help={__(
+                  'Shoppers who hold the same product see "Someone just added this to their cart".',
+                  "shopsocket",
+                )}
+                checked={settings.activity_enabled}
+                onChange={(value: boolean) =>
+                  update({ activity_enabled: value })
+                }
+              />
+              {exclusions(
+                "activity_excluded_categories",
+                settings.activity_enabled,
+                __("Except in these categories", "shopsocket"),
+              )}
+            </Stack>
+          </CollapsibleCard.Content>
+        </CollapsibleCard.Root>
+      </Stack>
+
+      <Stack direction="row">
+        <Button
+          variant="solid"
+          tone="brand"
+          onClick={() => save.run()}
+          loading={save.isPending}
+          disabled={save.isPending || !dirty}
+        >
+          {__("Save changes", "shopsocket")}
+        </Button>
+      </Stack>
+    </Stack>
   );
 }

@@ -1,6 +1,6 @@
 import "./env";
 import { expect, test } from "@wordpress/e2e-test-utils-playwright";
-import { addToCart, createProduct, deleteProduct, visitorContext, waitForLive } from "./helpers";
+import { addToCart, createProduct, deleteProduct, shopperCart, visitorContext, visitorOf, waitForLive } from "./helpers";
 import { wp } from "./env";
 
 /**
@@ -61,7 +61,7 @@ test.describe("Plain HTTP site", () => {
       await shop.goto(product.permalink);
       await waitForLive(shop);
       await addToCart(shop);
-      const liveLink = page.locator(".shopsocket-live-products a", { hasText: "E2E Http Cart" });
+      const liveLink = shopperCart(page, await visitorOf(shop));
       await expect(liveLink).toBeVisible({ timeout: 15_000 });
 
       // The fallback id is stored, so the next page is the same visitor, not a new one.

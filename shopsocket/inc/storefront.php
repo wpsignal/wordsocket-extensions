@@ -27,6 +27,8 @@ const STORE_NS          = 'shopsocket/storefront';
  * browsers that cached the previous build. Falls back to the plugin version
  * when the manifest is missing, which only happens on an unbuilt checkout.
  *
+ * @since 0.4.0
+ *
  * @param string $name File name under `build/storefront/`.
  * @return array{dependencies: array<string>, version: string}
  */
@@ -45,6 +47,8 @@ function storefront_asset( string $name ): array {
  * to shop pages made a cart look abandoned the moment its shopper opened
  * My Account or a blog post.
  *
+ * @since 0.1.1
+ *
  * @return bool
  */
 function is_live_storefront_page(): bool {
@@ -53,6 +57,8 @@ function is_live_storefront_page(): bool {
 	}
 	/**
 	 * Filters whether the live storefront features load on this request.
+	 *
+	 * @since 0.1.1
 	 *
 	 * @param bool $load Default: true on every front-end page.
 	 */
@@ -81,6 +87,8 @@ add_filter(
  * The `data-wp-context` for a stock element: ids, plus the rendered text and
  * class the store falls back to until an event arrives.
  *
+ * @since 0.1.1
+ *
  * @param WC_Product $product Product or variation.
  * @param array      $extra   Additional context keys.
  * @return string
@@ -91,6 +99,8 @@ function stock_context( WC_Product $product, array $extra = array() ): string {
 
 /**
  * The context values behind `stock_context()`.
+ *
+ * @since 0.1.1
  *
  * @param WC_Product $product Product or variation.
  * @param array      $extra   Additional context keys.
@@ -115,6 +125,8 @@ function stock_context_data( WC_Product $product, array $extra = array() ): arra
  * Replace WooCommerce's availability paragraph with one bound to the store.
  *
  * Rendered hidden when WooCommerce has nothing to say, so a later sell-out can appear.
+ *
+ * @since 0.1.1
  *
  * @param string     $html    Availability markup (may be empty).
  * @param WC_Product $product Product or variation.
@@ -143,6 +155,8 @@ add_filter( 'woocommerce_get_stock_html', __NAMESPACE__ . '\wrap_stock_html', 10
  *
  * Variable products keep WooCommerce's own `woocommerce/products` binding,
  * which the script feeds instead.
+ *
+ * @since 0.1.1
  *
  * @param string $content Rendered block.
  * @param array  $block   Parsed block, with `context`.
@@ -179,6 +193,8 @@ add_filter( 'render_block_woocommerce/product-stock-indicator', __NAMESPACE__ . 
  * "N shoppers have this in their cart" markup for a product, bound to the
  * store: hidden at zero, shown as soon as the count is positive.
  *
+ * @since 0.1.1
+ *
  * @param int $product_id Parent product ID.
  * @return string
  */
@@ -202,6 +218,8 @@ function in_carts_html( int $product_id ): string {
  * rather than reset them: a Live Stock block on an ordinary page has no other
  * source for its first count.
  *
+ * @since 0.2.1
+ *
  * @return object
  */
 function seeded_carts(): object {
@@ -212,6 +230,8 @@ function seeded_carts(): object {
 /**
  * The counter's two sentences, for the server render and the store's `i18n`
  * alike: `one` at exactly 1, `many` otherwise.
+ *
+ * @since 0.1.1
  *
  * @return array{one: string, many: string}
  */
@@ -231,6 +251,8 @@ function in_carts_strings(): array {
 
 /**
  * Render the counter once per request: a template may fire both hooks below.
+ *
+ * @since 0.1.1
  *
  * @param int $product_id The page's product.
  * @return string Markup, or '' when already rendered or disabled.
@@ -270,6 +292,8 @@ add_filter(
 /**
  * Which storefront page this is, for the module's page-specific behaviour.
  *
+ * @since 0.1.1
+ *
  * @return string `product`, `cart`, `checkout`, or `other`.
  */
 function storefront_page(): string {
@@ -287,20 +311,24 @@ function storefront_page(): string {
 
 /**
  * Whether the in-cart counter is shown, for a product or for the site as a
- * whole. Settings, categories and the product's own choice are combined in
- * `feature_enabled()` (inc/settings.php); the `shopsocket_in_carts_enabled`
- * filter still runs last.
+ * whole. Needs WordSocket's History, which holds the carts; settings, categories
+ * and the product's own choice are combined in `feature_enabled()`
+ * (inc/settings.php); the `shopsocket_in_carts_enabled` filter still runs last.
+ *
+ * @since 0.1.1
  *
  * @param int $product_id Product or variation ID, 0 for the site-wide switch.
  * @return bool
  */
 function in_carts_enabled( int $product_id = 0 ): bool {
-	return feature_enabled( FEATURE_IN_CARTS, $product_id );
+	return history_enabled() && feature_enabled( FEATURE_IN_CARTS, $product_id );
 }
 
 /**
  * Whether "someone just added" toasts are shown, for a product or for the
  * site as a whole. The `shopsocket_activity_enabled` filter still runs last.
+ *
+ * @since 0.1.1
  *
  * @param int $product_id Product or variation ID, 0 for the site-wide switch.
  * @return bool
@@ -324,10 +352,13 @@ add_action(
 		 */
 		wp_register_script_module( STOREFRONT_MODULE . '/viewer', URL . 'build/storefront/viewer.js', array(), storefront_asset( 'viewer.js' )['version'] );
 		wp_register_script_module( STOREFRONT_MODULE . '/woocommerce', URL . 'build/storefront/woocommerce.js', array( '@wordpress/interactivity' ), storefront_asset( 'woocommerce.js' )['version'] );
+		// The rules vocabulary (shared with the settings bundle) and the module that wires it to the viewer (0.8).
+		wp_register_script_module( STOREFRONT_MODULE . '/rules-vocabulary', URL . 'build/storefront/rules-vocabulary.js', array(), storefront_asset( 'rules-vocabulary.js' )['version'] );
+		wp_register_script_module( STOREFRONT_MODULE . '/rules', URL . 'build/storefront/rules.js', array( STOREFRONT_MODULE . '/rules-vocabulary' ), storefront_asset( 'rules.js' )['version'] );
 		wp_register_script_module(
 			STOREFRONT_MODULE,
 			URL . 'build/storefront/storefront.js',
-			array( '@wordpress/interactivity', STOREFRONT_MODULE . '/viewer', STOREFRONT_MODULE . '/woocommerce' ),
+			array( '@wordpress/interactivity', STOREFRONT_MODULE . '/viewer', STOREFRONT_MODULE . '/woocommerce', STOREFRONT_MODULE . '/rules' ),
 			storefront_asset( 'storefront.js' )['version']
 		);
 		wp_enqueue_script_module( STOREFRONT_MODULE );
@@ -345,7 +376,12 @@ add_action(
 					'activity' => ACTIVITY_CHANNEL,
 				),
 				'cartIdUrl'         => rest_url( REST_NS . '/cart-id' ),
+				'guestUrl'          => rest_url( REST_NS . '/guest' ),
 				'nonce'             => wp_create_nonce( 'wp_rest' ),
+				// The rules actions' routes (0.8); the engine itself is WordSocket's.
+				'rules'             => array(
+					'alertUrl' => rest_url( REST_NS . '/alert' ),
+				),
 
 				/*
 				 * Always on for the script: the per-product decisions reach the
@@ -396,7 +432,34 @@ add_action(
 
 
 /**
+ * The products in a cart as the rules' cart context sees them: id, name, units, category ids.
+ *
+ * @since 0.8.0
+ *
+ * @param array<int, int> $quantities Units per parent product id.
+ * @return array<int, array{id: int, name: string, qty: int, categories: int[]}>
+ */
+function cart_items_for_rules( array $quantities ): array {
+	$items = array();
+	foreach ( $quantities as $product_id => $qty ) {
+		$product = wc_get_product( (int) $product_id );
+		if ( ! $product instanceof WC_Product ) {
+			continue;
+		}
+		$items[] = array(
+			'id'         => (int) $product_id,
+			'name'       => $product->get_name(),
+			'qty'        => max( 1, (int) $qty ),
+			'categories' => array_map( 'intval', (array) $product->get_category_ids() ),
+		);
+	}
+	return $items;
+}
+
+/**
  * Whether the request already carries a WooCommerce session cookie.
+ *
+ * @since 0.1.1
  *
  * @return bool
  */
@@ -428,29 +491,8 @@ add_action(
 					),
 				),
 				'callback'            => static function ( \WP_REST_Request $request ) {
-					if ( ( has_wc_session_cookie() || is_user_logged_in() ) && function_exists( 'wc_load_cart' ) ) {
-						wc_load_cart();
-					}
-
-					/*
-					 * The row store is a cache of live carts, so every load and every
-					 * reconnect writes this shopper's row back from the real cart: a
-					 * row lost to cache eviction or a cleared transient returns the
-					 * moment its shopper is on the site again.
-					 */
-					record_cart( cart_id() );
-					$state    = current_cart_state();
-					$response = array(
-						'id'         => cart_id(),
-						'products'   => $state ? $state['products'] : array(),
-						'quantities' => $state ? (object) $state['quantities'] : new \stdClass(),
-					);
-					$product = (int) $request->get_param( 'product' );
-					if ( $product > 0 ) {
-						$response['count'] = count_in_carts( $product );
-					}
 					// Per-visitor identity and a live count: no CDN or page cache may store this.
-					$rest = rest_ensure_response( $response );
+					$rest = rest_ensure_response( viewer_state( (int) $request->get_param( 'product' ) ) );
 					$rest->header( 'Cache-Control', 'no-store, max-age=0' );
 					return $rest;
 				},
@@ -458,4 +500,67 @@ add_action(
 			)
 		);
 	}
+);
+
+/**
+ * This shopper's state for the browser: cart id, held products, the rules' cart fields, and the live count of `$product` when one is given.
+ *
+ * @since 0.8.0
+ *
+ * @param int $product The page's product id, 0 for none.
+ * @return array{id: string, products: int[], quantities: object, total: float|int, currency: string, items: array, count?: int}
+ */
+function viewer_state( int $product = 0 ): array {
+	if ( ( has_wc_session_cookie() || is_user_logged_in() ) && function_exists( 'wc_load_cart' ) ) {
+		wc_load_cart();
+	}
+
+	$state    = current_cart_state();
+	$response = array(
+		'id'         => cart_id(),
+		'products'   => $state ? $state['products'] : array(),
+		'quantities' => $state ? (object) $state['quantities'] : new \stdClass(),
+		// For the rules' cart context (0.8): the total, the currency, and each product's name and categories.
+		'total'      => $state ? $state['value'] : 0,
+		'currency'   => get_woocommerce_currency(),
+		'items'      => $state ? cart_items_for_rules( $state['quantities'] ) : array(),
+	);
+	if ( $product > 0 ) {
+		$response['count'] = count_in_carts( $product );
+	}
+	return $response;
+}
+
+/**
+ * The product a journey's open step is on, 0 when the page is not a product.
+ *
+ * @since 0.8.0
+ *
+ * @param string $journey The journey, its last step the current page.
+ * @return int
+ */
+function journey_product( string $journey ): int {
+	$last = (string) substr( strrchr( '>' . $journey, '>' ), 1 );
+	$step = explode( ':', $last );
+	return 'product' === ( $step[0] ?? '' ) ? max( 0, (int) ( $step[1] ?? 0 ) ) : 0;
+}
+
+/*
+ * The visit report WordSocket 0.31 sends on every page load answers with this
+ * shopper's state too, so the page makes one request instead of a visit and a
+ * `/cart-id` fetch (the viewer still fetches on cart changes and reconnects).
+ * The live count rides along for a product page, read from the journey's open
+ * step, since the report carries no product of its own.
+ */
+add_filter(
+	'wpsignal_visitor_visit_response',
+	static function ( array $answer, array $report ): array {
+		if ( ! function_exists( 'WC' ) ) {
+			return $answer;
+		}
+		$answer['shopsocket'] = viewer_state( journey_product( (string) ( $report['journey'] ?? '' ) ) );
+		return $answer;
+	},
+	10,
+	2
 );

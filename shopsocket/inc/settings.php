@@ -23,17 +23,29 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 const SETTINGS_OPTION = 'shopsocket_storefront';
 
-/** The two shopper-facing features the settings switch. */
+/**
+ * The two shopper-facing features the settings switch.
+ *
+ * @since 0.5.0
+ */
 const FEATURE_IN_CARTS = 'in_carts';
 const FEATURE_ACTIVITY = 'activity';
 
-/** Product meta per feature: '' (default), 'on', or 'off'. */
+/**
+ * Product meta per feature: '' (default), 'on', or 'off'.
+ *
+ * @since 0.5.0
+ */
 const PRODUCT_META = array(
 	FEATURE_IN_CARTS => '_shopsocket_in_carts',
 	FEATURE_ACTIVITY => '_shopsocket_activity',
 );
 
-/** The legacy filter per feature, applied last to the resolved value. */
+/**
+ * The legacy filter per feature, applied last to the resolved value.
+ *
+ * @since 0.5.0
+ */
 const FEATURE_FILTER = array(
 	FEATURE_IN_CARTS => 'shopsocket_in_carts_enabled',
 	FEATURE_ACTIVITY => 'shopsocket_activity_enabled',
@@ -43,7 +55,9 @@ const FEATURE_FILTER = array(
  * Defaults: everything on, nothing excluded, which is what every site had
  * before the settings existed.
  *
- * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[], history_enabled: bool, history_retention_days: int, journeys_retention_months: int}
+ * @since 0.5.0
+ *
+ * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[]}
  */
 function settings_defaults(): array {
 	return array(
@@ -51,31 +65,13 @@ function settings_defaults(): array {
 		'activity_enabled'             => true,
 		'in_carts_excluded_categories' => array(),
 		'activity_excluded_categories' => array(),
-		// Cart history (0.7): off until the merchant opts in; nothing outlives the session before that.
-		'history_enabled'              => false,
-		'history_retention_days'       => 30,
-		'journeys_retention_months'    => 12,
 	);
 }
 
 /**
- * An integer setting clamped to its range, with the default for a missing value.
- *
- * @param mixed $value    Whatever was saved.
- * @param int   $fallback The default.
- * @param int   $min      Lowest allowed.
- * @param int   $max      Highest allowed.
- * @return int
- */
-function clamp_setting( $value, int $fallback, int $min, int $max ): int {
-	if ( ! is_numeric( $value ) ) {
-		return $fallback;
-	}
-	return max( $min, min( $max, (int) $value ) );
-}
-
-/**
  * A list of `product_cat` term ids: integers above zero, deduplicated.
+ *
+ * @since 0.5.0
  *
  * @param mixed $value Whatever was saved.
  * @return int[]
@@ -94,8 +90,10 @@ function sanitize_term_ids( $value ): array {
 /**
  * Coerce whatever was saved into the option's shape.
  *
+ * @since 0.5.0
+ *
  * @param mixed $value The value being saved or read.
- * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[], history_enabled: bool, history_retention_days: int, journeys_retention_months: int}
+ * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[]}
  */
 function sanitize_settings( $value ): array {
 	$defaults = settings_defaults();
@@ -107,16 +105,15 @@ function sanitize_settings( $value ): array {
 		'activity_enabled'             => (bool) ( $value['activity_enabled'] ?? $defaults['activity_enabled'] ),
 		'in_carts_excluded_categories' => sanitize_term_ids( $value['in_carts_excluded_categories'] ?? $legacy ),
 		'activity_excluded_categories' => sanitize_term_ids( $value['activity_excluded_categories'] ?? $legacy ),
-		'history_enabled'              => (bool) ( $value['history_enabled'] ?? $defaults['history_enabled'] ),
-		'history_retention_days'       => clamp_setting( $value['history_retention_days'] ?? null, $defaults['history_retention_days'], 1, 365 ),
-		'journeys_retention_months'    => clamp_setting( $value['journeys_retention_months'] ?? null, $defaults['journeys_retention_months'], 1, 36 ),
 	);
 }
 
 /**
  * The saved settings, sanitized, with defaults for anything missing.
  *
- * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[], history_enabled: bool, history_retention_days: int, journeys_retention_months: int}
+ * @since 0.5.0
+ *
+ * @return array{in_carts_enabled: bool, activity_enabled: bool, in_carts_excluded_categories: int[], activity_excluded_categories: int[]}
  */
 function settings(): array {
 	return sanitize_settings( get_option( SETTINGS_OPTION, array() ) );
@@ -148,17 +145,6 @@ add_action(
 								'type'  => 'array',
 								'items' => array( 'type' => 'integer' ),
 							),
-							'history_enabled'              => array( 'type' => 'boolean' ),
-							'history_retention_days'       => array(
-								'type'    => 'integer',
-								'minimum' => 1,
-								'maximum' => 365,
-							),
-							'journeys_retention_months'    => array(
-								'type'    => 'integer',
-								'minimum' => 1,
-								'maximum' => 36,
-							),
 						),
 					),
 				),
@@ -167,9 +153,54 @@ add_action(
 	}
 );
 
+/*
+ * Whether the object cache outlives a request is probed, not asked:
+ * `wp_using_ext_object_cache()` is true under a drop-in that caches nothing
+ * (Lempify's `none` backend). A request plants a marker and the next one looks
+ * for it, so the settings tab asks twice and trusts the second answer. The
+ * History card warns when it is false; history is never locked by it.
+ */
+const CACHE_PROBE_GROUP = 'shopsocket';
+const CACHE_PROBE_KEY   = 'cache_probe';
+
+/**
+ * Whether an earlier request's marker is still in the object cache, leaving a fresh one for the next request.
+ *
+ * @since 0.8.0
+ *
+ * @return bool
+ */
+function object_cache_persists(): bool {
+	$marker = substr( hash( 'sha256', 'shopsocket-cache-probe' . wp_salt( 'nonce' ) ), 0, 16 );
+	$seen   = wp_cache_get( CACHE_PROBE_KEY, CACHE_PROBE_GROUP );
+	wp_cache_set( CACHE_PROBE_KEY, $marker, CACHE_PROBE_GROUP, DAY_IN_SECONDS );
+	return $seen === $marker;
+}
+
+add_action(
+	'rest_api_init',
+	static function (): void {
+		register_rest_route(
+			REST_NS,
+			'/cache',
+			array(
+				'methods'             => 'GET',
+				'callback'            => static function () {
+					$response = rest_ensure_response( array( 'persistent' => object_cache_persists() ) );
+					$response->header( 'Cache-Control', 'no-store' );
+					return $response;
+				},
+				'permission_callback' => static fn() => current_user_can( STAFF_CAP ),
+			)
+		);
+	}
+);
+
 /**
  * The per-product choice for a feature: 'on', 'off', or '' for default.
  * Variations follow their parent.
+ *
+ * @since 0.5.0
  *
  * @param int    $product_id Product or variation ID.
  * @param string $feature    FEATURE_IN_CARTS or FEATURE_ACTIVITY.
@@ -183,6 +214,8 @@ function product_setting( int $product_id, string $feature ): string {
 
 /**
  * Whether any of the product's categories is excluded in the settings.
+ *
+ * @since 0.5.0
  *
  * @param int   $product_id Parent product ID.
  * @param int[] $excluded   Excluded `product_cat` term IDs.
@@ -202,6 +235,8 @@ function in_excluded_category( int $product_id, array $excluded ): bool {
  * - The product's own choice always wins: Off is off and On is on, whatever the site switch and the categories say.
  * - If the site switch is off, the feature is off for all products.
  * - If categories are excluded, the feature is off for products in those categories.
+ *
+ * @since 0.5.0
  *
  * @param string $feature    FEATURE_IN_CARTS or FEATURE_ACTIVITY.
  * @param int    $product_id Product or variation ID, 0 for the site as a whole.
@@ -229,6 +264,8 @@ function feature_enabled( string $feature, int $product_id = 0 ): bool {
 	 * Filters whether the feature applies. Runs after the settings, so code
 	 * still has the final say; `$product_id` is 0 for the site-wide check.
 	 *
+	 * @since 0.5.0
+	 *
 	 * @param bool $enabled    The resolved value.
 	 * @param int  $product_id Parent product ID, or 0.
 	 */
@@ -255,6 +292,8 @@ add_filter(
 /**
  * The ShopSocket mark as a CSS mask, so the tab icon is the logo in the tab's
  * own text colour, where WooCommerce's tabs use a dashicon.
+ *
+ * @since 0.5.0
  *
  * @return string A `url("data:image/svg+xml,...")` value.
  */

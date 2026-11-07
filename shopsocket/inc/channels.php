@@ -74,6 +74,8 @@ add_action(
 /**
  * The public channels (stock and activity), for every token, visitors included.
  *
+ * @since 0.1.1
+ *
  * @param string[] $channels Channels the client auto-subscribes to.
  * @param int      $user_id  Token owner (0 for visitors).
  * @param string   $site_id  Hashed site identifier.
@@ -93,6 +95,8 @@ add_filter( 'wpsignal_token_channels', __NAMESPACE__ . '\register_stock_channel'
  *
  * Skipped for everyone else: their tokens lack the orders prefix, so the
  * subscribe would only be refused.
+ *
+ * @since 0.1.1
  *
  * @param string[] $channels Channels the client auto-subscribes to.
  * @param int      $user_id  Token owner.
@@ -120,6 +124,8 @@ add_filter( 'wpsignal_token_channels', __NAMESPACE__ . '\register_orders_channel
  * Runs after WordSocket's own enqueue (priority 10), and only when the client
  * is there to carry it. `setPresence()` before the socket is open is kept and
  * sent on connect.
+ *
+ * @since 0.6.0
  *
  * @return void
  */

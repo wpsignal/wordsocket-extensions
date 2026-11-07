@@ -6,10 +6,14 @@
 
 use function WPSignal\Extensions\ShopSocket\feature_enabled;
 use function WPSignal\Extensions\ShopSocket\in_carts_enabled;
+use function WPSignal\Extensions\ShopSocket\object_cache_persists;
 use function WPSignal\Extensions\ShopSocket\sanitize_settings;
 use function WPSignal\Extensions\ShopSocket\settings;
 use function WPSignal\Extensions\ShopSocket\toasts_enabled;
 use const WPSignal\Extensions\ShopSocket\ACTIVITY_CHANNEL;
+use const WPSignal\Extensions\ShopSocket\CACHE_PROBE_GROUP;
+use const WPSignal\Extensions\ShopSocket\CACHE_PROBE_KEY;
+use const WPSignal\Extensions\ShopSocket\REST_NS;
 use const WPSignal\Extensions\ShopSocket\FEATURE_ACTIVITY;
 use const WPSignal\Extensions\ShopSocket\FEATURE_IN_CARTS;
 use const WPSignal\Extensions\ShopSocket\PRODUCT_META;
@@ -57,9 +61,6 @@ final class SettingsTest extends ExtensionTestCase {
 				'activity_enabled'             => true,
 				'in_carts_excluded_categories' => array(),
 				'activity_excluded_categories' => array(),
-				'history_enabled'              => false,
-				'history_retention_days'       => 30,
-				'journeys_retention_months'    => 12,
 			),
 			settings(),
 			'a site without the option behaves as before the settings existed'
@@ -71,23 +72,16 @@ final class SettingsTest extends ExtensionTestCase {
 				'activity_enabled'             => true,
 				'in_carts_excluded_categories' => array( 3, 7 ),
 				'activity_excluded_categories' => array( 9 ),
-				'history_enabled'              => true,
-				'history_retention_days'       => 365,
-				'journeys_retention_months'    => 1,
 			),
 			sanitize_settings(
 				array(
 					'in_carts_enabled'             => '0',
 					'in_carts_excluded_categories' => array( '3', 7, 3, -1, 'x' ),
 					'activity_excluded_categories' => array( 9 ),
-					'history_enabled'              => '1',
-					'history_retention_days'       => 4000,
-					'journeys_retention_months'    => 0,
 				)
 			),
 			'booleans coerced, term ids deduplicated and cleaned, missing keys defaulted, retentions clamped to their ranges'
 		);
-		$this->assertSame( 30, sanitize_settings( array( 'history_retention_days' => 'soon' ) )['history_retention_days'], 'a non-number falls back to the default' );
 
 		$legacy = sanitize_settings( array( 'excluded_categories' => array( 5 ) ) );
 		$this->assertSame( array( 5 ), $legacy['in_carts_excluded_categories'], 'the pre-release single list applies to both features' );
@@ -99,6 +93,7 @@ final class SettingsTest extends ExtensionTestCase {
 	}
 
 	public function test_the_site_switch_categories_and_product_choice_combine_in_order(): void {
+		$this->set_history( true );
 		$product  = $this->make_product();
 		$id       = $product->get_id();
 		$excluded = $this->make_category( 'Excluded' );
@@ -188,6 +183,7 @@ final class SettingsTest extends ExtensionTestCase {
 	}
 
 	public function test_the_cart_added_event_follows_the_product_settings(): void {
+		$this->set_history( true );
 		$product = $this->make_product( 10 );
 		$id      = $product->get_id();
 		WC()->cart->empty_cart();
@@ -224,5 +220,14 @@ final class SettingsTest extends ExtensionTestCase {
 			remove_filter( 'shopsocket_activity_throttle', '__return_zero' );
 			WC()->cart->empty_cart();
 		}
+	}
+
+	public function test_the_cache_probe_sees_its_marker_only_on_a_later_call_and_is_staff_only(): void {
+		wp_cache_delete( CACHE_PROBE_KEY, CACHE_PROBE_GROUP );
+		$this->assertFalse( object_cache_persists(), 'the first call finds nothing and plants the marker' );
+		$this->assertTrue( object_cache_persists(), 'the next call finds it' );
+
+		wp_set_current_user( 0 );
+		$this->assertSame( 401, rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/cache' ) )->get_status(), 'visitors learn nothing about the server' );
 	}
 }

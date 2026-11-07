@@ -30,6 +30,8 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   // Storefront checkouts need a payment method; cash on delivery is the simplest.
   wp("option", "update", "woocommerce_cod_settings", '{"enabled":"yes","title":"Cash on delivery"}', "--format=json");
   wp("option", "update", "woocommerce_coming_soon", "no");
+  // Moments are off until a site switches them on (WordSocket 0.31); the rules specs need them.
+  wp("option", "update", "wpsignal_moments_enabled", "1");
 
   const { storageState, baseURL } = config.projects[0].use;
   const requestContext = await request.newContext({ baseURL, ignoreHTTPSErrors: true });

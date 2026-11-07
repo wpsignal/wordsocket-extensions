@@ -11,6 +11,7 @@
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
+  margin-bottom: var(--wpds-dimension-gap-2xl);
 }
 
 .shopsocket-meta-nav {

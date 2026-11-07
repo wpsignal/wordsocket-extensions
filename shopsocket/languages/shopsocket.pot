@@ -9,18 +9,18 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-19T03:16:06+00:00\n"
+"POT-Creation-Date: 2026-11-07T05:51:45+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 3.0.0-alpha-01b1b10\n"
 "X-Domain: shopsocket\n"
 
 #. Plugin Name of the plugin
 #: shopsocket.php:3
-#: inc/admin-board.php:40
-#: inc/admin-board.php:52
+#: inc/admin-board.php:42
+#: inc/admin-board.php:54
 #: inc/channels.php:28
-#: inc/class-privacy.php:25
-#: inc/settings.php:246
+#: inc/class-privacy.php:30
+#: inc/settings.php:283
 #: build/settings.js:1
 msgid "ShopSocket"
 msgstr ""
@@ -45,50 +45,50 @@ msgstr ""
 msgid "https://wpsignal.io"
 msgstr ""
 
-#: inc/admin-board.php:35
+#: inc/admin-board.php:37
 msgid "Realtime"
 msgstr ""
 
-#: inc/admin-board.php:73
+#: inc/admin-board.php:77
 msgid "View"
 msgstr ""
 
 #. translators: 1: minimum WordSocket version, 2: link to the Plugins screen
-#: inc/admin-board.php:111
+#: inc/admin-board.php:120
 #, php-format
 msgid "ShopSocket needs WordSocket %1$s or newer. %2$s, then come back."
 msgstr ""
 
-#: inc/admin-board.php:113
+#: inc/admin-board.php:122
 msgid "Update WordSocket"
 msgstr ""
 
-#: inc/admin-board.php:219
+#: inc/admin-board.php:243
 msgid "(opens in a new tab)"
 msgstr ""
 
-#: inc/admin-board.php:222
+#: inc/admin-board.php:246
 msgid "Dashboard"
 msgstr ""
 
-#: inc/admin-board.php:223
+#: inc/admin-board.php:247
 msgid "Documentation"
 msgstr ""
 
-#: inc/admin-board.php:224
+#: inc/admin-board.php:248
 msgid "Support"
 msgstr ""
 
-#: inc/admin-board.php:229
+#: inc/admin-board.php:253
 msgid "External links"
 msgstr ""
 
-#: inc/admin-board.php:234
+#: inc/admin-board.php:258
 msgid "ShopSocket home (opens in a new tab)"
 msgstr ""
 
 #. translators: %d: units that can still be bought
-#: inc/blocks.php:103
+#: inc/blocks.php:111
 #, php-format
 msgid "%d left"
 msgstr ""
@@ -98,151 +98,289 @@ msgstr ""
 msgid "A live orders board for your team and live stock on product pages."
 msgstr ""
 
-#: inc/class-privacy.php:26
-#: inc/class-privacy.php:27
-#: inc/class-privacy.php:62
-msgid "ShopSocket cart history"
-msgstr ""
-
-#: inc/class-privacy.php:37
-msgid "With cart history on, ShopSocket keeps a record of each shopping cart on this site: the products it held, its value, when it was first and last seen, when the shopper left and whether it became an order, for the number of days set in its settings. For logged-in shoppers the cart is linked to their account; guests are known only by a random id their browser made. Journeys (the pages a shopper opened and how long each was open, as post and term ids) are kept separately for the number of months set in its settings, under that random browser id and never under an account."
-msgstr ""
-
+#: inc/class-privacy.php:31
+#: inc/class-privacy.php:32
 #: inc/class-privacy.php:66
-#: build/board.js:188
-msgid "Products"
+msgid "ShopSocket guest guesses"
+msgstr ""
+
+#: inc/class-privacy.php:44
+msgid "While WordSocket keeps a history of journeys, ShopSocket adds to each visit the shopping cart it was made with: the products it held, its value, and the order it became. It is kept with the journey, for as long as WordSocket keeps that, and exported and erased with it. Shoppers who were not logged in are known only by a random id their browser made, unless their browser remembers the email of an earlier order here, in which case staff see that email, flagged as a guess, for two days."
 msgstr ""
 
 #: inc/class-privacy.php:70
-#: build/board.js:188
-msgid "Value"
+msgid "Browser id"
 msgstr ""
 
 #: inc/class-privacy.php:74
-msgid "First seen"
+msgid "Email"
 msgstr ""
 
 #: inc/class-privacy.php:78
-msgid "Last seen"
+msgid "Kept since"
 msgstr ""
 
-#: inc/class-privacy.php:82
-#: build/board.js:188
-msgid "Left"
+#: inc/guests.php:263
+#: inc/rules.php:376
+msgid "Try again in a minute."
 msgstr ""
 
-#. translators: 1: Current page number, 2: Total number of pages.
-#: inc/class-privacy.php:86
-#: build/board.js:184
-#: build/board.js:188
-msgid "Order"
+#: inc/history.php:463
+msgid "Order placed"
 msgstr ""
 
-#: inc/payloads.php:32
+#: inc/history.php:465
+msgid "Orders a day"
+msgstr ""
+
+#: inc/history.php:470
+#: inc/rules.php:96
+#: build/board.js:7
+#: build/board.js:214
+#: build/board.js:237
+msgid "Cart"
+msgstr ""
+
+#: inc/history.php:471
+msgid "Carts left behind a day"
+msgstr ""
+
+#: inc/payloads.php:34
+#: build/board.js:191
+#: build/board.js:192
+#: build/board.js:223
 msgid "Guest"
 msgstr ""
 
-#: inc/settings.php:134
+#: inc/rules.php:76
+msgid "at least"
+msgstr ""
+
+#: inc/rules.php:80
+msgid "at most"
+msgstr ""
+
+#: inc/rules.php:86
+msgid "includes"
+msgstr ""
+
+#: inc/rules.php:90
+msgid "excludes"
+msgstr ""
+
+#: inc/rules.php:98
+msgid "items in the cart"
+msgstr ""
+
+#: inc/rules.php:99
+msgid "the cart total"
+msgstr ""
+
+#: inc/rules.php:100
+msgid "the first product's name"
+msgstr ""
+
+#: inc/rules.php:108
+msgid "Cart has items"
+msgstr ""
+
+#: inc/rules.php:112
+#: inc/rules.php:155
+msgid "is"
+msgstr ""
+
+#: inc/rules.php:122
+msgid "Items in the cart"
+msgstr ""
+
+#. translators: %s: currency code
+#: inc/rules.php:132
+#, php-format
+msgid "Cart total (%s)"
+msgstr ""
+
+#: inc/rules.php:141
+msgid "Cart has product (id)"
+msgstr ""
+
+#: inc/rules.php:144
+msgid "The product id, from its edit screen."
+msgstr ""
+
+#: inc/rules.php:151
+msgid "Cart has the product on this page"
+msgstr ""
+
+#: inc/rules.php:159
+msgid "Only on a product page; anywhere else the condition is false either way."
+msgstr ""
+
+#: inc/rules.php:178
+msgid "Cart has a product in"
+msgstr ""
+
+#: inc/rules.php:190
+msgid "Alert Realtime Board"
+msgstr ""
+
+#: inc/rules.php:191
+msgid "Your team, on the board: the cart, its value and where the shopper is. Nothing is shown to the shopper."
+msgstr ""
+
+#: inc/rules.php:195
+msgid "Message"
+msgstr ""
+
+#: inc/rules.php:196
+#: build/board.js:241
+msgid "A shopper may need a hand"
+msgstr ""
+
+#: inc/rules.php:213
+msgid "The shop page"
+msgstr ""
+
+#: inc/rules.php:214
+msgid "A product category"
+msgstr ""
+
+#: inc/rules.php:215
+msgid "The cart"
+msgstr ""
+
+#: inc/rules.php:216
+msgid "The checkout"
+msgstr ""
+
+#: inc/rules.php:217
+msgid "The order received page"
+msgstr ""
+
+#: inc/rules.php:235
+msgid "Product category"
+msgstr ""
+
+#: inc/rules.php:255
+msgid "Get customers' attention when away"
+msgstr ""
+
+#: inc/rules.php:280
+msgid "Your cart is waiting: {cart.product}"
+msgstr ""
+
+#: inc/rules.php:286
+msgid "Your cart is waiting"
+msgstr ""
+
+#: inc/rules.php:367
+msgid "No such moment."
+msgstr ""
+
+#: inc/rules.php:373
+msgid "No cart to alert about."
+msgstr ""
+
+#: inc/settings.php:131
 msgid "ShopSocket storefront settings."
 msgstr ""
 
-#: inc/settings.php:292
+#: inc/settings.php:331
 msgid "Default"
 msgstr ""
 
-#: inc/settings.php:293
+#: inc/settings.php:332
 msgid "On"
 msgstr ""
 
-#: inc/settings.php:294
+#: inc/settings.php:333
 msgid "Off"
 msgstr ""
 
 #. translators: %s: a link to the ShopSocket tab of the WordSocket settings page, reading "Settings"
-#: inc/settings.php:299
+#: inc/settings.php:338
 #, php-format
 msgid "What shoppers see for this product. Default follows the ShopSocket tab on the %s page, including its excluded categories; On and Off apply here whatever that page says."
 msgstr ""
 
-#: inc/settings.php:300
+#: inc/settings.php:339
 msgid "Settings"
 msgstr ""
 
-#: inc/settings.php:305
+#: inc/settings.php:344
 #: build/settings.js:1
 msgid "In-cart count"
 msgstr ""
 
-#: inc/settings.php:306
+#: inc/settings.php:345
 msgid "The \"shoppers have this in their cart\" line on this product."
 msgstr ""
 
-#: inc/settings.php:315
+#: inc/settings.php:354
 #: build/settings.js:1
 msgid "Added-to-cart notification"
 msgstr ""
 
-#: inc/settings.php:316
+#: inc/settings.php:355
 msgid "The \"someone just added this\" notice other shoppers see for this product."
 msgstr ""
 
 #. translators: %d: number of shoppers
-#: inc/storefront.php:221
+#: inc/storefront.php:241
 #, php-format
 msgid "%d shopper has this in their cart right now"
 msgstr ""
 
 #. translators: %d: number of shoppers
-#: inc/storefront.php:223
+#: inc/storefront.php:243
 #, php-format
 msgid "%d shoppers have this in their cart right now"
 msgstr ""
 
-#: inc/storefront.php:225
+#: inc/storefront.php:245
 msgid "You have this in your cart right now"
 msgstr ""
 
-#: inc/storefront.php:226
+#: inc/storefront.php:246
 msgid "You and 1 other shopper have this in your carts right now"
 msgstr ""
 
 #. translators: %d: number of other shoppers
-#: inc/storefront.php:228
+#: inc/storefront.php:248
 #, php-format
 msgid "You and %d other shoppers have this in your carts right now"
 msgstr ""
 
-#: inc/storefront.php:360
+#: inc/storefront.php:396
 msgid "Someone just added this to their cart"
 msgstr ""
 
 #. translators: %s: product name
-#: inc/storefront.php:362
+#: inc/storefront.php:398
 #, php-format
 msgid "Someone just added %s to their cart"
 msgstr ""
 
 #. translators: %s: product name
-#: inc/storefront.php:364
+#: inc/storefront.php:400
 #, php-format
 msgid "%s just sold out and can no longer be purchased. Please remove it from your cart."
 msgstr ""
 
 #. translators: 1: product name, 2: units left
-#: inc/storefront.php:366
+#: inc/storefront.php:402
 #, php-format
 msgid "Only %2$d of %1$s left, fewer than your cart holds."
 msgstr ""
 
-#: inc/storefront.php:368
+#: inc/storefront.php:404
 msgid "Add to cart"
 msgstr ""
 
-#: inc/storefront.php:369
+#: inc/storefront.php:405
 msgid "Read more"
 msgstr ""
 
-#: inc/storefront.php:392
+#: inc/storefront.php:428
 msgid "Dismiss"
 msgstr ""
 
@@ -258,200 +396,792 @@ msgstr ""
 msgid "3 shoppers have this in their cart right now"
 msgstr ""
 
-#: build/board.js:184
-msgid "Time"
+#. translators: accessibility text appended to link text
+#: build/board.js:6
+#, js-format
+msgid "Product #%d (removed)"
 msgstr ""
 
-#: build/board.js:184
-msgid "Customer"
+#: build/board.js:7
+msgid "Home"
 msgstr ""
 
-#: build/board.js:184
-msgid "Items"
+#: build/board.js:7
+msgid "Shop"
 msgstr ""
 
-#: build/board.js:184
-msgid "Total"
+#: build/board.js:7
+msgid "Checkout"
 msgstr ""
 
-#: build/board.js:184
-msgid "Status"
+#: build/board.js:7
+msgid "Order received"
 msgstr ""
 
-#: build/board.js:184
-msgid "Payment"
+#: build/board.js:7
+msgid "Search"
 msgstr ""
 
-#: build/board.js:184
-msgid "Search orders"
+#: build/board.js:7
+msgid "Archive"
 msgstr ""
 
-#: build/board.js:184
-msgid "No orders yet. New orders appear here the moment they are placed."
+#: build/board.js:7
+msgid "Another page"
 msgstr ""
 
+#: build/board.js:7
+msgid "Admin"
+msgstr ""
+
+#: build/board.js:7
+msgid "Away"
+msgstr ""
+
+#: build/board.js:7
+msgid "Pages since removed"
+msgstr ""
+
+#: build/board.js:7
+msgid "Category"
+msgstr ""
+
+#: build/board.js:7
+#: build/board.js:191
+msgid "Product"
+msgstr ""
+
+#: build/board.js:7
+#: build/board.js:217
+msgid "Page"
+msgstr ""
+
+#: build/board.js:7
+msgid "Post"
+msgstr ""
+
+#: build/board.js:7
+#, js-format
+msgid "%1$s #%2$d"
+msgstr ""
+
+#. translators: 1: Current page number, 2: Total number of pages.
+#: build/board.js:191
+msgid "Last 24 hours"
+msgstr ""
+
+#: build/board.js:191
+msgid "The last seven days, day by day"
+msgstr ""
+
+#: build/board.js:191
+msgid "Above the 7-day average"
+msgstr ""
+
+#: build/board.js:191
+msgid "Below the 7-day average"
+msgstr ""
+
+#: build/board.js:191
+#: build/board.js:223
+msgid "Staff"
+msgstr ""
+
+#: build/board.js:191
+msgid "Shopper"
+msgstr ""
+
+#. translators: %d: paid orders placed with the guessed email
 #. translators: %d: number of orders on the board
-#: build/board.js:185
-#, js-format
-msgid "No orders match. %d on the board."
-msgstr ""
-
-#: build/board.js:185
-msgid "Sound on new order"
-msgstr ""
-
-#: build/board.js:185
-msgid "Exit full screen"
-msgstr ""
-
-#: build/board.js:185
-msgid "Full screen"
-msgstr ""
-
-#: build/board.js:185
-msgid "Stock"
-msgstr ""
-
-#. translators: %s: product name
-#: build/board.js:185
-#, js-format
-msgid "%s is out of stock"
-msgstr ""
-
-#. translators: 1: product name, 2: quantity
-#: build/board.js:186
-#, js-format
-msgid "%1$s is low (%2$d left)"
-msgstr ""
-
-#: build/board.js:186
-msgid "Live orders"
-msgstr ""
-
-#. translators: %d: number of orders on the board
-#: build/board.js:186
+#: build/board.js:192
+#: build/board.js:193
+#: build/board.js:229
 #, js-format
 msgid "%d order"
 msgid_plural "%d orders"
 msgstr[0] ""
 msgstr[1] ""
 
-#: build/board.js:186
+#: build/board.js:192
+msgid "same as the 7-day average"
+msgstr ""
+
+#: build/board.js:192
 #, js-format
-msgid "(%d staff)"
+msgid "%s vs the 7-day average"
 msgstr ""
 
-#. translators: %d: how many of the figure above are staff (people or tabs)
-#: build/board.js:187
-msgid "Storefront Customers"
+#: build/board.js:193
+msgid "Turn on History in WordSocket to see how the last 24 hours compare with the last seven days."
 msgstr ""
 
-#: build/board.js:187
-msgid "Unique visitors on the storefront right now"
+#: build/board.js:193
+msgid "Open Journeys"
 msgstr ""
 
-#: build/board.js:187
+#. translators: %d: carts in one day
+#: build/board.js:193
+#: build/board.js:194
+msgid "This day"
+msgstr ""
+
+#: build/board.js:194
+msgid "Sales, carts, recovered sales and checkouts over the last 24 hours, each against its daily average over the last seven days."
+msgstr ""
+
+#: build/board.js:194
+msgid "Sales"
+msgstr ""
+
+#. translators: 1: the paid orders placed, 2: the change in what they came to against the 7-day average
+#: build/board.js:195
 #, js-format
-msgid "(%d away)"
+msgid "%1$s, %2$s"
 msgstr ""
 
-#: build/board.js:187
-msgid "Open Tabs"
+#: build/board.js:195
+msgid "Carts left behind"
 msgstr ""
 
-#. translators: %d: plan connection limit
-#: build/board.js:188
+#: build/board.js:195
 #, js-format
-msgid "All browser tabs, of %d/%d on your plan"
+msgid "%d cart"
+msgid_plural "%d carts"
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: 1: the change against the 7-day average, 2: the value of those carts
+#: build/board.js:196
+#, js-format
+msgid "%1$s, %2$s in them"
 msgstr ""
 
-#: build/board.js:188
-msgid "Connections between your storefront and wpsignal.io"
+#: build/board.js:196
+msgid "Recovered orders"
 msgstr ""
 
-#: build/board.js:188
-#: build/board.js:189
+#. translators: 1: the value of the recovered orders, 2: the change against the 7-day average
+#: build/board.js:197
+#, js-format
+msgid "%1$s in orders after a moment, %2$s"
+msgstr ""
+
+#: build/board.js:197
+msgid "Checkout conversion"
+msgstr ""
+
+#. translators: 1: orders, 2: shoppers who reached checkout, 3: the change against the 7-day figure in points
+#: build/board.js:198
+#, js-format
+msgid "%1$d of %2$d who reached checkout, %3$s"
+msgstr ""
+
+#. translators: %d: percentage points
+#: build/board.js:199
+#, js-format
+msgid "%d pts"
+msgstr ""
+
+#. translators: %d: seconds
+#: build/board.js:201
+#, js-format
+msgid "%d s"
+msgstr ""
+
+#: build/board.js:201
+#, js-format
+msgid "%1$d min %2$d s"
+msgstr ""
+
+#. translators: %d: hours
+#: build/board.js:203
+#, js-format
+msgid "Last %d hour"
+msgid_plural "Last %d hours"
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %d: days
+#: build/board.js:204
+#, js-format
+msgid "Last %d day"
+msgid_plural "Last %d days"
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %d: hours
+#: build/board.js:205
+#, js-format
+msgid "the last %d hour"
+msgid_plural "the last %d hours"
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %d: days
+#: build/board.js:206
+#, js-format
+msgid "the last %d day"
+msgid_plural "the last %d days"
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: 1: carts listed, 2: carts counted, 3: a time frame, such as "the last 24 hours"
+#: build/board.js:207
+#, js-format
+msgid "The newest %1$d of %2$d carts left in %3$s."
+msgstr ""
+
+#. translators: 1: carts, 2: a time frame, such as "the last 24 hours"
+#: build/board.js:208
+#, js-format
+msgid "%1$d cart left in %2$s."
+msgid_plural "%1$d carts left in %2$s."
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: 1: carts listed, 2: carts counted, 3: a time frame, such as "the last 24 hours"
+#: build/board.js:209
+#, js-format
+msgid "The newest %1$d of %2$d carts left in %3$s that became orders."
+msgstr ""
+
+#. translators: 1: carts, 2: a time frame, such as "the last 24 hours"
+#: build/board.js:210
+#, js-format
+msgid "%1$d cart left in %2$s became an order."
+msgid_plural "%1$d carts left in %2$s became orders."
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: 1: products listed, 2: products counted, 3: a time frame, such as "the last 24 hours"
+#: build/board.js:211
+#, js-format
+msgid "The top %1$d of %2$d products in the carts left in %3$s."
+msgstr ""
+
+#. translators: 1: products, 2: a time frame, such as "the last 24 hours"
+#: build/board.js:212
+#, js-format
+msgid "%1$d product in the carts left in %2$s."
+msgid_plural "%1$d products in the carts left in %2$s."
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: 1: pages listed, 2: pages counted, 3: a time frame, such as "the last 24 hours"
+#: build/board.js:213
+#, js-format
+msgid "The top %1$d of %2$d pages shoppers left from with a cart in %3$s."
+msgstr ""
+
+#. translators: 1: pages, 2: a time frame, such as "the last 24 hours"
+#: build/board.js:214
+#, js-format
+msgid "%1$d page shoppers left from with a cart in %2$s."
+msgid_plural "%1$d pages shoppers left from with a cart in %2$s."
+msgstr[0] ""
+msgstr[1] ""
+
+#: build/board.js:214
+msgid "Left"
+msgstr ""
+
+#: build/board.js:214
+#: build/board.js:221
+msgid "Order"
+msgstr ""
+
+#: build/board.js:214
+msgid "Order value"
+msgstr ""
+
+#: build/board.js:214
+msgid "Ordered"
+msgstr ""
+
+#: build/board.js:214
+msgid "Value"
+msgstr ""
+
+#. translators: %s: a time frame, such as "the last 24 hours"
+#: build/board.js:215
+#, js-format
+msgid "No cart left in %s has become an order."
+msgstr ""
+
+#. translators: %s: a time frame, such as "the last 24 hours"
+#: build/board.js:216
+#, js-format
+msgid "No shopper has left a cart behind in %s."
+msgstr ""
+
+#: build/board.js:216
+msgid "Left in carts"
+msgstr ""
+
+#: build/board.js:216
+msgid "Bought"
+msgstr ""
+
+#. translators: %s: a time frame, such as "the last 24 hours"
+#: build/board.js:217
+#, js-format
+msgid "No cart was left behind in %s."
+msgstr ""
+
+#: build/board.js:217
+msgid "Type"
+msgstr ""
+
+#: build/board.js:217
+msgid "Shoppers left"
+msgstr ""
+
+#: build/board.js:217
+msgid "Share"
+msgstr ""
+
+#: build/board.js:217
+msgid "Typical time there"
+msgstr ""
+
+#. translators: %s: a time frame, such as "the last 24 hours"
+#: build/board.js:218
+#, js-format
+msgid "No shopper has left with a cart in %s."
+msgstr ""
+
+#: build/board.js:218
+msgid "Abandoned carts"
+msgstr ""
+
+#: build/board.js:218
+msgid "Carts whose shopper left without ordering, those an order recovered, the products left most often and the pages most left from."
+msgstr ""
+
+#: build/board.js:218
+msgid "Time frame"
+msgstr ""
+
+#. translators: %d: products in those carts
+#. translators: %d: products in the cart
+#: build/board.js:219
+#: build/board.js:238
+#, js-format
+msgid "%d product"
+msgid_plural "%d products"
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %s: a time frame, such as "the last 24 hours"
+#: build/board.js:220
+#, js-format
+msgid "Loading the carts left in %s"
+msgstr ""
+
+#. translators: 1: where most leavers left from, 2: the typical time there, 3: how many, 4: their share of everyone who left, 5: a time frame, such as "the last 24 hours"
+#: build/board.js:221
+#, js-format
+msgid "Most shoppers who leave with a cart do so from %1$s, usually after %2$s there: %3$d in %5$s, %4$d%% of everyone who left."
+msgstr ""
+
+#: build/board.js:221
+msgid "a product page"
+msgstr ""
+
+#: build/board.js:221
+msgid "a category page"
+msgstr ""
+
+#: build/board.js:221
+msgid "the cart"
+msgstr ""
+
+#: build/board.js:221
+msgid "checkout"
+msgstr ""
+
+#: build/board.js:221
+msgid "the home page"
+msgstr ""
+
+#: build/board.js:221
+msgid "the shop"
+msgstr ""
+
+#: build/board.js:221
+msgid "a search"
+msgstr ""
+
+#: build/board.js:221
+msgid "the order page"
+msgstr ""
+
+#: build/board.js:221
+msgid "a page"
+msgstr ""
+
+#: build/board.js:221
+msgid "See their journeys"
+msgstr ""
+
+#: build/board.js:221
+msgid "The carts left behind"
+msgstr ""
+
+#: build/board.js:221
+msgid "Carts"
+msgstr ""
+
+#: build/board.js:221
+msgid "Recovered"
+msgstr ""
+
+#: build/board.js:221
+msgid "Products"
+msgstr ""
+
+#: build/board.js:221
+#: build/board.js:237
+msgid "Pages"
+msgstr ""
+
+#: build/board.js:221
+msgid "Top pages"
+msgstr ""
+
+#: build/board.js:221
+#: build/board.js:237
+msgid "Shoppers"
+msgstr ""
+
+#: build/board.js:221
+#: build/board.js:237
+#: build/board.js:238
+msgid "No shopper is on the site right now."
+msgstr ""
+
+#: build/board.js:221
+msgid "Top products in carts"
+msgstr ""
+
+#: build/board.js:221
+msgid "No shopper on the site holds a cart."
+msgstr ""
+
+#: build/board.js:221
+msgid "Customer"
+msgstr ""
+
+#: build/board.js:221
+msgid "Time"
+msgstr ""
+
+#: build/board.js:221
+msgid "Items"
+msgstr ""
+
+#: build/board.js:221
+msgid "Total"
+msgstr ""
+
+#: build/board.js:221
+msgid "Status"
+msgstr ""
+
+#: build/board.js:221
+msgid "Payment"
+msgstr ""
+
+#: build/board.js:221
+msgid "Search orders"
+msgstr ""
+
+#: build/board.js:221
+msgid "No recent orders. New orders appear here the moment they are placed."
+msgstr ""
+
+#. translators: %d: number of orders on the board
+#: build/board.js:222
+#, js-format
+msgid "No orders match. %d on the board."
+msgstr ""
+
+#. translators: %s: the name or email guessed for a guest
+#: build/board.js:223
+#, js-format
+msgid "%s (best guess)"
+msgstr ""
+
+#. translators: 1: who the shopper is, 2: which of their tabs, 3: the pages of its route
+#: build/board.js:224
+#, js-format
+msgid "%1$s · tab %2$d · %3$s"
+msgstr ""
+
+#. translators: 1: a kind of page, 2: shoppers on it now
+#: build/board.js:225
+#, js-format
+msgid "%1$s · %2$d shopper here now"
+msgid_plural "%1$s · %2$d shoppers here now"
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: 1: a kind of page, 2: shoppers who came through it, 3: pages before the one they are on
+#: build/board.js:226
+#, js-format
+msgid "%1$s · %2$d shopper came through here, %3$d back"
+msgid_plural "%1$s · %2$d shoppers came through here, %3$d back"
+msgstr[0] ""
+msgstr[1] ""
+
+#: build/board.js:226
+msgid "Each shopper on the site drawn as a route through your pages, ending where they are now"
+msgstr ""
+
+#: build/board.js:226
+msgid "Now"
+msgstr ""
+
+#. translators: %d: pages before the one the shopper is on
+#: build/board.js:227
+#, js-format
+msgid "%d page back"
+msgid_plural "%d pages back"
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %d: alerts
+#: build/board.js:228
+#, js-format
+msgid "Show %d alert"
+msgid_plural "Show %d alerts"
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %d: alerts
+#: build/board.js:229
+#, js-format
+msgid "Hide %d alert"
+msgid_plural "Hide %d alerts"
+msgstr[0] ""
+msgstr[1] ""
+
+#: build/board.js:229
+msgid "Mute the new order sound"
+msgstr ""
+
+#: build/board.js:229
+msgid "Play a sound on a new order"
+msgstr ""
+
+#: build/board.js:229
+msgid "Exit full screen"
+msgstr ""
+
+#: build/board.js:229
+msgid "Full screen"
+msgstr ""
+
+#: build/board.js:229
+msgid "Live orders"
+msgstr ""
+
+#. translators: %d: hours
+#: build/board.js:230
+#, js-format
+msgid "Orders placed in the last %d hours. New ones appear here the moment they are placed."
+msgstr ""
+
+#: build/board.js:230
+#, js-format
+msgid "%d of them staff"
+msgstr ""
+
+#: build/board.js:230
+msgid "Right now"
+msgstr ""
+
+#: build/board.js:230
+msgid "Who is in your store this minute and what their carts hold."
+msgstr ""
+
+#. translators: 1: shoppers with a tab in view, 2: shoppers with every tab hidden
+#: build/board.js:231
+#, js-format
+msgid "%1$d looking now, %2$d with every tab hidden"
+msgstr ""
+
+#. translators: %d: shoppers with a tab in view
+#: build/board.js:233
+#, js-format
+msgid "Looking now: %d"
+msgstr ""
+
+#. translators: %d: shoppers with every tab hidden
+#: build/board.js:235
+#, js-format
+msgid "Tab hidden: %d"
+msgstr ""
+
+#: build/board.js:235
+msgid "Shoppers on the site"
+msgstr ""
+
+#: build/board.js:235
+msgid "Different people browsing now"
+msgstr ""
+
+#: build/board.js:235
+msgid "Looking now"
+msgstr ""
+
+#: build/board.js:235
+msgid "A tab of theirs in view"
+msgstr ""
+
+#: build/board.js:235
+msgid "Tab hidden"
+msgstr ""
+
+#: build/board.js:235
+msgid "Every tab of theirs hidden"
+msgstr ""
+
+#: build/board.js:235
+msgid "Open tabs"
+msgstr ""
+
+#. translators: 1: open tabs, 2: plan connection limit
+#: build/board.js:236
+#, js-format
+msgid "%1$d of %2$d on your plan"
+msgstr ""
+
+#: build/board.js:236
+msgid "Browser tabs connected to your store"
+msgstr ""
+
+#: build/board.js:236
+msgid "Revenue in carts"
+msgstr ""
+
+#. translators: %d: carts held by shoppers on the site
+#: build/board.js:237
+#, js-format
+msgid "%d cart held"
+msgid_plural "%d carts held"
+msgstr[0] ""
+msgstr[1] ""
+
+#: build/board.js:237
+msgid "The shoppers on the site"
+msgstr ""
+
+#: build/board.js:237
+msgid "Journeys"
+msgstr ""
+
+#: build/board.js:237
+msgid "A hidden tab"
+msgstr ""
+
+#: build/board.js:237
+msgid "The tab they are looking at"
+msgstr ""
+
+#. translators: %d: items in the order
+#: build/board.js:239
+#, js-format
+msgid "%d item"
+msgid_plural "%d items"
+msgstr[0] ""
+msgstr[1] ""
+
+#: build/board.js:239
+msgid "New order"
+msgstr ""
+
+#: build/board.js:239
+msgid "Stock"
+msgstr ""
+
+#. translators: %s: product name
+#: build/board.js:240
+#, js-format
+msgid "%s is out of stock"
+msgstr ""
+
+#. translators: 1: product name, 2: quantity
+#: build/board.js:241
+#, js-format
+msgid "%1$s is low (%2$d left)"
+msgstr ""
+
+#. translators: 1: the shopper's name, 2: where they are (a page kind), 3: the cart's products, 4: the cart's value
+#: build/board.js:242
+#, js-format
+msgid "%1$s is on %2$s with %3$s (%4$s)."
+msgstr ""
+
+#: build/board.js:242
+#: build/board.js:244
+msgid "an empty cart"
+msgstr ""
+
+#. translators: 1: the shopper's name, 2: the cart's products, 3: the cart's value
+#: build/board.js:243
+#, js-format
+msgid "%1$s has %2$s in their cart (%3$s)."
+msgstr ""
+
+#: build/board.js:243
+msgid "nothing"
+msgstr ""
+
+#. translators: 1: where the shopper is (a page kind), 2: the cart's products, 3: the cart's value
+#: build/board.js:244
+#, js-format
+msgid "On %1$s with %2$s (%3$s)."
+msgstr ""
+
+#. translators: 1: the cart's products, 2: the cart's value
+#: build/board.js:245
+#, js-format
+msgid "Cart: %1$s (%2$s)."
+msgstr ""
+
+#: build/board.js:245
+msgid "empty"
+msgstr ""
+
+#: build/board.js:245
 msgid "Live"
 msgstr ""
 
-#: build/board.js:188
-msgid "shopper here now"
-msgstr ""
-
-#: build/board.js:188
-msgid "Away"
-msgstr ""
-
-#: build/board.js:188
-msgid "here, tab hidden"
-msgstr ""
-
-#: build/board.js:188
-msgid "Abandoned"
-msgstr ""
-
-#: build/board.js:188
-msgid "left, cart still held"
-msgstr ""
-
-#: build/board.js:188
-msgid "Customers"
-msgstr ""
-
-#: build/board.js:188
-msgid "Revenue"
-msgstr ""
-
-#: build/board.js:188
-msgid "Products in live carts"
-msgstr ""
-
-#: build/board.js:188
-msgid "No shopper with a cart is on the site right now."
-msgstr ""
-
-#: build/board.js:188
-msgid "Product"
-msgstr ""
-
-#: build/board.js:188
-msgid "Live carts"
-msgstr ""
-
-#: build/board.js:188
-msgid "Units"
-msgstr ""
-
-#. translators: %d: product id
-#: build/board.js:188
-#, js-format
-msgid "Product #%d (removed)"
-msgstr ""
-
-#: build/board.js:188
-msgid "Recently abandoned"
-msgstr ""
-
-#: build/board.js:188
-msgid "No shopper has left a cart behind recently."
-msgstr ""
-
-#: build/board.js:189
+#: build/board.js:245
 msgid "Not delivering: reconnect WordSocket"
 msgstr ""
 
 #. translators: %d: seconds
-#: build/board.js:190
+#: build/board.js:246
 #, js-format
 msgid "Reconnecting in %ds"
 msgstr ""
 
-#: build/board.js:190
+#: build/board.js:246
 msgid "Connecting"
 msgstr ""
 
-#: build/board.js:190
+#: build/board.js:246
 msgid "Realtime client not loaded"
+msgstr ""
+
+#: build/board.js:246
+msgid "The board could not draw."
+msgstr ""
+
+#: build/board.js:246
+msgid "Reload"
 msgstr ""
 
 #: build/settings.js:1
@@ -479,7 +1209,7 @@ msgid "Enable"
 msgstr ""
 
 #: build/settings.js:1
-msgid "Shoppers see \"N shoppers have this in their cart right now\" under the price."
+msgid "Shoppers see \"N shoppers have this in their cart right now\" under the price. Counts the carts WordSocket's History keeps, so it needs that on."
 msgstr ""
 
 #: build/settings.js:1
@@ -487,43 +1217,7 @@ msgid "Except in these categories"
 msgstr ""
 
 #: build/settings.js:1
-msgid "Show added-to-cart notifications"
-msgstr ""
-
-#: build/settings.js:1
 msgid "Shoppers who hold the same product see \"Someone just added this to their cart\"."
-msgstr ""
-
-#: build/settings.js:1
-msgid "Cart history"
-msgstr ""
-
-#: build/settings.js:1
-msgid "Keep a history of carts"
-msgstr ""
-
-#: build/settings.js:1
-msgid "Off: a cart is forgotten with its session, as before. On: each cart stays on your site with what it held, when its shopper left and whether it became an order, and the pages they visited are kept as a journey. Nothing leaves your site."
-msgstr ""
-
-#: build/settings.js:1
-msgid "Keep carts for (days)"
-msgstr ""
-
-#: build/settings.js:1
-msgid "A cart's products, value and outcome, linked to the shopper's account when they were logged in."
-msgstr ""
-
-#: build/settings.js:1
-msgid "Keep journeys for (months)"
-msgstr ""
-
-#: build/settings.js:1
-msgid "The pages a shopper opened, as ids and durations, under a random browser id and never under an account."
-msgstr ""
-
-#: build/settings.js:1
-msgid "A product set to On or Off on its own edit screen (Product data, ShopSocket tab) keeps that choice whatever these settings say."
 msgstr ""
 
 #: build/settings.js:1

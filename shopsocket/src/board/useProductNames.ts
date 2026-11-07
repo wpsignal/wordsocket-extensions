@@ -4,6 +4,7 @@
  * once per page per id; a product that no longer exists is remembered as null
  * so it is never asked for again.
  */
+import { __, sprintf } from "@wordpress/i18n";
 import { useEffect, useMemo, useRef, useState } from "@wordpress/element";
 import apiFetch from "@wordpress/api-fetch";
 
@@ -12,7 +13,34 @@ const BATCH = 100;
 
 type Config = Pick<ShopSocketBoardConfig, "productsUrl" | "nonce">;
 
-/** A lookup from product id to its ref, null when removed, undefined while unknown. */
+/**
+ * The most products one board table asks names for.
+ *
+ * @since 0.8.0
+ */
+export const LIVE_PRODUCTS = 100;
+
+/**
+ * What a product cell says: the name, "Product #N (removed)" for a ref of null, "#N" while unknown.
+ *
+ * @since 0.8.0
+ */
+export function productLabel(
+  ref: WooProductRef | null | undefined,
+  id: number,
+): string {
+  if (ref) return ref.name;
+  /* translators: %d: product id */
+  return ref === null
+    ? sprintf(__("Product #%d (removed)", "shopsocket"), id)
+    : `#${id}`;
+}
+
+/**
+ * A lookup from product id to its ref, null when removed, undefined while unknown.
+ *
+ * @since 0.1.1
+ */
 export function useProductNames(ids: number[], config: Config) {
   const cache = useRef(new Map<number, WooProductRef | null>());
   const pending = useRef(new Set<number>());
@@ -20,12 +48,17 @@ export function useProductNames(ids: number[], config: Config) {
   const [version, setVersion] = useState(0);
   const key = ids.join(",");
 
-  useEffect(() => () => {
-    mounted.current = false;
-  }, []);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
 
   useEffect(() => {
-    const missing = ids.filter((id) => !cache.current.has(id) && !pending.current.has(id)).slice(0, BATCH);
+    const missing = ids
+      .filter((id) => !cache.current.has(id) && !pending.current.has(id))
+      .slice(0, BATCH);
     if (missing.length === 0 || !config.productsUrl) return undefined;
     missing.forEach((id) => pending.current.add(id));
     let fired = false;
@@ -51,9 +84,9 @@ export function useProductNames(ids: number[], config: Config) {
       clearTimeout(timer);
       if (!fired) missing.forEach((id) => pending.current.delete(id));
     };
-    // The ids are keyed by their joined string so a new array with the same ids does not refetch.
+    // The ids are keyed by their joined string so a new array with the same ids does not refetch; an answered batch asks for the next.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, config.productsUrl, config.nonce]);
+  }, [key, version, config.productsUrl, config.nonce]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => (id: number) => cache.current.get(id), [version]);

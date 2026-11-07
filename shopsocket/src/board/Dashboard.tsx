@@ -10,21 +10,63 @@ import {
   useRef,
   useState,
 } from "@wordpress/element";
-import { Button, Notice, ToggleControl } from "@wordpress/components";
-import { useLiveOrders, useStockAlerts } from "./useLiveOrders";
+import { Notice } from "@wordpress/components";
+import {
+  fullscreen as fullscreenIcon,
+  fullscreenExit,
+  bellUnread,
+  bell,
+} from "@wordpress/icons";
+import {
+  Badge,
+  Link,
+  Stack,
+  Tabs,
+  Text,
+  Button,
+  IconButton,
+  Icon,
+} from "@wordpress/ui";
+import { useBoardAlerts, useLiveOrders } from "./useLiveOrders";
 import { useConnectionState } from "./useConnectionState";
 import { useDashboardSnapshot } from "./useDashboardSnapshot";
-import { useProductNames } from "./useProductNames";
-import { adminUrlOrNull } from "./trust";
+import { LIVE_PRODUCTS, useProductNames } from "./useProductNames";
+import { needsLookup, pageLabel, pageUrl, usePageNames } from "./usePageNames";
+import { money, price } from "./format";
+import { DayStrip } from "./DayStrip";
+import { AbandonedCarts } from "./AbandonedCarts";
+import { TopNow } from "./TopNow";
+import { adminUrlOrNull, siteUrlOrNull } from "./trust";
 import { LiveOrders } from "./LiveOrders";
+import { LiveJourneys, type RouteNames } from "./LiveJourneys";
+import { useGuestNames } from "./useGuestNames";
+import { routeSteps } from "./journey";
 import { playChime } from "./chime";
+import { soundOff, soundOn } from "./icons";
+import {
+  BoardTable,
+  Section,
+  Stat,
+  StatGroup,
+  shopperColumn,
+  type Column,
+} from "./ui";
 
 const config: ShopSocketBoardConfig = window.shopSocket ?? {
   dashboardUrl: "",
   productsUrl: "",
+  pagesUrl: "",
+  guestsUrl: "",
+  homeUrl: "",
+  shopUrl: "",
+  cartUrl: "",
+  checkoutUrl: "",
   adminUrl: "",
+  journeysUrl: "",
   nonce: "",
   orders: [],
+  boardHours: 24,
+  abandonedHours: [24],
   statuses: [],
   snapshot: { carts: [], abandoned: [], online: null },
   currencySymbol: "",
@@ -32,6 +74,17 @@ const config: ShopSocketBoardConfig = window.shopSocket ?? {
 };
 
 const SOUND_KEY = "shopsocket-sound";
+
+const ALERTS_KEY = "shopsocket-alerts-min";
+
+/** The alerts are listed until this browser minimizes them. */
+function readMinimized(): boolean {
+  try {
+    return window.localStorage.getItem(ALERTS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 /** The chime is on until this browser turns it off. */
 function readSound(): boolean {
@@ -43,21 +96,53 @@ function readSound(): boolean {
   }
 }
 
-/** The board: header controls, tiles, the stock strip, and the live orders table. */
+/**
+ * The board: header controls, the alerts (listed, or minimized to their count), the figures, and the live orders table.
+ *
+ * @since 0.1.1
+ */
 export function Dashboard() {
   const [sound, setSound] = useState(readSound);
   const [fullscreen, setFullscreen] = useState(false);
   const soundRef = useRef(sound);
   soundRef.current = sound;
 
-  const onNewOrder = useCallback(() => {
-    if (soundRef.current) playChime();
-  }, []);
+  const [minimized, setMinimized] = useState(readMinimized);
+  const { alerts, dismiss, orderPlaced } = useBoardAlerts(config.channels);
+  const onNewOrder = useCallback(
+    (order: WooOrderEvent) => {
+      if (soundRef.current) playChime();
+      orderPlaced(order);
+    },
+    [orderPlaced],
+  );
 
-  const { rows, reconcile } = useLiveOrders(config.orders, onNewOrder, config.channels);
-  const alerts = useStockAlerts(config.channels);
+  const { rows, reconcile } = useLiveOrders(
+    config.orders,
+    onNewOrder,
+    config.channels,
+    config.boardHours,
+  );
+  /* One lookup for every staff alert's products, rather than a request per notice. */
+  const alertProducts = useProductNames(
+    useMemo(
+      () =>
+        Array.from(
+          new Set(
+            alerts.flatMap((alert) =>
+              alert.type === "staff" ? alert.event.products : [],
+            ),
+          ),
+        ).slice(0, LIVE_PRODUCTS),
+      [alerts],
+    ),
+    config,
+  );
   const connection = useConnectionState();
-  const { snapshot, stale } = useDashboardSnapshot(config, reconcile);
+  const { snapshot, stale, hours, setHours } = useDashboardSnapshot(
+    config,
+    reconcile,
+  );
 
   useEffect(() => {
     try {
@@ -68,6 +153,14 @@ export function Dashboard() {
   }, [sound]);
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(ALERTS_KEY, minimized ? "1" : "0");
+    } catch {
+      // Storage unavailable: the alerts still minimize for this page.
+    }
+  }, [minimized]);
+
+  useEffect(() => {
     document.body.classList.toggle("shopsocket-fullscreen", fullscreen);
     return () => document.body.classList.remove("shopsocket-fullscreen");
   }, [fullscreen]);
@@ -75,66 +168,113 @@ export function Dashboard() {
   return (
     <div className={`shopsocket-board${fullscreen ? " is-fullscreen" : ""}`}>
       {/* The page title and meta links are PHP-rendered above the board (`render_header()`). */}
-      <div className="shopsocket-board__header">
+      <Stack direction="row" className="shopsocket-board__header">
+        <ConnectionBadge state={connection} />
         <div className="shopsocket-board__controls">
-          <ConnectionBadge state={connection} />
-          <ToggleControl
-            label={__("Sound on new order", "shopsocket")}
-            checked={sound}
-            onChange={setSound}
-          />
-          <Button variant="secondary" onClick={() => setFullscreen((f) => !f)}>
-            {fullscreen
-              ? __("Exit full screen", "shopsocket")
-              : __("Full screen", "shopsocket")}
-          </Button>
-        </div>
-      </div>
-
-      <Tiles snapshot={snapshot} stale={stale} />
-      <LiveProductsPanel products={snapshot.liveProducts} />
-      <AbandonedPanel rows={snapshot.abandoned} currencySymbol={config.currencySymbol} />
-
-      {alerts.length > 0 && (
-        <Notice
-          status="warning"
-          isDismissible={false}
-          className="shopsocket-board__stock"
-        >
-          <strong>{__("Stock", "shopsocket")}:</strong>{" "}
-          {alerts.map((a) => (
-            <span
-              key={`${a.product_id}-${a.variation_id}`}
-              className={`shopsocket-stock-alert is-${a.kind}`}
-            >
-              {a.kind === "out"
-                ? sprintf(
-                    /* translators: %s: product name */ __(
-                      "%s is out of stock",
-                      "shopsocket",
-                    ),
-                    a.name,
+          <Button
+            variant="unstyled"
+            size="small"
+            style={{ padding: 0, minWidth: 0, display: "flex" }}
+            className="shopsocket-board__alerts-toggle"
+            aria-expanded={!minimized}
+            disabled={!alerts.length}
+            aria-label={sprintf(
+              minimized
+                ? /* translators: %d: alerts */
+                  _n(
+                    "Show %d alert",
+                    "Show %d alerts",
+                    alerts.length,
+                    "shopsocket",
                   )
-                : sprintf(
-                    /* translators: 1: product name, 2: quantity */
-                    __("%1$s is low (%2$d left)", "shopsocket"),
-                    a.name,
-                    a.stock_quantity ?? 0,
-                  )}
-            </span>
-          ))}
-        </Notice>
-      )}
+                : /* translators: %d: alerts */
+                  _n(
+                    "Hide %d alert",
+                    "Hide %d alerts",
+                    alerts.length,
+                    "shopsocket",
+                  ),
+              alerts.length,
+            )}
+            onClick={() => setMinimized((m) => !m)}
+          >
+            <Icon icon={alerts.length ? bellUnread : bell} />{" "}
+            {minimized && alerts.length ? <span>({alerts.length})</span> : ""}
+          </Button>
+          <IconButton
+            variant="unstyled"
+            size="small"
+            className="shopsocket-board__sound"
+            icon={sound ? soundOn : soundOff}
+            onClick={() => setSound((on) => !on)}
+            label={
+              sound
+                ? __("Mute the new order sound", "shopsocket")
+                : __("Play a sound on a new order", "shopsocket")
+            }
+          />
+          <IconButton
+            variant="unstyled"
+            size="small"
+            icon={fullscreen ? fullscreenExit : fullscreenIcon}
+            onClick={() => setFullscreen((f) => !f)}
+            label={
+              fullscreen
+                ? __("Exit full screen", "shopsocket")
+                : __("Full screen", "shopsocket")
+            }
+          />
+        </div>
+      </Stack>
 
-      <section
-        className="shopsocket-board__orders"
-        aria-labelledby="shopsocket-orders-heading"
+      <Stack
+        direction="column"
+        gap="sm"
+        className="shopsocket-board__alerts"
+        style={{ display: alerts.length > 0 && !minimized ? "flex" : "none" }}
       >
-        <div className="shopsocket-board__orders-head">
-          <h2 id="shopsocket-orders-heading">
-            {__("Live orders", "shopsocket")}
-          </h2>
-          <span className="shopsocket-board__orders-count">
+        {!minimized &&
+          alerts.map((alert) =>
+            alert.type === "staff" ? (
+              <AlertNotice
+                key={alert.id}
+                alert={alert.event}
+                name={(id) => alertProducts(id)?.name ?? `#${id}`}
+                onDismiss={() => dismiss(alert.id)}
+              />
+            ) : alert.type === "order" ? (
+              <OrderNotice
+                key={alert.id}
+                order={
+                  rows.find((row) => row.order_id === alert.event.order_id) ??
+                  alert.event
+                }
+                onDismiss={() => dismiss(alert.id)}
+              />
+            ) : (
+              <StockNotice
+                key={alert.id}
+                alert={alert.event}
+                onDismiss={() => dismiss(alert.id)}
+              />
+            ),
+          )}
+      </Stack>
+
+      <RightNow snapshot={snapshot} stale={stale} />
+      <DayStrip strip={snapshot.strip} config={config} />
+      <AbandonedCarts
+        snapshot={snapshot}
+        config={config}
+        hours={hours}
+        onHours={setHours}
+      />
+
+      <Section
+        title={__("Live orders", "shopsocket")}
+        className="shopsocket-board__orders"
+        aside={
+          <Badge intent="none">
             {sprintf(
               /* translators: %d: number of orders on the board */ _n(
                 "%d order",
@@ -144,36 +284,30 @@ export function Dashboard() {
               ),
               rows.length,
             )}
-          </span>
-        </div>
+          </Badge>
+        }
+        description={sprintf(
+          /* translators: %d: hours */
+          __(
+            "Orders placed in the last %d hours. New ones appear here the moment they are placed.",
+            "shopsocket",
+          ),
+          config.boardHours,
+        )}
+      >
         <LiveOrders
           rows={rows}
           statuses={config.statuses}
           currencySymbol={config.currencySymbol}
           adminUrl={config.adminUrl}
         />
-      </section>
+      </Section>
     </div>
   );
 }
 
-type CartSegment = WooDashboardSnapshot["carts"]["live"];
-
-/** A whole-unit amount in the browser's locale, or a rounded number when the currency is unknown. */
-function money(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    return String(Math.round(amount));
-  }
-}
-
-/** The "right now" figures: users online, open connections, and the carts panel. */
-function Tiles({
+/** "Right now": the shoppers on the site split by where they are, what their carts are worth, the pages and products they are on most, then who they are and their routes. */
+function RightNow({
   snapshot,
   stale,
 }: {
@@ -181,272 +315,440 @@ function Tiles({
   stale: boolean;
 }) {
   const { carts, usersOnline, online, staff, awayUsers } = snapshot;
+  const names = useShopperNames(snapshot.shoppers);
+  /* A guest nobody has named yet may have a best guess waiting on the server. */
+  const unnamed = useMemo(
+    () =>
+      snapshot.shoppers
+        .filter((s) => !s.staff && !s.cart?.customer)
+        .map((s) => s.v),
+    [snapshot.shoppers],
+  );
+  const guests = useGuestNames(unnamed, config);
+  const shoppers = useMemo(
+    () =>
+      snapshot.shoppers.map((s) => ({
+        ...s,
+        guess: s.staff || s.cart?.customer ? null : (guests(s.v) ?? null),
+      })),
+    [snapshot.shoppers, guests],
+  );
   /* translators: %d: how many of the figure above are staff (people or tabs) */
-  const staffNote = (count: number) => (count > 0 ? " " + sprintf(__("(%d staff)", "shopsocket"), count) : "");
-  /* translators: %d: how many of the figure above have every tab hidden */
-  const awayNote = (count: number) => (count > 0 ? " " + sprintf(__("(%d away)", "shopsocket"), count) : "");
+  const staffNote = (count: number) =>
+    count > 0
+      ? ", " + sprintf(__("%d of them staff", "shopsocket"), count)
+      : "";
+  const looking = Math.max(0, usersOnline - awayUsers);
+  /* What the carts of the shoppers connected now hold between them. */
+  const heldCarts = carts.live.shoppers + carts.away.shoppers;
+  const heldValue = carts.live.revenue + carts.away.revenue;
+  const heldCurrency = carts.live.currency || carts.away.currency;
   return (
-    <div
-      className={`shopsocket-summary${stale ? " is-stale" : ""}`}
-      aria-live="polite"
-    >
-      <div className="shopsocket-tiles">
-        <div className="shopsocket-tile is-users">
-          <span className="shopsocket-tile__value">{String(usersOnline)}</span>
-          <span className="shopsocket-tile__label">
-            {__("Storefront Customers", "shopsocket")}
-          </span>
-          <span className="shopsocket-tile__detail">
-            {__("Unique visitors on the storefront right now", "shopsocket") + staffNote(staff.users) + awayNote(awayUsers)}
-          </span>
-        </div>
-        <div className="shopsocket-tile is-connections">
-          <span className="shopsocket-tile__value">
-            {online ? String(online.active_connections) : "\u2014"}
-          </span>
-          <span className="shopsocket-tile__label">
-            {__("Open Tabs", "shopsocket")}
-          </span>
-          <span className="shopsocket-tile__detail">
-            {online
-              ? sprintf(
-                  /* translators: %d: plan connection limit */
-                  __(
-                    "All browser tabs, of %d/%d on your plan",
-                    "shopsocket",
-                  ),
-                  online.active_connections,
-                  online.max_connections,
-                ) + staffNote(staff.tabs)
-              : __(
-                  "Connections between your storefront and wpsignal.io",
-                  "shopsocket",
-                )}
-          </span>
-        </div>
-      </div>
-      <CartsPanel live={carts.live} away={carts.away} abandoned={carts.abandoned} />
-    </div>
-  );
-}
-
-/** Customers, products, and revenue, split into live, away and abandoned carts. */
-function CartsPanel({ live, away, abandoned }: { live: CartSegment; away: CartSegment; abandoned: CartSegment }) {
-  return (
-    <div className="shopsocket-carts">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col"></th>
-            <th scope="col" className="is-live">
-              {__("Live", "shopsocket")}
-              <span className="shopsocket-carts__hint">{__("shopper here now", "shopsocket")}</span>
-            </th>
-            <th scope="col" className="is-away">
-              {__("Away", "shopsocket")}
-              <span className="shopsocket-carts__hint">{__("here, tab hidden", "shopsocket")}</span>
-            </th>
-            <th scope="col" className="is-abandoned">
-              {__("Abandoned", "shopsocket")}
-              <span className="shopsocket-carts__hint">{__("left, cart still held", "shopsocket")}</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <CartRow
-            label={__("Customers", "shopsocket")}
-            live={String(live.shoppers)}
-            away={String(away.shoppers)}
-            abandoned={String(abandoned.shoppers)}
-          />
-          <CartRow
-            label={__("Products", "shopsocket")}
-            live={String(live.products)}
-            away={String(away.products)}
-            abandoned={String(abandoned.products)}
-          />
-          <CartRow
-            label={__("Revenue", "shopsocket")}
-            live={money(live.revenue, live.currency)}
-            away={money(away.revenue, away.currency)}
-            abandoned={money(abandoned.revenue, abandoned.currency)}
-          />
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-const LIVE_PRODUCTS = 100;
-
-/** Products in live carts, most held first, at most LIVE_PRODUCTS of them, each linking to its edit screen. */
-function LiveProductsPanel({
-  products,
-}: {
-  products: WooDashboardSnapshot["liveProducts"];
-}) {
-  // Rank by live carts before asking for names, so the fetch stays bounded.
-  const top = useMemo(
-    () =>
-      [...products]
-        .sort(
-          (a, b) => b.carts - a.carts || b.units - a.units || a.id - b.id,
-        )
-        .slice(0, LIVE_PRODUCTS),
-    [products],
-  );
-  const ref = useProductNames(
-    useMemo(() => top.map((p) => p.id), [top]),
-    config,
-  );
-  const rows = useMemo(
-    () =>
-      [...top].sort((a, b) => {
-        if (a.carts !== b.carts) return b.carts - a.carts;
-        if (a.units !== b.units) return b.units - a.units;
-        const an = ref(a.id)?.name;
-        const bn = ref(b.id)?.name;
-        if (an && bn) return an.localeCompare(bn);
-        if (an || bn) return an ? -1 : 1;
-        return a.id - b.id;
-      }),
-    [top, ref],
-  );
-
-  return (
-    <section
-      className="shopsocket-live-products"
-      aria-labelledby="shopsocket-live-products-heading"
-    >
-      <h2 id="shopsocket-live-products-heading">
-        {__("Products in live carts", "shopsocket")}
-      </h2>
-      {rows.length === 0 ? (
-        <p className="shopsocket-board__empty">
-          {__(
-            "No shopper with a cart is on the site right now.",
-            "shopsocket",
-          )}
-        </p>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">{__("Product", "shopsocket")}</th>
-              <th scope="col" className="shopsocket-live-products__count">
-                {__("Live carts", "shopsocket")}
-              </th>
-              <th scope="col" className="shopsocket-live-products__count">
-                {__("Units", "shopsocket")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ id, carts, units }) => {
-              const product = ref(id);
-              const label = product
-                ? product.name
-                : product === null
-                  ? sprintf(
-                      /* translators: %d: product id */ __(
-                        "Product #%d (removed)",
-                        "shopsocket",
-                      ),
-                      id,
-                    )
-                  : `#${id}`;
-              const href = product
-                ? adminUrlOrNull(product.edit_url, config.adminUrl)
-                : null;
-              return (
-                <tr key={id}>
-                  <th scope="row">
-                    {href ? <a href={href}>{label}</a> : label}
-                  </th>
-                  <td className="shopsocket-live-products__count">
-                    {String(carts)}
-                  </td>
-                  <td className="shopsocket-live-products__count">
-                    {String(units)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+    <Section
+      title={__("Right now", "shopsocket")}
+      className={stale ? "is-stale" : undefined}
+      description={__(
+        "Who is in your store this minute and what their carts hold.",
+        "shopsocket",
       )}
-    </section>
+    >
+      <div className="shopsocket-groups" aria-live="polite">
+        <StatGroup
+          name="shoppers"
+          summary={sprintf(
+            /* translators: 1: shoppers with a tab in view, 2: shoppers with every tab hidden */
+            __("%1$d looking now, %2$d with every tab hidden", "shopsocket"),
+            looking,
+            awayUsers,
+          )}
+          shares={[
+            {
+              name: "looking",
+              size: looking,
+              /* translators: %d: shoppers with a tab in view */
+              title: sprintf(__("Looking now: %d", "shopsocket"), looking),
+            },
+            {
+              name: "idle",
+              size: awayUsers,
+              /* translators: %d: shoppers with every tab hidden */
+              title: sprintf(__("Tab hidden: %d", "shopsocket"), awayUsers),
+            },
+          ]}
+          headline={
+            <Stat
+              name="users"
+              value={String(usersOnline)}
+              label={__("Shoppers on the site", "shopsocket")}
+              detail={
+                __("Different people browsing now", "shopsocket") +
+                staffNote(staff.users)
+              }
+            />
+          }
+        >
+          <Stat
+            compact
+            swatch
+            name="looking"
+            value={String(looking)}
+            label={__("Looking now", "shopsocket")}
+            detail={__("A tab of theirs in view", "shopsocket")}
+          />
+          <Stat
+            compact
+            swatch
+            name="idle"
+            value={String(awayUsers)}
+            label={__("Tab hidden", "shopsocket")}
+            detail={__("Every tab of theirs hidden", "shopsocket")}
+          />
+          <Stat
+            compact
+            name="connections"
+            value={online ? String(online.active_connections) : "\u2014"}
+            label={__("Open tabs", "shopsocket")}
+            detail={
+              online
+                ? sprintf(
+                    /* translators: 1: open tabs, 2: plan connection limit */
+                    __("%1$d of %2$d on your plan", "shopsocket"),
+                    online.active_connections,
+                    online.max_connections,
+                  ) + staffNote(staff.tabs)
+                : __("Browser tabs connected to your store", "shopsocket")
+            }
+          />
+          <Stat
+            compact
+            name="revenue"
+            value={
+              heldCurrency
+                ? money(heldValue, heldCurrency)
+                : `${config.currencySymbol}0`
+            }
+            label={__("Revenue in carts", "shopsocket")}
+            detail={sprintf(
+              /* translators: %d: carts held by shoppers on the site */
+              _n("%d cart held", "%d carts held", heldCarts, "shopsocket"),
+              heldCarts,
+            )}
+          />
+        </StatGroup>
+        <TopNow shoppers={shoppers} names={names} config={config} />
+      </div>
+      <Tabs.Root defaultValue="shoppers" className="shopsocket-tabs">
+        <Tabs.List
+          variant="minimal"
+          aria-label={__("The shoppers on the site", "shopsocket")}
+        >
+          <Tabs.Tab value="shoppers">{__("Shoppers", "shopsocket")}</Tabs.Tab>
+          <Tabs.Tab value="routes">{__("Journeys", "shopsocket")}</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="shoppers" tabIndex={-1} keepMounted>
+          <ShoppersPanel shoppers={shoppers} names={names} />
+        </Tabs.Panel>
+        <Tabs.Panel value="routes" tabIndex={-1} keepMounted>
+          <Stack direction="column" gap="lg">
+            <Text variant="body-sm" className="shopsocket-muted" render={<p />}>
+              {shoppers.length === 0 &&
+                __("No shopper is on the site right now.", "shopsocket")}
+            </Text>
+            {shoppers.length > 0 && (
+              <LiveJourneys shoppers={shoppers} names={names} />
+            )}
+          </Stack>
+        </Tabs.Panel>
+      </Tabs.Root>
+    </Section>
   );
 }
 
-/** When a cart was left, in the browser's locale, with the date only when it is not today. */
-function leftAt(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  const today = new Date().toDateString() === date.toDateString();
-  return new Intl.DateTimeFormat(undefined, today ? { timeStyle: "short" } : { dateStyle: "medium", timeStyle: "short" }).format(date);
+/** A shopper's visitor id as their row key. */
+const byVisitorId = (row: WooShopper) => row.v;
+
+/**
+ * Names and links for every page in the shoppers' routes.
+ *
+ * @since 0.8.0
+ */
+export interface ShopperNames extends RouteNames {
+  url: (kind: string, id: number) => string | null;
 }
 
 /**
- * Carts whose shopper left and is not back, newest first: what they held, the
- * value, when, and the order when one followed. The historical record next to the live
- * split above; with history off it empties as sessions expire.
+ * The names and links of every page the shoppers' routes hold, each fetched once per page per step
+ * and shared by the shoppers table and the routes diagram.
+ *
+ * @since 0.8.0
  */
-function AbandonedPanel({ rows, currencySymbol }: { rows: WooAbandonedRow[]; currencySymbol: string }) {
-  const ids = useMemo(() => Array.from(new Set(rows.flatMap((r) => r.products))).slice(0, LIVE_PRODUCTS), [rows]);
-  const ref = useProductNames(ids, config);
-  const name = (id: number) => {
-    const product = ref(id);
-    if (product) return product.name;
-    /* translators: %d: product id */
-    return product === null ? sprintf(__("Product #%d (removed)", "shopsocket"), id) : `#${id}`;
-  };
-  return (
-    <section className="shopsocket-live-products shopsocket-abandoned" aria-labelledby="shopsocket-abandoned-heading">
-      <h2 id="shopsocket-abandoned-heading">{__("Recently abandoned", "shopsocket")}</h2>
-      {rows.length === 0 ? (
-        <p className="shopsocket-board__empty">{__("No shopper has left a cart behind recently.", "shopsocket")}</p>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">{__("Products", "shopsocket")}</th>
-              <th scope="col" className="shopsocket-live-products__count">{__("Value", "shopsocket")}</th>
-              <th scope="col" className="shopsocket-live-products__count">{__("Left", "shopsocket")}</th>
-              <th scope="col" className="shopsocket-live-products__count">{__("Order", "shopsocket")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const href = row.order_url ? adminUrlOrNull(row.order_url, config.adminUrl) : null;
-              const label = row.order_id ? `#${row.order_id}` : "";
-              return (
-                <tr key={row.id} data-cart={row.id} data-journey={row.journey}>
-                  <th scope="row" title={row.journey}>
-                    {row.products.map((id) => `${name(id)}${(row.quantities?.[id] ?? 1) > 1 ? ` \u00d7${row.quantities[id]}` : ""}`).join(", ")}
-                  </th>
-                  <td className="shopsocket-live-products__count">{money(row.value, row.currency || currencySymbol)}</td>
-                  <td className="shopsocket-live-products__count" title={row.left_at}>{leftAt(row.left_at)}</td>
-                  <td className="shopsocket-live-products__count">{href ? <a href={href}>{label}</a> : label}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </section>
+function useShopperNames(shoppers: WooShopper[]): ShopperNames {
+  /* The pages the shoppers' tabs are on first, so the table's cells are named before the routes' nodes. */
+  const all = useMemo(
+    () => [
+      ...shoppers.flatMap((s) =>
+        s.tabs.map((t) => ({ kind: t.kind, id: t.id })),
+      ),
+      ...shoppers.flatMap((s) => s.tabs.flatMap((t) => routeSteps(t.j))),
+    ],
+    [shoppers],
+  );
+  const steps = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          all
+            .filter((s) => needsLookup(s.kind))
+            .map((s) => `${s.kind}:${s.id}`),
+        ),
+      ).slice(0, LIVE_PRODUCTS),
+    [all],
+  );
+  const page = usePageNames(steps, config);
+  const productIds = useMemo(
+    () =>
+      Array.from(
+        new Set(all.filter((s) => s.kind === "product").map((s) => s.id)),
+      ).slice(0, LIVE_PRODUCTS),
+    [all],
+  );
+  const product = useProductNames(productIds, config);
+  return useMemo(
+    () => ({
+      label: (kind, id) =>
+        pageLabel(kind, id, page(`${kind}:${id}`), product(id)),
+      url: (kind, id) =>
+        pageUrl(kind, page(`${kind}:${id}`), product(id), config),
+    }),
+    [page, product],
   );
 }
 
-/** One row of the carts table. */
-function CartRow({ label, live, away, abandoned }: { label: string; live: string; away: string; abandoned: string }) {
+/**
+ * Every connected visitor: who they are when logged in, the page of each of
+ * their tabs linked to it, a hidden tab's marked, and what their cart holds.
+ *
+ * @since 0.8.0
+ */
+function ShoppersPanel({
+  shoppers,
+  names,
+}: {
+  shoppers: WooShopper[];
+  names: ShopperNames;
+}) {
+  const columns = useMemo<Column<WooShopper>[]>(() => {
+    const label = (row: WooShopper) => names.label(row.kind, row.id);
+    return [
+      shopperColumn<WooShopper>(
+        (row) => ({
+          v: row.v,
+          customer: row.cart?.customer,
+          customerUrl: row.cart?.customer_url,
+          guess: row.guess,
+          staff: row.staff,
+        }),
+        config.adminUrl,
+      ),
+      {
+        id: "page",
+        label: __("Pages", "shopsocket"),
+        style: { width: "50%" },
+        value: label,
+        render: (row) => (
+          <span className="shopsocket-shoppers__pages">
+            {row.tabs.map((tab) => {
+              const url = names.url(tab.kind, tab.id);
+              const href = url ? siteUrlOrNull(url, config.homeUrl) : null;
+              const name = names.label(tab.kind, tab.id);
+              return (
+                <span
+                  key={tab.key}
+                  className={`shopsocket-shoppers__page${tab.away ? " is-away" : ""}`}
+                  title={
+                    tab.away
+                      ? __("A hidden tab", "shopsocket")
+                      : __("The tab they are looking at", "shopsocket")
+                  }
+                >
+                  {href ? (
+                    <Link
+                      variant="default"
+                      tone={tab.away ? "neutral" : "brand"}
+                      href={href}
+                      openInNewTab
+                    >
+                      {name}
+                    </Link>
+                  ) : (
+                    name
+                  )}
+                </span>
+              );
+            })}
+          </span>
+        ),
+      },
+      {
+        id: "cart",
+        label: __("Cart", "shopsocket"),
+        style: { width: "130px" },
+        value: (row) => row.cart?.value ?? 0,
+        render: (row) =>
+          row.cart ? (
+            <>
+              {sprintf(
+                /* translators: %d: products in the cart */
+                _n(
+                  "%d product",
+                  "%d products",
+                  row.cart.products.length,
+                  "shopsocket",
+                ),
+                row.cart.products.length,
+              )}
+              {", "}
+              {money(
+                row.cart.value,
+                row.cart.currency || config.currencySymbol,
+              )}
+            </>
+          ) : (
+            ""
+          ),
+        numeric: true,
+      },
+    ];
+  }, [names]);
   return (
-    <tr>
-      <th scope="row">{label}</th>
-      <td className="is-live">{live}</td>
-      <td className="is-away">{away}</td>
-      <td className="is-abandoned">{abandoned}</td>
-    </tr>
+    <BoardTable
+      className="shopsocket-shoppers"
+      rows={shoppers}
+      rowId={byVisitorId}
+      empty={__("No shopper is on the site right now.", "shopsocket")}
+      columns={columns}
+    />
+  );
+}
+
+/** An order just placed, as the board holds it now: its number linked to its edit screen, who placed it, how many items and what it came to. */
+function OrderNotice({
+  order,
+  onDismiss,
+}: {
+  order: WooOrderEvent;
+  onDismiss: () => void;
+}) {
+  const href = adminUrlOrNull(order.edit_url, config.adminUrl);
+  const total = price(order.total, order.currency, config.currencySymbol);
+  const items = sprintf(
+    /* translators: %d: items in the order */
+    _n("%d item", "%d items", order.item_count, "shopsocket"),
+    order.item_count,
+  );
+  return (
+    <Notice
+      status="success"
+      className="shopsocket-board__order"
+      onRemove={onDismiss}
+    >
+      <strong>{__("New order", "shopsocket")}: </strong>
+      {href ? <a href={href}>#{order.number}</a> : `#${order.number}`}{" "}
+      {[order.customer, items, total].filter(Boolean).join(", ")}
+    </Notice>
+  );
+}
+
+/** A product low on or out of stock, linked to its edit screen. */
+function StockNotice({
+  alert,
+  onDismiss,
+}: {
+  alert: WooStockEvent & { kind: "low" | "out" };
+  onDismiss: () => void;
+}) {
+  return (
+    <Notice
+      status="warning"
+      className="shopsocket-board__stock"
+      onRemove={onDismiss}
+    >
+      <strong>{__("Stock", "shopsocket")}: </strong>
+      <a
+        href={`${config.adminUrl}post.php?post=${alert.product_id}&action=edit`}
+        target="_blank"
+        rel="noreferrer"
+        className={`shopsocket-stock-alert is-${alert.kind}`}
+      >
+        {alert.kind === "out"
+          ? sprintf(
+              /* translators: %s: product name */
+              __("%s is out of stock", "shopsocket"),
+              alert.name,
+            )
+          : sprintf(
+              /* translators: 1: product name, 2: quantity */
+              __("%1$s is low (%2$d left)", "shopsocket"),
+              alert.name,
+              alert.stock_quantity ?? 0,
+            )}
+      </a>
+    </Notice>
+  );
+}
+
+/** "Right now": a shopper a rule asked staff to look at, with their cart, where they are and who they are when logged in. */
+function AlertNotice({
+  alert,
+  name,
+  onDismiss,
+}: {
+  alert: WooAlertEvent;
+  name: (id: number) => string;
+  onDismiss: () => void;
+}) {
+  const names = alert.products.map(name).join(", ");
+  return (
+    <Notice
+      status="info"
+      className="shopsocket-board__alert"
+      onRemove={onDismiss}
+    >
+      <strong>
+        {alert.message || __("A shopper may need a hand", "shopsocket")}
+      </strong>{" "}
+      {alert.customer
+        ? alert.step
+          ? sprintf(
+              /* translators: 1: the shopper's name, 2: where they are (a page kind), 3: the cart's products, 4: the cart's value */
+              __("%1$s is on %2$s with %3$s (%4$s).", "shopsocket"),
+              alert.customer,
+              alert.step,
+              names || __("an empty cart", "shopsocket"),
+              money(alert.value, alert.currency),
+            )
+          : sprintf(
+              /* translators: 1: the shopper's name, 2: the cart's products, 3: the cart's value */
+              __("%1$s has %2$s in their cart (%3$s).", "shopsocket"),
+              alert.customer,
+              names || __("nothing", "shopsocket"),
+              money(alert.value, alert.currency),
+            )
+        : alert.step
+          ? sprintf(
+              /* translators: 1: where the shopper is (a page kind), 2: the cart's products, 3: the cart's value */
+              __("On %1$s with %2$s (%3$s).", "shopsocket"),
+              alert.step,
+              names || __("an empty cart", "shopsocket"),
+              money(alert.value, alert.currency),
+            )
+          : sprintf(
+              /* translators: 1: the cart's products, 2: the cart's value */
+              __("Cart: %1$s (%2$s).", "shopsocket"),
+              names || __("empty", "shopsocket"),
+              money(alert.value, alert.currency),
+            )}
+    </Notice>
   );
 }
 
@@ -454,26 +756,28 @@ function CartRow({ label, live, away, abandoned }: { label: string; live: string
 function ConnectionBadge({ state }: { state: WPSConnectionState | null }) {
   if (!state) {
     return (
-      <span className="shopsocket-conn is-off">
+      <span className="shopsocket-connection-badge is-off">
         {__("Realtime client not loaded", "shopsocket")}
       </span>
     );
   }
   if (state.connected) {
     return (
-      <span className="shopsocket-conn is-on">{__("Live", "shopsocket")}</span>
+      <span className="shopsocket-connection-badge is-on">
+        {__("Live", "shopsocket")}
+      </span>
     );
   }
   if (state.error?.code === "authentication-failed") {
     return (
-      <span className="shopsocket-conn is-off">
+      <span className="shopsocket-connection-badge is-off">
         {__("Not delivering: reconnect WordSocket", "shopsocket")}
       </span>
     );
   }
   if (state.retryInMs) {
     return (
-      <span className="shopsocket-conn is-off">
+      <span className="shopsocket-connection-badge is-off">
         {sprintf(
           /* translators: %d: seconds */
           __("Reconnecting in %ds", "shopsocket"),
@@ -483,7 +787,7 @@ function ConnectionBadge({ state }: { state: WPSConnectionState | null }) {
     );
   }
   return (
-    <span className="shopsocket-conn is-off">
+    <span className="shopsocket-connection-badge is-off">
       {__("Connecting", "shopsocket")}
     </span>
   );

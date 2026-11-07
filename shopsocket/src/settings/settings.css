@@ -30,3 +30,20 @@
   max-width: 640px;
   margin: 0 0 16px;
 }
+
+.shopsocket-settings-cards {
+  flex-direction: row;
+
+  & > * {
+    flex: 1;
+  }
+
+  @media (max-width: 782px) {
+    flex-direction: column;
+
+    & > * {
+      flex: none;
+      width: 100%;
+    }
+  }
+}

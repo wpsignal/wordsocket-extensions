@@ -8,6 +8,7 @@ import { __ } from "@wordpress/i18n";
 import "./settings.css";
 import ShopSocketLogo from "./ShopSocketLogo";
 import { SettingsTab } from "./SettingsTab";
+import { registerConditions } from "../storefront/rules-vocabulary";
 
 const SLUG = "shopsocket";
 
@@ -15,6 +16,14 @@ const SLUG = "shopsocket";
 // It saves through WordSocket's useTask, so it needs 0.29 (registerTab alone came in 0.28).
 if (window.wordsocket?.registerTab && window.wordsocket.useTask) {
   window.wordsocket.registerTab({ name: SLUG, title: __("ShopSocket", "shopsocket"), render: SettingsTab });
+}
+
+/*
+ * The Moments tab replays a rule over the journeys WordSocket keeps: the cart
+ * conditions must be known here too, and the cart context rides on each journey.
+ */
+if (window.WPS?.rules) {
+  registerConditions(window.WPS.rules);
 }
 
 function Panel() {

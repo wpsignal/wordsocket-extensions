@@ -22,7 +22,11 @@ interface WooProductsStoreState {
   productVariations?: Record<number, WooProductAvailability>;
 }
 
-/** Write the availability into WooCommerce's product store where it exists. */
+/**
+ * Write the availability into WooCommerce's product store where it exists.
+ *
+ * @since 0.1.1
+ */
 export function feedWooCommerceStore(productId: number, variationId: number, entry: StockEntry): void {
   try {
     const wc = store<{ state: WooProductsStoreState }>("woocommerce/products", {}, { lock: WC_PRODUCTS_LOCK }).state;
@@ -36,7 +40,11 @@ export function feedWooCommerceStore(productId: number, variationId: number, ent
   }
 }
 
-/** Availability markup the classic variation form injected after load. */
+/**
+ * Availability markup the classic variation form injected after load.
+ *
+ * @since 0.1.1
+ */
 export function syncInjected(
   productId: number,
   variationId: number,
@@ -65,7 +73,11 @@ function readContext(el: Element): { productId?: number; variationId?: number } 
   }
 }
 
-/** The page's own product: keep the add-to-cart button honest. */
+/**
+ * The page's own product: keep the add-to-cart button honest.
+ *
+ * @since 0.1.1
+ */
 export function syncAddToCart(
   productId: number,
   variationId: number,
@@ -88,6 +100,8 @@ export function syncAddToCart(
  * quantity limits appear: the block stores re-fetch through wp.data (the Store
  * API answer carries the cart errors), the classic cart, mini cart and
  * checkout through their jQuery events. Unknown events are no-ops.
+ *
+ * @since 0.1.1
  */
 export function refreshCart(page: string | undefined): void {
   try {
@@ -103,7 +117,11 @@ export function refreshCart(page: string | undefined): void {
   if (page === "checkout") body.trigger("update_checkout");
 }
 
-/** The page product's quantity input follows what can still be bought; a value over the limit is clamped. */
+/**
+ * The page product's quantity input follows what can still be bought; a value over the limit is clamped.
+ *
+ * @since 0.1.1
+ */
 export function setQuantityMax(
   productId: number,
   variationId: number,
@@ -132,6 +150,8 @@ export function setQuantityMax(
  * hidden and a plain link stands in beside it, and the swap is undone when the
  * stock state returns to what the page was rendered with. Only simple products
  * have an add-to-cart button on archives, so only those are touched.
+ *
+ * @since 0.1.1
  */
 export function syncArchiveButtons(
   productId: number,
@@ -172,7 +192,11 @@ export function syncArchiveButtons(
   });
 }
 
-/** Report the classic variation form's selection (0 when cleared); it is jQuery-driven. */
+/**
+ * Report the classic variation form's selection (0 when cleared); it is jQuery-driven.
+ *
+ * @since 0.1.1
+ */
 export function watchVariationForm(onSelect: (variationId: number) => void): void {
   const jq = window.jQuery;
   if (!jq) return;

@@ -1,181 +1,422 @@
-.shopsocket-board {
+/*
+ * The board, in the look of WordSocket's settings tabs:
+ * - every block is a `@wordpress/ui` card, laid out on the theme's spacing and colour tokens;
+ * - figures are stat tiles on the weak neutral surface;
+ * - tables are DataViews, numbers in tabular figures.
+ */
 
-  h2 {
-    font-size: 1.1em;
-    margin: 24px 0 8px;
-  }
+.shopsocket-board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wpds-dimension-gap-lg, 16px);
 }
 
 .shopsocket-board__header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-block: 8px 16px;
+  background-color: var(
+    --wpds-color-background-surface-neutral-strong,
+    #f6f7f7
+  );
+  border: 1px solid var(--wpds-color-stroke-surface-neutral, #dbdbdb);
+  border-radius: 999px;
+  padding: var(--wpds-dimension-padding-md, 12px) var(--wpds-dimension-padding-lg, 16px);
+  overflow: hidden;
 }
 
 .shopsocket-board__controls {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--wpds-dimension-gap-lg, 16px);
   justify-content: flex-end;
+  flex-wrap: wrap;
+
+  button {
+    cursor: pointer;
+    color: var(--wpds-color-foreground-content-neutral-weak);
+    
+    &:hover,
+    &:active {
+      color: var(--wpds-color-foreground-content-neutral);
+    }
+
+    &:focus {
+      outline: 1px solid var(--wpds-color-stroke-surface-neutral, #dbdbdb);
+    }
+
+    &[data-disabled] {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+  }
+} 
+
+.shopsocket-section {
   width: 100%;
+  transition: opacity 0.3s;
+
+  &.is-stale {
+    opacity: 0.6;
+  }
 }
 
-.shopsocket-board__empty {
-  color: #50575e;
-  font-size: 14px;
-}
-
-/* Tiles, the left column of the summary grid */
-
-.shopsocket-tiles {
+/* Tabs inside a section: the list, then the panel in view. */
+.shopsocket-tabs {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--wpds-dimension-gap-md, 12px);
+  padding: 0 var(--wpds-dimension-padding-2xl, 1.5rem)
+    var(--wpds-dimension-gap-2xl, 1.5rem);
 }
 
-.shopsocket-tile {
+/* Abandoned carts: a figure for each time frame, then the sentence about where leavers leave from. */
+.shopsocket-abandoned-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wpds-dimension-gap-lg, 16px);
+  margin-bottom: var(--wpds-dimension-gap-2xl, 1.5rem);
+}
+
+.shopsocket-leak {
+  margin: 0;
+}
+
+/* The time frames, and the progress bar under them while the chosen one is fetched: it takes no room of its own. */
+.shopsocket-frames {
+  position: relative;
+}
+
+.shopsocket-frames .shopsocket-frames__loading {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% + var(--wpds-dimension-gap-xs, 4px));
+  width: auto;
+}
+
+/* The line above a tab's table. */
+.shopsocket-caption {
+  margin: 0 0 var(--wpds-dimension-gap-sm, 8px);
+}
+
+/* A time frame's figure, an inset card: a click anywhere on it chooses it, and the chosen one is outlined. */
+.shopsocket-frame {
+  display: grid;
+  cursor: pointer;
+
+  &.is-chosen .shopsocket-stat {
+    border-color: var(--wp-admin-theme-color, #3858e9);
+    box-shadow: 0 0 0 1px var(--wp-admin-theme-color, #3858e9);
+  }
+}
+
+/* Stat tiles: as many to a row as fit, one column on a phone. */
+
+.shopsocket-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: var(--wpds-dimension-gap-md, 12px);
+}
+
+.shopsocket-stat {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 16px 20px;
-  background: #fff;
-  border: 1px solid #c3c4c7;
-  border-radius: 4px;
-  box-shadow: 0 1px 1px rgb(0 0 0 / 0.04);
+  padding: var(--wpds-dimension-gap-2xl, 16px)
+    var(--wpds-dimension-gap-2xl, 16px);
+  background: var(--wpds-color-background-surface-neutral-strong, #f6f7f7);
+  border-radius: var(--wpds-border-radius-lg, 8px);
 }
 
-.shopsocket-tile__value {
-  font-size: 32px;
-  font-weight: 600;
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
-}
-
-.shopsocket-tile__label {
-  font-size: 14px;
+.shopsocket-stat__label {
   font-weight: 500;
 }
 
-.shopsocket-tile__detail {
-  font-size: 12px;
-  color: #646970;
+/* The arrow by the label: a small tinted square, green for a change for the better, red for the worse. */
+.shopsocket-stat__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--wpds-border-radius-xs, 2px);
+  font-size: 11px;
+  line-height: 1;
+
+  &.is-good {
+    background: var(--wpds-color-background-surface-success-weak, #e6f4ea);
+    color: var(--wpds-color-foreground-content-success, #1e6f33);
+  }
+
+  &.is-bad {
+    background: var(--wpds-color-background-surface-error-weak, #fbe9e9);
+    color: var(--wpds-color-foreground-content-error, #a12a2a);
+  }
 }
 
-/* Live orders */
+/* The sparkline: full width, a fixed height, strokes unscaled, pinned to the tile's bottom edge. */
+.shopsocket-spark {
+  display: block;
+  box-sizing: content-box;
+  width: 100%;
+  height: 28px;
+  margin-top: auto;
+  padding-top: var(--wpds-dimension-gap-xs, 4px);
+  overflow: visible;
 
-.shopsocket-board__stock {
-  margin-bottom: 16px;
+  path {
+    fill: none;
+    stroke-width: 1.5px;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .shopsocket-spark__before {
+    stroke: var(--wpds-color-foreground-content-neutral-weak, #757575);
+    opacity: 0.5;
+  }
+
+  .shopsocket-spark__now {
+    stroke: var(--wp-admin-theme-color, #3858e9);
+  }
+
+  .shopsocket-spark__end {
+    stroke: var(--wp-admin-theme-color, #3858e9);
+    stroke-width: 6px;
+  }
+
+  .shopsocket-spark__hit {
+    fill: transparent;
+  }
 }
+
+.shopsocket-stat__detail {
+  &.is-good {
+    color: var(--wpds-color-foreground-content-success-weak, #00800a);
+  }
+
+  &.is-bad {
+    color: var(--wpds-color-foreground-content-error-weak, #d63638);
+  }
+}
+
+/* Right now: two cards side by side, the shoppers' headline figure over a bar split into its parts with the parts as inset figures, and the top lists. */
+.shopsocket-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+  gap: var(--wpds-dimension-gap-lg, 16px);
+  margin-bottom: var(--wpds-dimension-gap-2xl, 1.5rem);
+}
+
+.shopsocket-group {
+  background-color: var(--wpds-color-background-surface-neutral, #fff);
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--wpds-dimension-gap-lg, 16px);
+  padding: var(--wpds-dimension-padding-2xl, 24px);
+  border: 1px solid var(--wpds-color-stroke-surface-neutral, #e0e0e0);
+  border-radius: var(--wpds-border-radius-lg, 8px);
+
+  /* The fill of each share: solid for a tab in view, hatched for a hidden one. */
+  --shopsocket-people: var(--wp-admin-theme-color, #3858e9);
+  --shopsocket-held: var(--wpds-color-foreground-content-success-weak, #008030);
+
+  & .is-looking {
+    --shopsocket-fill: var(--shopsocket-people);
+  }
+
+  & .is-idle {
+    --shopsocket-fill: repeating-linear-gradient(
+      135deg,
+      var(--shopsocket-people) 0 2px,
+      color-mix(in srgb, var(--shopsocket-people) 25%, transparent) 2px 5px
+    );
+  }
+}
+
+.shopsocket-group__head .shopsocket-stat {
+  padding: 0;
+  background: none;
+}
+
+/* The bar: one share per part, as wide as its count among the others; a grey track when there is none. */
+.shopsocket-split {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 5px;
+
+  &:empty {
+    background: var(--wpds-color-background-track-neutral, #dbdbdb);
+  }
+}
+
+.shopsocket-split__share {
+  flex: 0 0 0;
+  min-width: 6px;
+  background: var(--shopsocket-fill);
+}
+
+.shopsocket-group__parts {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--wpds-dimension-gap-sm, 8px);
+
+  & .shopsocket-stat {
+    border: 1px solid var(--wpds-color-stroke-surface-neutral, #e0e0e0);
+    padding: var(--wpds-dimension-padding-md, 12px)
+      var(--wpds-dimension-padding-lg, 16px);
+  }
+}
+
+.shopsocket-frame .shopsocket-stat {
+  border: 1px solid var(--wpds-color-stroke-surface-neutral, #e0e0e0);
+  padding: var(--wpds-dimension-padding-md, 12px)
+    var(--wpds-dimension-padding-lg, 16px);
+}
+
+@container (max-width: 560px) {
+  .shopsocket-group__parts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 300px) {
+  .shopsocket-group__parts {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The top lists: two side by side in their card, one over the other when it is narrow. */
+.shopsocket-group.is-top {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: var(--wpds-dimension-gap-2xl, 24px);
+
+  & .is-pages {
+    --shopsocket-fill: var(--shopsocket-people);
+  }
+
+  & .is-products {
+    --shopsocket-fill: var(--shopsocket-held);
+  }
+}
+
+@container (max-width: 420px) {
+  .shopsocket-top {
+    grid-column: 1 / -1;
+  }
+}
+
+.shopsocket-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wpds-dimension-gap-sm, 8px);
+  min-width: 0;
+
+  & h3,
+  & p {
+    margin: 0;
+  }
+}
+
+.shopsocket-top__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--wpds-dimension-gap-sm, 8px);
+}
+
+.shopsocket-top__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  /* Each row over a bar as wide as its count among the others. */
+  & li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--wpds-dimension-gap-md, 12px);
+    margin: 0;
+    padding: var(--wpds-dimension-padding-xs, 4px)
+      var(--wpds-dimension-padding-sm, 8px);
+    border-radius: var(--wpds-border-radius-sm, 4px);
+    background: linear-gradient(
+        color-mix(in srgb, var(--shopsocket-fill) 12%, transparent) 0 0
+      )
+      no-repeat left / calc(var(--shopsocket-share, 0) * 100%) 100%;
+  }
+}
+
+.shopsocket-top__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shopsocket-top__count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.shopsocket-stat__swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--wpds-border-radius-xs, 2px);
+  background: var(--shopsocket-fill);
+}
+
+/* Tables: numbers in tabular figures. */
+
+.shopsocket-table {
+  overflow-x: auto;
+}
+
+.shopsocket-table__num,
+.shopsocket-stat__money,
+.shopsocket-order__time,
+.shopsocket-order__total {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Live orders: the DataViews table with the customer under the order number. */
 
 .shopsocket-board__orders {
-  background: #fff;
-  border: 1px solid #dcdcde;
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
-  padding: 20px 24px 12px;
-
   /* The toolbar wraps on a phone rather than squeezing the search box. */
   .dataviews__view-actions {
     flex-wrap: wrap;
   }
 
-  .dataviews-view-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  /* Column headings: quiet labels, the same colour whether or not they sort. */
-  .dataviews-view-table thead th {
-    color: #757575;
-    letter-spacing: 0.04em;
-    border-bottom: 1px solid #e0e0e0;
-    padding-block: 12px;
-  }
-
-  .dataviews-view-table thead th .components-button,
-  .dataviews-view-table thead th .components-button:not(:hover) {
-    color: #757575;
-    font-size: inherit;
-    letter-spacing: inherit;
-  }
-
-  .dataviews-view-table thead th .components-button:hover {
-    color: #1e1e1e;
-  }
-
-  /* The first column is the order and customer: head it from the left, like its cells. */
-  .dataviews-view-table thead th:first-child,
-  .dataviews-view-table thead th:first-child .components-button {
-    text-align: left;
-    justify-content: flex-start;
-  }
-
-  .dataviews-view-table thead th,
-  .dataviews-view-table tbody td,
-  .dataviews-view-table tbody th {
-    padding-inline: 12px;
-  }
-
-  .dataviews-view-table tr > :first-child {
-    padding-left: 4px;
-  }
-
-  .dataviews-view-table tr > :last-child {
-    padding-right: 4px;
-  }
-
-  .dataviews-view-table tbody tr {
-    border-bottom: 1px solid #f0f0f1;
-    transition: background-color 0.15s;
-  }
-
-  .dataviews-view-table tbody tr:last-child {
-    border-bottom: 0;
-  }
-
-  .dataviews-view-table tbody tr:hover {
-    background: #f6f7f7;
-  }
-
-  .dataviews-view-table tbody td,
-  .dataviews-view-table tbody th {
-    padding-block: 14px;
-    vertical-align: middle;
-    font-size: 14px;
-  }
-
-  /* The customer sits under the order number. */
-  .dataviews-view-table__primary-column-content .dataviews-title-field {
-    font-size: 15px;
-  }
-
   .dataviews-view-table__primary-column-content > :not(:first-child),
-  .dataviews-view-table__primary-column-content .dataviews-view-table__cell-content-wrapper:not(:first-child) {
-    color: #646970;
-    font-size: 13px;
-    margin-top: 2px;
+  .dataviews-view-table__primary-column-content
+    .dataviews-view-table__cell-content-wrapper:not(:first-child) {
+    color: var(--wpds-color-foreground-content-neutral-weak, #757575);
   }
 }
 
-.shopsocket-board__orders-head {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 12px;
-
-  h2 {
-    margin: 0;
-    font-size: 16px;
+.shopsocket-shoppers {
+  .dataviews-view-table tbody .dataviews-view-table__cell-content-wrapper {
+    white-space: wrap;
+    word-break: break-word;
   }
 }
 
-.shopsocket-board__orders-count {
-  font-size: 13px;
-  color: #757575;
-  font-variant-numeric: tabular-nums;
+.dataviews-view-table tbody .dataviews-view-table__cell-content-wrapper {
+  white-space: wrap;
+}
+
+.shopsocket-board__stock,
+.shopsocket-board__alert,
+.shopsocket-board__order {
+  margin: 0;
 }
 
 .shopsocket-order {
@@ -191,11 +432,10 @@
 .shopsocket-order__time,
 .shopsocket-order__total {
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 
 .shopsocket-order__time {
-  color: #646970;
+  color: var(--wpds-color-foreground-content-neutral-weak, #757575);
 }
 
 .shopsocket-order__total {
@@ -214,12 +454,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shopsocket-order.is-fresh {
+  .shopsocket-order.is-fresh,
+  .shopsocket-journeys__now {
     animation: none;
   }
 }
 
-.shopsocket-conn {
+.shopsocket-connection-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -227,6 +468,7 @@
   padding: 2px 10px;
   border-radius: 999px;
   border: 1px solid #c3c4c7;
+  margin-right: auto;
 
   &::before {
     content: "";
@@ -252,8 +494,8 @@
   gap: 6px;
   padding: 3px 10px;
   border-radius: 999px;
-  background: #f0f0f1;
-  color: #3c434a;
+  background: var(--wpds-color-background-surface-neutral-weak, #f0f0f1);
+  color: var(--wpds-color-foreground-content-neutral, #3c434a);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.4;
@@ -269,26 +511,26 @@
   }
 
   &.status-processing {
-    background: #e6f4ea;
-    color: #1e6f33;
+    background: var(--wpds-color-background-surface-success-weak, #e6f4ea);
+    color: var(--wpds-color-foreground-content-success, #1e6f33);
   }
 
   &.status-completed {
-    background: #e7eef5;
-    color: #2c4a66;
+    background: var(--wpds-color-background-surface-info-weak, #e7eef5);
+    color: var(--wpds-color-foreground-content-info, #2c4a66);
   }
 
   &.status-on-hold,
   &.status-pending {
-    background: #fcf1dc;
-    color: #8a5a00;
+    background: var(--wpds-color-background-surface-warning-weak, #fcf1dc);
+    color: var(--wpds-color-foreground-content-warning, #8a5a00);
   }
 
   &.status-cancelled,
   &.status-failed,
   &.status-refunded {
-    background: #fbe9e9;
-    color: #a12a2a;
+    background: var(--wpds-color-background-surface-error-weak, #fbe9e9);
+    color: var(--wpds-color-foreground-content-error, #a12a2a);
   }
 }
 
@@ -311,192 +553,201 @@ body.shopsocket-fullscreen {
   }
 
   #wpcontent {
-    margin-left: 0;
+    margin: 0;
     padding: 0;
+  }
+
+  #wpbody-content {
+    padding: 0;
+  }
+
+  .wrap {
+    margin: 0;
   }
 
   .shopsocket-board {
     max-width: none;
     padding: 24px;
-    font-size: 18px;
+    margin-top: calc(var(--wpds-dimension-gap-2xl, 1.5rem) * -1);
   }
-
-  .shopsocket-tile__value {
-    font-size: 48px;
-  }
-
-  .shopsocket-board__orders,
-  .shopsocket-live-products {
-    font-size: 18px;
-  }
-}
-
-/* Carts panel: live vs abandoned */
-
-.shopsocket-summary {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.6fr);
-  gap: 16px;
-  margin-bottom: 16px;
-  transition: opacity 0.3s;
-
-  &.is-stale {
-    opacity: 0.6;
-  }
-}
-
-.shopsocket-carts {
-  background: #fff;
-  border: 1px solid #c3c4c7;
-  border-radius: 4px;
-  box-shadow: 0 1px 1px rgb(0 0 0 / 0.04);
-  padding: 8px 4px;
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  th,
-  td {
-    padding: 8px 16px;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-
-  thead th {
-    font-size: 13px;
-    border-bottom: 1px solid #dcdcde;
-  }
-
-  thead th:first-child,
-  tbody th {
-    text-align: left;
-    font-weight: 500;
-  }
-
-  tbody th {
-    color: #8c8f94;
-    font-size: 13px;
-  }
-
-  tbody td {
-    font-size: 18px;
-    font-weight: 600;
-  }
-
-  td.is-away {
-    color: #996800;
-  }
-
-  td.is-abandoned {
-    color: #8c8f94;
-  }
-}
-
-.shopsocket-carts__hint {
-  display: block;
-  font-size: 11px;
-  font-weight: 400;
-  color: #8c8f94;
-}
-
-/* Products in live carts */
-
-.shopsocket-live-products {
-  background: #fff;
-  border: 1px solid #c3c4c7;
-  border-radius: 4px;
-  box-shadow: 0 1px 1px rgb(0 0 0 / 0.04);
-  padding: 8px 4px;
-  margin-bottom: 16px;
-
-  h2 {
-    font-size: 13px;
-    font-weight: 500;
-    margin: 4px 16px 8px;
-  }
-
-  .shopsocket-board__empty {
-    color: #8c8f94;
-    padding: 0 16px 8px;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  th,
-  td {
-    padding: 6px 16px;
-    text-align: left;
-  }
-
-  thead th {
-    font-size: 13px;
-    color: #646970;
-    border-bottom: 1px solid #dcdcde;
-  }
-
-  tbody th {
-    font-weight: 500;
-  }
-
-  a {
-    font-weight: 600;
-    text-decoration: none;
-  }
-
-  .shopsocket-live-products__count {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  tbody .shopsocket-live-products__count {
-    font-weight: 600;
-  }
-}
-
-/* Recently abandoned: the live-products table, with wrapping product lists. */
-
-.shopsocket-abandoned tbody th {
-  font-weight: 400;
-  max-width: 48ch;
 }
 
 @media (max-width: 782px) {
-  .shopsocket-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .shopsocket-board__orders {
-    padding: 16px 12px 8px;
-    border-radius: 6px;
-  }
-
   .shopsocket-board__orders .dataviews-view-table tbody td,
   .shopsocket-board__orders .dataviews-view-table tbody th {
     padding-block: 12px;
   }
 
-  .shopsocket-board__orders .dataviews-view-table thead th,
-  .shopsocket-board__orders .dataviews-view-table tbody td,
-  .shopsocket-board__orders .dataviews-view-table tbody th {
-    padding-inline: 8px;
-  }
-
-  .shopsocket-board__orders .dataviews-view-table tr > :first-child {
-    padding-left: 2px;
-  }
-
-  .shopsocket-board__orders .dataviews-view-table tr > :last-child {
-    padding-right: 2px;
-  }
-
   .shopsocket-status {
     padding: 2px 8px;
     font-size: 11px;
+  }
+}
+
+/* Shoppers on the site right now: one page per open tab, a hidden tab's in a dashed border. */
+.shopsocket-shoppers__pages {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--wpds-dimension-gap-xs, 4px);
+}
+
+.shopsocket-shoppers__page {
+  display: inline-block;
+  padding: 0 var(--wpds-dimension-padding-xs, 4px);
+  border: 1px solid transparent;
+  border-radius: var(--wpds-dimension-radius-sm, 2px);
+  padding: var(--wpds-dimension-padding-xs, 4px)
+    var(--wpds-dimension-padding-sm, 8px);
+
+  &.is-away {
+    border: 1px dashed var(--wpds-color-stroke-surface-neutral, #949494);
+    border-radius: var(--wpds-dimension-radius-xs, 99px);
+    white-space: nowrap;
+  }
+}
+
+/* Where shoppers are coming from: the frame scrolls sideways under row labels pinned to its left edge (a shadow at their edge once scrolled); routes grey, the hovered shopper's (every tab of theirs, or every shopper through a hovered node) dark and the rest faded, a hidden tab's route dotted; nodes by page kind, the "Now" nodes ringed. */
+.shopsocket-journeys {
+  position: relative;
+  display: flex;
+  overflow-x: auto;
+  container-type: scroll-state;
+
+  & svg {
+    display: block;
+    flex: none;
+    max-width: none;
+    font-size: 12px;
+  }
+
+  & text {
+    fill: var(--wpds-color-foreground-content-neutral-weak, #757575);
+
+    &.is-strong {
+      fill: var(--wpds-color-foreground-content-neutral, #1e1e1e);
+      font-weight: 600;
+    }
+  }
+}
+
+/* The plot takes what the labels leave; its width is what the drawing is sized to. */
+.shopsocket-journeys__plot {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The row labels: a grid of a header spacer then one row per kind, each label centred in its row. */
+.shopsocket-journeys__labels {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: none;
+  display: grid;
+  grid-template-rows: var(--shopsocket-top) repeat(
+      var(--shopsocket-rows),
+      var(--shopsocket-row)
+    );
+  align-items: center;
+  justify-items: end;
+  padding-right: var(--wpds-dimension-padding-md, 12px);
+  border-right: 1px solid var(--wpds-color-stroke-surface-neutral-weak, #e0e0e0);
+  background: var(--wpds-color-background-surface-neutral-strong, #fff);
+  font-size: 12px;
+  color: var(--wpds-color-foreground-content-neutral-weak, #757575);
+  white-space: nowrap;
+
+  &::before {
+    content: "";
+  }
+}
+
+@container scroll-state(scrollable: left) {
+  .shopsocket-journeys__labels::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: -1rem;
+    width: 1rem;
+    height: 100%;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.1), transparent);
+  }
+}
+
+.shopsocket-journeys__route {
+  fill: none;
+  stroke: var(--wpds-color-foreground-content-neutral, #1e1e1e);
+  stroke-width: 2.5px;
+  /* The ink thins as routes pile up: `--shopsocket-ink` is 1 for a few shoppers and falls toward 0.1. */
+  stroke-opacity: calc(0.3 * var(--shopsocket-ink, 1));
+  stroke-linecap: round;
+  shape-rendering: geometricPrecision;
+  /* The fade shortens with the ink, so a crowd of routes does not animate on every crossing. */
+  transition: stroke-opacity calc(0.15s * var(--shopsocket-ink, 1));
+
+  /* A hidden tab's route: zero-length round-capped dashes, drawn darker than a line. */
+  .is-away & {
+    stroke-dasharray: 0 6;
+    stroke-width: 2px;
+    stroke-opacity: calc(0.5 * var(--shopsocket-ink, 1));
+  }
+
+  .shopsocket-journeys__shopper:hover &,
+  .shopsocket-journeys__shopper.is-on & {
+    stroke-opacity: 1;
+    stroke-width: 2px;
+  }
+
+  .shopsocket-journeys__shopper:hover .is-away &,
+  .shopsocket-journeys__shopper.is-on .is-away & {
+    stroke-width: 2.5px;
+  }
+
+  svg:has(.shopsocket-journeys__shopper:hover)
+    .shopsocket-journeys__shopper:not(:hover)
+    &,
+  .is-focused .shopsocket-journeys__shopper:not(.is-on) & {
+    stroke-opacity: calc(0.08 * var(--shopsocket-ink, 1));
+  }
+}
+
+/* On a narrow screen only "Now" heads the columns. */
+@media (max-width: 782px) {
+  .shopsocket-journeys__back {
+    display: none;
+  }
+}
+
+/* The route's hit area: wide and invisible, above the line. */
+.shopsocket-journeys__hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 10px;
+  stroke-linecap: round;
+  pointer-events: stroke;
+}
+
+.shopsocket-journeys__node {
+  stroke: var(--wpds-color-background-surface-neutral-strong, #fff);
+  stroke-width: 2px;
+}
+
+/* The ring on a Now node pulses out from it and fades, on repeat. */
+.shopsocket-journeys__now {
+  fill: none;
+  stroke-width: 2px;
+  stroke-opacity: 0.6;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: shopsocket-pulse 2s ease-out infinite;
+}
+
+@keyframes shopsocket-pulse {
+  from {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.8);
+    opacity: 0;
   }
 }

@@ -25,6 +25,8 @@ const UTM = '?utm_source=wordpress&utm_medium=plugin&utm_campaign=shopsocket-boa
  * numbers. Analytics is a WooCommerce feature owners can switch off, and then
  * its menu is gone, so the board falls back to the WooCommerce menu.
  *
+ * @since 0.1.1
+ *
  * @return array{parent: string, label: string, position: int}
  */
 function board_menu(): array {
@@ -66,6 +68,8 @@ add_action(
 /**
  * A link to the board on the plugin's row in the Plugins list.
  *
+ * @since 0.1.1
+ *
  * @param string[] $links The row's action links.
  * @return string[]
  */
@@ -77,6 +81,8 @@ add_filter( 'plugin_action_links_' . SLUG . '/shopsocket.php', __NAMESPACE__ . '
 
 /**
  * Order statuses as `{slug, label}` pairs, without the `wc-` prefix (events carry the bare slug).
+ *
+ * @since 0.1.1
  *
  * @return array<int, array{slug: string, label: string}>
  */
@@ -93,6 +99,9 @@ function order_statuses(): array {
 
 /**
  * Render the dashboard screen and enqueue its bundle.
+ *
+ * @since 0.1.1
+ * @since 0.8.0 Adds `journeysUrl`, `pagesUrl`, `homeUrl`, `shopUrl`, `cartUrl` and `checkoutUrl` to the board config.
  *
  * @return void
  */
@@ -141,9 +150,18 @@ function render_dashboard(): void {
 			array(
 				'dashboardUrl'   => rest_url( REST_NS . '/dashboard' ),
 				'productsUrl'    => rest_url( REST_NS . '/products' ),
+				'pagesUrl'       => rest_url( REST_NS . '/pages' ),
+				'guestsUrl'      => rest_url( REST_NS . '/guests' ),
+				'homeUrl'        => home_url( '/' ),
+				'shopUrl'        => (string) wc_get_page_permalink( 'shop' ),
+				'cartUrl'        => (string) wc_get_cart_url(),
+				'checkoutUrl'    => (string) wc_get_checkout_url(),
 				'adminUrl'       => admin_url(),
+				'journeysUrl'    => admin_url( 'admin.php?page=wordsocket&tab=journeys' ),
 				'nonce'          => wp_create_nonce( 'wp_rest' ),
 				'orders'         => board_orders(),
+				'boardHours'     => BOARD_HOURS,
+				'abandonedHours' => ABANDONED_WINDOWS,
 				'statuses'       => order_statuses(),
 				'snapshot'       => dashboard_snapshot(),
 				'currencySymbol' => html_entity_decode( get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8' ),
@@ -180,6 +198,8 @@ function render_dashboard(): void {
  * had painted: the logo showed at the full width of the screen, in the admin's
  * link blue, until the stylesheet caught up.
  *
+ * @since 0.2.0
+ *
  * @return void
  */
 function enqueue_page_styles(): void {
@@ -192,6 +212,8 @@ function enqueue_page_styles(): void {
 /**
  * What the board looks like before its script runs: the same shapes, shimmering.
  * React replaces it on mount.
+ *
+ * @since 0.1.1
  *
  * @return void
  */
@@ -212,6 +234,8 @@ function render_skeleton(): void {
 /**
  * The page header, in WordSocket's shape: the title, then the meta links and
  * the ShopSocket mark. The board's own controls render below it.
+ *
+ * @since 0.1.1
  *
  * @return void
  */
@@ -246,6 +270,8 @@ function render_header(): void {
  * The card on WordSocket's Extensions tab. Enqueued only on that screen, after
  * WordSocket's settings bundle, so `window.wordsocket` exists when it runs.
  *
+ * @since 0.1.1
+ *
  * @return void
  */
 function enqueue_settings_panel(): void {
@@ -265,9 +291,11 @@ function enqueue_settings_panel(): void {
 		SLUG . '-settings',
 		'window.shopSocketSettings = ' . wp_json_encode(
 			array(
-				'boardUrl'   => admin_url( 'admin.php?page=' . SLUG ),
-				'docsUrl'    => 'https://wpsignal.io/extensions/shopsocket',
-				'storefront' => settings(),
+				'boardUrl'    => admin_url( 'admin.php?page=' . SLUG ),
+				'docsUrl'     => 'https://wpsignal.io/extensions/shopsocket',
+				'storefront'  => settings(),
+				'rulesUrl'    => admin_url( 'admin.php?page=wordsocket&tab=moments' ),
+				'journeysUrl' => admin_url( 'admin.php?page=wordsocket&tab=journeys' ),
 			),
 			JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
 		) . ';',

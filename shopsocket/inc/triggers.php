@@ -23,6 +23,8 @@ const ORDERS_CHANNEL = ORDERS_NS . ':feed';
  * Whether stock changes are published right now: not during an import
  * (WordPress importers and the WooCommerce CSV importer set WP_IMPORTING).
  *
+ * @since 0.1.1
+ *
  * @return bool
  */
 function should_publish_stock(): bool {
@@ -30,6 +32,8 @@ function should_publish_stock(): bool {
 	/**
 	 * Filters whether a stock change is published. Return false to stay silent
 	 * (for example during a bulk update of your own).
+	 *
+	 * @since 0.1.1
 	 *
 	 * @param bool $publish Default: true unless an import is running.
 	 */
@@ -39,6 +43,8 @@ function should_publish_stock(): bool {
 /**
  * Whether the WooCommerce CSV importer is running in this request. It does not
  * set WP_IMPORTING, so its per-item hook flips this flag instead.
+ *
+ * @since 0.1.1
  *
  * @param bool|null $set Internal: mark the import as running.
  * @return bool
@@ -53,13 +59,19 @@ function product_import_running( ?bool $set = null ): bool {
 // The CSV importer's per-item hook: mark the import as running for the rest of the request.
 add_action( 'woocommerce_product_import_before_process_item', static fn() => product_import_running( true ) );
 
-/** Seconds between publishes for the same product. Filter `shopsocket_activity_throttle`. */
+/**
+ * Seconds between publishes for the same product. Filter `shopsocket_activity_throttle`.
+ *
+ * @since 0.1.1
+ */
 const ACTIVITY_THROTTLE = 10;
 
 /**
  * Whether the product's stock state is news. One save can fire the status
  * hook and the quantity hook in either order, so both triggers ask here and
  * only the first to see a state publishes it.
+ *
+ * @since 0.1.1
  *
  * @param WC_Product $product The product or variation.
  * @return bool
@@ -77,6 +89,8 @@ function stock_state_changed( WC_Product $product ): bool {
 /**
  * Whether an add-to-cart should be published: a purchasable product, the
  * feature enabled, and the per-product throttle window elapsed.
+ *
+ * @since 0.1.1
  *
  * @param string $cart_item_key Cart item key.
  * @param int    $product_id    Product ID.
@@ -104,17 +118,19 @@ function should_publish_cart_add( $cart_item_key, $product_id, $quantity, $varia
 	/**
 	 * Filters the minimum seconds between two publishes for the same product.
 	 *
+	 * @since 0.1.1
+	 *
 	 * @param int $seconds Default 10. Return 0 to publish every add.
 	 */
 	$throttle = (int) apply_filters( 'shopsocket_activity_throttle', ACTIVITY_THROTTLE );
 	if ( $throttle <= 0 ) {
 		return true;
 	}
-	$key = 'shopsocket_act_' . $id;
-	if ( get_transient( $key ) ) {
+	$key = 'act_' . $id;
+	if ( null !== recall( $key ) ) {
 		return false;
 	}
-	set_transient( $key, 1, $throttle );
+	remember( $key, 1, $throttle );
 	return true;
 }
 
@@ -124,6 +140,8 @@ function should_publish_cart_add( $cart_item_key, $product_id, $quantity, $varia
  * Other shoppers see this id on public activity events, so it is an HMAC
  * with the site's auth salt: a plain hash of a small user id would be
  * trivial to reverse. Empty while there is no session.
+ *
+ * @since 0.4.0
  *
  * @return string
  */
@@ -144,6 +162,8 @@ function cart_id(): string {
 
 /**
  * Resolve an order from the hook arguments WooCommerce passes.
+ *
+ * @since 0.1.1
  *
  * @param int|\WC_Order $order_or_id Order ID or object.
  * @return \WC_Order|null

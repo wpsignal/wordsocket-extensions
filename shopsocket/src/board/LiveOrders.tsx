@@ -1,72 +1,25 @@
 /**
- * Live orders as a DataViews table: newest activity first, searchable by
- * order number and customer, filterable by status, sortable by column.
- * The order number and customer share the first column; on a phone only
- * time, total, and status stay beside it (the view menu brings the rest back).
+ * Live orders as a board table: the orders the board holds, newest activity first.
+ *
+ * - Searchable by order number and customer, filterable by status, sortable by column.
+ * - The order number and customer share the first column.
+ * - On a phone only time, total and status stay beside it; the view menu brings the rest back.
  */
 import { __, sprintf } from "@wordpress/i18n";
-import { useEffect, useMemo, useState } from "@wordpress/element";
-import {
-  DataViews,
-  filterSortAndPaginate,
-  type Field,
-  type View,
-} from "@wordpress/dataviews";
+import { useMemo } from "@wordpress/element";
 import type { OrderRow } from "./useLiveOrders";
 import { adminUrlOrNull } from "./trust";
+import { price } from "./format";
+import { BoardTable, useNarrow, type Column } from "./ui";
 
+/** How long a row that just changed stays marked, in milliseconds. */
 const FRESH_MS = 4000;
-/** Only the table layout is offered, so the view is always a table view. */
-type TableView = Extract<View, { type: "table" }>;
-const NARROW = "(max-width: 782px)";
-const WIDE_FIELDS = [
-  "created_at",
-  "item_count",
-  "total",
-  "status",
-  "payment_method",
-];
-const NARROW_FIELDS = ["created_at", "total", "status"];
-const WIDE_STYLES: NonNullable<TableView["layout"]>["styles"] = {
-  created_at: { width: "11em" },
-  item_count: { width: "5em", align: "end" },
-  total: { width: "8em", align: "end" },
-  status: { width: "10em" },
-  payment_method: { width: "12em" },
-};
-const NARROW_STYLES: typeof WIDE_STYLES = {
-  created_at: { width: "6em" },
-  total: { width: "6em", align: "end" },
-  status: { width: "8em" },
-};
 
-const DEFAULT_VIEW: TableView = {
-  type: "table",
-  titleField: "number",
-  descriptionField: "customer",
-  fields: WIDE_FIELDS,
-  page: 1,
-  perPage: 25,
-  search: "",
-  filters: [],
-  layout: { density: "balanced", styles: WIDE_STYLES },
-};
+/** Orders a page of the table holds. */
+const PER_PAGE = 10;
 
-/** Whether the viewport matches the media query, tracked live. */
-function useMedia(query: string): boolean {
-  const [matches, setMatches] = useState(
-    () => window.matchMedia?.(query).matches ?? false,
-  );
-  useEffect(() => {
-    const media = window.matchMedia?.(query);
-    if (!media) return undefined;
-    const update = () => setMatches(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, [query]);
-  return matches;
-}
+/** An order's id as its table key. */
+const byOrderId = (row: OrderRow) => String(row.order_id);
 
 type Props = {
   rows: OrderRow[];
@@ -74,22 +27,6 @@ type Props = {
   currencySymbol: string;
   adminUrl: string;
 };
-
-/** An amount in the browser's locale, or symbol plus two decimals when the currency is unknown. */
-function formatMoney(
-  amount: number,
-  currency: string,
-  fallbackSymbol: string,
-): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-    }).format(amount);
-  } catch {
-    return `${fallbackSymbol}${amount.toFixed(2)}`;
-  }
-}
 
 /**
  * When the order was placed: the time today, the date and time otherwise
@@ -112,137 +49,130 @@ function timeOf(row: OrderRow, withDate: boolean): string {
     : `${when.toLocaleDateString(undefined, { month: "short", day: "numeric" })} ${time}`;
 }
 
-/** The orders table; the view (search, filters, sort, page) is component state. */
+/**
+ * The orders table; a row opens its order's edit screen when that is on this site's admin.
+ *
+ * @since 0.1.1
+ * @since 0.8.0 Drawn by the board's shared table.
+ */
 export function LiveOrders({
   rows,
   statuses,
   currencySymbol,
   adminUrl,
 }: Props) {
-  const [view, setView] = useState<TableView>(DEFAULT_VIEW);
-  const narrow = useMedia(NARROW);
-  useEffect(() => {
-    setView((v) => ({
-      ...v,
-      fields: narrow ? NARROW_FIELDS : WIDE_FIELDS,
-      layout: { ...v.layout, styles: narrow ? NARROW_STYLES : WIDE_STYLES },
-    }));
-  }, [narrow]);
-  // Edit links come from event data, so only follow them into this site's admin.
-  const editUrl = (row: OrderRow) => adminUrlOrNull(row.edit_url, adminUrl);
-  const open = (row: OrderRow) => {
-    const url = editUrl(row);
-    if (url) window.location.assign(url);
-  };
-
-  const fields = useMemo<Field<OrderRow>[]>(
+  const narrow = useNarrow();
+  const columns = useMemo<Column<OrderRow>[]>(
     () => [
       {
         id: "number",
         label: __("Order", "shopsocket"),
-        enableGlobalSearch: true,
-        enableSorting: false,
-        render: ({ item }) => (
+        value: (row) => row.number,
+        sortable: false,
+        searchable: true,
+        render: (row) => (
           <a
-            key={item.updatedAt}
-            href={editUrl(item) ?? undefined}
-            data-order-id={item.order_id}
-            className={`shopsocket-order${item.updatedAt && Date.now() - item.updatedAt < FRESH_MS ? " is-fresh" : ""}`}
+            key={row.updatedAt}
+            href={adminUrlOrNull(row.edit_url, adminUrl) ?? undefined}
+            data-order-id={row.order_id}
+            className={`shopsocket-order${row.updatedAt && Date.now() - row.updatedAt < FRESH_MS ? " is-fresh" : ""}`}
           >
-            #{item.number}
+            #{row.number}
           </a>
         ),
       },
       {
+        id: "customer",
+        label: __("Customer", "shopsocket"),
+        value: (row) => row.customer,
+        searchable: true,
+      },
+      {
         id: "created_at",
-        type: "datetime",
         label: __("Time", "shopsocket"),
-        render: ({ item }) => (
+        value: (row) => row.created_at ?? "",
+        datetime: true,
+        style: { width: "11em" },
+        narrow: { width: "6em" },
+        render: (row) => (
           <span
             className="shopsocket-order__time"
             title={
-              item.created_at
-                ? new Date(item.created_at).toLocaleString()
+              row.created_at
+                ? new Date(row.created_at).toLocaleString()
                 : undefined
             }
           >
-            {timeOf(item, !narrow)}
+            {timeOf(row, !narrow)}
           </span>
         ),
       },
       {
-        id: "customer",
-        type: "text",
-        label: __("Customer", "shopsocket"),
-        enableGlobalSearch: true,
-      },
-      {
         id: "item_count",
-        type: "integer",
         label: __("Items", "shopsocket"),
+        value: (row) => row.item_count,
+        numeric: true,
+        style: { width: "5em", align: "end" },
+        narrow: false,
       },
       {
         id: "total",
-        type: "number",
         label: __("Total", "shopsocket"),
-        render: ({ item }) => (
+        value: (row) => row.total,
+        numeric: true,
+        style: { width: "8em", align: "end" },
+        narrow: { width: "6em", align: "end" },
+        render: (row) => (
           <span className="shopsocket-order__total">
-            {formatMoney(item.total, item.currency, currencySymbol)}
+            {price(row.total, row.currency, currencySymbol)}
           </span>
         ),
       },
       {
         id: "status",
-        type: "text",
         label: __("Status", "shopsocket"),
-        elements: statuses.map((s) => ({ value: s.slug, label: s.label })),
-        filterBy: { operators: ["isAny"] },
-        render: ({ item }) => (
-          <span className={`shopsocket-status status-${item.status}`}>
-            {statuses.find((s) => s.slug === item.status)?.label ?? item.status}
+        value: (row) => row.status,
+        options: statuses.map((s) => ({ value: s.slug, label: s.label })),
+        style: { width: "10em" },
+        narrow: { width: "8em" },
+        render: (row) => (
+          <span className={`shopsocket-status status-${row.status}`}>
+            {statuses.find((s) => s.slug === row.status)?.label ?? row.status}
           </span>
         ),
       },
       {
         id: "payment_method",
-        type: "text",
         label: __("Payment", "shopsocket"),
+        value: (row) => row.payment_method,
+        style: { width: "12em" },
+        narrow: false,
       },
     ],
     [statuses, currencySymbol, adminUrl, narrow],
   );
-
-  const { data, paginationInfo } = useMemo(
-    () => filterSortAndPaginate(rows, view, fields),
-    [rows, view, fields],
-  );
-
   return (
-    <DataViews<OrderRow>
-      data={data}
-      fields={fields}
-      view={view}
-      onChangeView={(next) => setView(next as TableView)}
-      paginationInfo={paginationInfo}
-      getItemId={(row) => String(row.order_id)}
-      defaultLayouts={{ table: {} }}
+    <BoardTable
+      columns={columns}
+      rows={rows}
+      rowId={byOrderId}
+      description="customer"
+      density="balanced"
+      perPage={PER_PAGE}
       searchLabel={__("Search orders", "shopsocket")}
-      isItemClickable={() => true}
-      onClickItem={open}
-      empty={
-        <p className="shopsocket-board__empty">
-          {rows.length === 0
-            ? __(
-                "No orders yet. New orders appear here the moment they are placed.",
-                "shopsocket",
-              )
-            : sprintf(
-                /* translators: %d: number of orders on the board */
-                __("No orders match. %d on the board.", "shopsocket"),
-                rows.length,
-              )}
-        </p>
-      }
+      onOpen={(row) => {
+        const url = adminUrlOrNull(row.edit_url, adminUrl);
+        if (url) window.location.assign(url);
+      }}
+      empty={__(
+        "No recent orders. New orders appear here the moment they are placed.",
+        "shopsocket",
+      )}
+      noMatch={sprintf(
+        /* translators: %d: number of orders on the board */
+        __("No orders match. %d on the board.", "shopsocket"),
+        rows.length,
+      )}
     />
   );
 }

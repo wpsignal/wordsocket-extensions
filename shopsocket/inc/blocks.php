@@ -29,6 +29,8 @@ add_action(
  * Whether the block template being rendered contains the Live Stock block, so
  * the counter is not injected a second time after the price.
  *
+ * @since 0.1.1
+ *
  * @return bool
  */
 function template_has_live_stock_block(): bool {
@@ -39,6 +41,8 @@ function template_has_live_stock_block(): bool {
 /**
  * The product a block instance is about: its own attribute, then the template's
  * post context, then the page's queried product.
+ *
+ * @since 0.1.1
  *
  * @param array     $attributes Block attributes.
  * @param \WP_Block $block      The block being rendered.
@@ -59,6 +63,8 @@ function live_stock_product( array $attributes, \WP_Block $block ): ?WC_Product 
 /**
  * Render the block: the availability line (WooCommerce's own wording), the
  * units left, and the in-cart counter, every part bound to the store.
+ *
+ * @since 0.1.1
  *
  * @param array     $attributes Block attributes.
  * @param string    $content    Unused: the block has no saved content.
@@ -95,6 +101,8 @@ function render_live_stock_block( array $attributes, string $content, \WP_Block 
 
 /**
  * The "units left" sentence, one source for PHP and the store's `i18n`.
+ *
+ * @since 0.1.1
  *
  * @return string
  */

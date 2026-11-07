@@ -90,7 +90,15 @@ export interface StorefrontState {
   presenceChannel?: string;
   channels?: { stock?: string; activity?: string };
   cartIdUrl?: string;
+  /**
+   * Where the storefront offers the email its checkout form remembers, as a best guess at who a guest is.
+   *
+   * @since 0.8.0
+   */
+  guestUrl?: string;
   nonce?: string;
+  /** The rules actions' routes (0.8); the nonce is the state's own. */
+  rules?: { alertUrl?: string };
   stock: Record<string, StockEntry>;
   pulses: Record<string, boolean>;
   toast: { message: string; href: string; visible: boolean; image: string; kind: "info" | "error"; sticky: boolean; key: string };

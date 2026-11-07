@@ -3,8 +3,10 @@
  * Storefront: stock and counter markup, the cart-id endpoint, the import guard.
  */
 
+use function WPSignal\Extensions\ShopSocket\cart_id;
 use function WPSignal\Extensions\ShopSocket\cart_rows;
 use function WPSignal\Extensions\ShopSocket\in_carts_html;
+use function WPSignal\Extensions\ShopSocket\journey_product;
 use function WPSignal\Extensions\ShopSocket\render_live_stock_block;
 use const WPSignal\Extensions\ShopSocket\LIVE_STOCK_BLOCK;
 use function WPSignal\Extensions\ShopSocket\product_import_running;
@@ -133,24 +135,24 @@ final class StorefrontTest extends ExtensionTestCase {
 		}
 	}
 
-	public function test_cart_id_rebuilds_the_shoppers_row_from_their_cart(): void {
+	public function test_cart_id_answers_the_shoppers_state_and_writes_nothing(): void {
 		$product = $this->make_product( 5 );
 		WC()->cart->empty_cart();
 		WC()->cart->add_to_cart( $product->get_id(), 2 );
 		$this->clear_carts();
-		$this->assertSame( array(), cart_rows(), 'the row store was lost' );
-
 		try {
 			$_COOKIE['wp_woocommerce_session_phpunit'] = 'present';
 			wp_set_current_user( 0 );
 			$response = rest_do_request( new WP_REST_Request( 'GET', '/' . REST_NS . '/cart-id' ) );
 			$this->assertSame( 200, $response->get_status() );
-			$rows = cart_rows();
-			$this->assertCount( 1, $rows, 'asking for the cart id wrote the row back' );
-			$this->assertSame( array( $product->get_id() ), $rows[0]['products'] );
-			$this->assertSame( array( $product->get_id() => 2 ), $rows[0]['quantities'] );
-			$this->assertSame( $rows[0]['id'], $response->get_data()['id'] );
-			$this->assertEquals( (object) array( $product->get_id() => 2 ), $response->get_data()['quantities'], 'the shopper learns how many they hold' );
+			$this->assertSame( array(), cart_rows(), 'the route writes nothing: the report does' );
+			$data = $response->get_data();
+			$this->assertSame( cart_id(), $data['id'] );
+			$this->assertEquals( (object) array( $product->get_id() => 2 ), $data['quantities'], 'the shopper learns how many they hold' );
+			// For the rules' cart context (0.8): the total, the currency, and the items by name.
+			$this->assertSame( 19.98, $data['total'] );
+			$this->assertSame( get_woocommerce_currency(), $data['currency'] );
+			$this->assertSame( array( 'id' => $product->get_id(), 'name' => 'PHPUnit Widget', 'qty' => 2, 'categories' => $data['items'][0]['categories'] ), $data['items'][0] );
 		} finally {
 			unset( $_COOKIE['wp_woocommerce_session_phpunit'] );
 			WC()->cart->empty_cart();
@@ -158,6 +160,7 @@ final class StorefrontTest extends ExtensionTestCase {
 	}
 
 	public function test_the_live_stock_block_renders_the_availability_units_left_and_counter(): void {
+		$this->set_history( true );
 		$product = $this->make_product( 5 );
 		$this->seed_cart( 'a', array( $product->get_id() ), 5.0 );
 
@@ -221,5 +224,44 @@ final class StorefrontTest extends ExtensionTestCase {
 			remove_filter( 'shopsocket_publish_stock', '__return_false' );
 		}
 		$this->assertCount( 1, $this->events_on( STOCK_CHANNEL, 'woo.stock.changed' ), 'the filter silences publishes too' );
+	}
+
+	public function test_the_visit_report_answers_with_the_shoppers_state_and_the_pages_live_count(): void {
+		$this->set_history( true );
+		$product = $this->make_product( 5 );
+		WC()->cart->empty_cart();
+		WC()->cart->add_to_cart( $product->get_id(), 2 );
+		$this->clear_carts();
+
+		$report = static function ( string $route, int $product ): WP_REST_Request {
+			$request = new WP_REST_Request( 'POST', '/wpsignal/v1/' . $route );
+			$request->set_param( 'v', '0b2b6a4e-9f0a-4c7a-8f1c-1d2e3f4a5b6c' );
+			$request->set_param( 'n', '7c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f' );
+			$request->set_param( 'journey', 'home:0:1200>product:' . $product . ':0' );
+			return $request;
+		};
+		try {
+			$_COOKIE['wp_woocommerce_session_phpunit'] = 'present';
+			wp_set_current_user( 0 );
+			$response = rest_do_request( $report( 'visit', $product->get_id() ) );
+			$this->assertSame( 200, $response->get_status() );
+			$data = $response->get_data();
+			$this->assertTrue( $data['ok'] );
+			$mine = $data['shopsocket'];
+			$this->assertSame( cart_rows()[0]['id'], $mine['id'], 'WordSocket wrote the journey with the cart on it and the shopper learns its id' );
+			$this->assertEquals( (object) array( $product->get_id() => 2 ), $mine['quantities'] );
+			$this->assertSame( 19.98, $mine['total'] );
+			$this->assertSame( 'PHPUnit Widget', $mine['items'][0]['name'] );
+			$this->assertSame( 1, $mine['count'], 'the live count for the product the journey is on' );
+
+			$leave = rest_do_request( $report( 'leave', $product->get_id() ) )->get_data();
+			$this->assertSame( array( 'ok' => true ), $leave, 'a leave answers nothing extra' );
+		} finally {
+			unset( $_COOKIE['wp_woocommerce_session_phpunit'] );
+		}
+
+		$this->assertSame( $product->get_id(), journey_product( 'home:0:1>product:' . $product->get_id() . ':5' ) );
+		$this->assertSame( 0, journey_product( 'product:9:1>cart:0:5' ), 'only the open step counts' );
+		$this->assertSame( 0, journey_product( '' ) );
 	}
 }

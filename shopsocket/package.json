@@ -8,7 +8,7 @@
     "build": "wp-scripts build && tsc -p tsconfig.storefront.json && node bin/storefront-assets.mjs",
     "start": "concurrently -k -n board,storefront,assets \"wp-scripts start\" \"tsc -p tsconfig.storefront.json --watch --preserveWatchOutput\" \"node bin/storefront-assets.mjs --watch\"",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tests/e2e/tsconfig.json",
-    "make-pot": "php -d memory_limit=512M \"$(command -v wp)\" i18n make-pot . languages/shopsocket.pot --slug=shopsocket --domain=shopsocket --exclude=node_modules,vendor,tests,artifacts,src",
+    "make-pot": "php -d memory_limit=2G \"$(command -v wp)\" i18n make-pot . languages/shopsocket.pot --slug=shopsocket --domain=shopsocket --exclude=node_modules,vendor,tests,artifacts,src",
     "test:php": "vendor/bin/phpunit",
     "test:e2e": "wp-scripts test-playwright",
     "test": "npm run test:php && npm run test:e2e",
@@ -16,7 +16,8 @@
     "svn": "bash ../bin/svn.sh shopsocket",
     "release": "bash ../bin/release.sh shopsocket",
     "test:e2e:http": "SHOPSOCKET_HTTP=1 wp-scripts test-playwright",
-    "shots": "SHOPSOCKET_HTTP=1 wp-scripts test-playwright --config playwright.shots.config.ts"
+    "shots": "SHOPSOCKET_HTTP=1 wp-scripts test-playwright --config playwright.shots.config.ts",
+    "rehearse": "node bin/rehearse.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -31,7 +32,10 @@
     "@wordpress/components": "^40.1.0",
     "@wordpress/dataviews": "^19.0.0",
     "@wordpress/element": "^6.0.0",
-    "@wordpress/i18n": "^5.0.0"
+    "@wordpress/i18n": "^5.0.0",
+    "@wordpress/icons": "^20.0.0",
+    "@wordpress/theme": "^2.3.0",
+    "@wordpress/ui": "^0.24.0"
   },
   "engines": {
     "node": ">=22.19.0",

@@ -4,15 +4,27 @@ import { WP_ROOT, wp } from "./env";
 import { spawn } from "node:child_process";
 
 /**
- * One shopper as a background wp-cli process: add to cart, hold for
- * `holdSeconds`, empty the cart. Two wp-cli calls would be two sessions.
+ * One shopper as a background wp-cli process: add to cart, report the visit as
+ * a browser would (so the cart has a journey row and counts), hold for
+ * `holdSeconds`, empty the cart and report again. Two wp-cli calls would be
+ * two sessions.
  */
 function shopperSession(productId: number, holdSeconds: number): Promise<void> {
   /*
    * Zero the 10s per-product publish throttle in this process, or the viewer's
    * own add moments earlier swallows this shopper's `woo.cart.added`.
    */
-  const script = `add_filter( 'shopsocket_activity_throttle', '__return_zero' ); WC()->cart->add_to_cart( ${productId}, 1 ); sleep( ${holdSeconds} ); WC()->cart->empty_cart();`;
+  const script = [
+    "add_filter( 'shopsocket_activity_throttle', '__return_zero' );",
+    "wc_load_cart();",
+    `WC()->cart->add_to_cart( ${productId}, 1 );`,
+    "$v = wp_generate_uuid4(); $n = wp_generate_uuid4();",
+    `$report = static fn( int $steps ): array => array( 'visitor' => $v, 'journey_id' => $n, 'journey' => implode( '>', array_fill( 0, $steps, 'product:${productId}:1' ) ), 'steps' => $steps, 'user_id' => 0, 'data' => array(), 'leaving' => false );`,
+    "do_action( 'wpsignal_visitor_visit', $report( 1 ) );",
+    `sleep( ${holdSeconds} );`,
+    "WC()->cart->empty_cart();",
+    "do_action( 'wpsignal_visitor_visit', $report( 2 ) );",
+  ].join(" ");
   return new Promise((resolve, reject) => {
     const child = spawn("php", ["-d", "error_reporting=0", "-d", "memory_limit=512M", "/opt/homebrew/bin/wp", `--path=${WP_ROOT}`, "eval", script], { stdio: "ignore" });
     child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`shopper session exited with ${code}`))));
@@ -29,7 +41,24 @@ import { addToCart, anyImageId, createProduct, deleteProduct, visitorContext, wa
  * effort basis and not asserted here: their markup is WooCommerce's and varies
  * by theme. The Live Stock block is the markup this plugin owns.
  */
+/** WordSocket's History holds the carts the in-cart count reads (0.8), so the counter needs it on. */
+const HISTORY = "wpsignal_history_enabled";
+let historyBefore = "";
+
 test.describe("Storefront", () => {
+  test.beforeAll(() => {
+    try {
+      historyBefore = wp("option", "get", HISTORY);
+    } catch {
+      historyBefore = "";
+    }
+    wp("option", "update", HISTORY, "1");
+  });
+  test.afterAll(() => {
+    if (historyBefore) wp("option", "update", HISTORY, historyBefore);
+    else wp("option", "delete", HISTORY);
+  });
+
   test("a shopper who holds an item sees the count, a toast when another shopper adds it, and a sell-out", async ({ browser, baseURL, requestUtils }) => {
     const product = await createProduct(requestUtils, "E2E Live Widget", 8);
     const visitor = await visitorContext(browser, baseURL);
@@ -78,6 +107,40 @@ test.describe("Storefront", () => {
     } finally {
       await visitor.close();
       await deleteProduct(requestUtils, product.id);
+    }
+  });
+
+  test("a shopper's cart follows them to the next page without a visit request", async ({ browser, baseURL, requestUtils }) => {
+    const first = await createProduct(requestUtils, "E2E Held Widget", 5);
+    const second = await createProduct(requestUtils, "E2E Other Widget", 5);
+    const visitor = await visitorContext(browser, baseURL);
+    const page = await visitor.newPage();
+    const visits: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/wpsignal/v1/visit")) visits.push(request.url());
+    });
+    try {
+      await page.goto(first.permalink);
+      await waitForLive(page);
+      await addToCart(page);
+      await expect(page.locator(".shopsocket-in-carts")).toContainText("You have this in your cart right now");
+      // The add reported the cart: its answer is remembered with the cart hash cookie.
+      await expect.poll(() => page.evaluate(() => window.sessionStorage.getItem("shopsocket-viewer"))).toContain('"hash":"');
+      const before = visits.length;
+
+      // The next page is a hop within the visit: the remembered cart is applied, nothing is asked.
+      await page.goto(second.permalink);
+      await waitForLive(page);
+      await expect(page.locator(".shopsocket-in-carts")).toBeHidden();
+      await page.goto(first.permalink);
+      await waitForLive(page);
+      await expect(page.locator(".shopsocket-in-carts")).toContainText("You have this in your cart right now");
+      await page.waitForTimeout(1500);
+      expect(visits.length, "two hops, no visit request").toBe(before);
+    } finally {
+      await visitor.close();
+      await deleteProduct(requestUtils, first.id);
+      await deleteProduct(requestUtils, second.id);
     }
   });
 

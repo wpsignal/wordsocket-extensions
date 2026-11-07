@@ -3,10 +3,13 @@
  * Dashboard: cart rows for the board and "online now" from the stats request.
  */
 
+use function WPSignal\Extensions\ShopSocket\board_orders;
 use function WPSignal\Extensions\ShopSocket\cart_rows;
 use function WPSignal\Extensions\ShopSocket\dashboard_snapshot;
 use function WPSignal\Extensions\ShopSocket\enqueue_settings_panel;
+use function WPSignal\Extensions\ShopSocket\pages_for_board;
 use function WPSignal\Extensions\ShopSocket\parse_product_ids;
+use function WPSignal\Extensions\ShopSocket\parse_steps;
 use function WPSignal\Extensions\ShopSocket\products_for_board;
 use const WPSignal\Extensions\ShopSocket\REST_NS;
 
@@ -89,6 +92,21 @@ final class DashboardTest extends ExtensionTestCase {
 		$this->assertSame( 40.0, $by_id['aaa']['value'] );
 		$this->assertSame( 15.0, $by_id['bbb']['value'] );
 		$this->assertSame( get_woocommerce_currency(), $by_id['aaa']['currency'] );
+		$this->assertNull( $by_id['aaa']['customer'], 'a guest has no name' );
+		$this->assertSame( '', $by_id['aaa']['customer_url'] );
+	}
+
+	public function test_cart_rows_name_a_logged_in_shopper(): void {
+		$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
+		$user   = (int) $admins[0];
+		$this->seed_cart( 'ccc', array( 9001 ), 12.0, array(), 'open', 0, $user );
+		$this->seed_cart( 'ddd', array( 9002 ), 8.0 );
+
+		$by_id = array_column( cart_rows(), null, 'id' );
+		$this->assertSame( $user, $by_id['ccc']['user_id'] );
+		$this->assertSame( get_userdata( $user )->display_name, $by_id['ccc']['customer'] );
+		$this->assertStringEndsWith( 'user-edit.php?user_id=' . $user, $by_id['ccc']['customer_url'] );
+		$this->assertNull( $by_id['ddd']['user_id'] );
 	}
 
 	public function test_the_dashboard_route_is_staff_only_and_returns_rows_plus_online(): void {
@@ -120,8 +138,16 @@ final class DashboardTest extends ExtensionTestCase {
 			$this->assertSame( 'aaa', $data['carts'][0]['id'] );
 			$this->assertSame( 20.0, $data['carts'][0]['value'] );
 			$this->assertSame( array( 'active_connections' => 12, 'max_connections' => 500 ), $data['online'] );
-			$this->assertSame( array( 'carts', 'abandoned', 'online', 'as_of' ), array_keys( $data ), 'no orders unless the board names a moment' );
+			$this->assertSame( array( 'carts', 'abandoned', 'abandoned_totals', 'abandoned_returning', 'abandonment', 'strip', 'online', 'as_of' ), array_keys( $data ), 'no orders unless the board names a moment' );
 			$this->assertSame( array(), $data['abandoned'], 'nobody has left yet' );
+			$this->assertSame( array( 24, 48, 168 ), array_keys( $data['abandoned_totals'] ) );
+			$this->assertSame( 0, $data['abandoned_totals'][24]['carts'] );
+			// The abandoned carts' time frame is one the board offers, or the request is refused.
+			foreach ( array( 24 => 200, 48 => 200, 168 => 200, 12 => 400 ) as $hours => $status ) {
+				$request = new WP_REST_Request( 'GET', '/' . REST_NS . '/dashboard' );
+				$request->set_query_params( array( 'hours' => $hours ) );
+				$this->assertSame( $status, rest_do_request( $request )->get_status(), "hours=$hours" );
+			}
 			$this->assertEqualsWithDelta( time(), $data['as_of'], 5, 'the server clock the board sends back as since' );
 		} finally {
 			remove_filter( 'pre_http_request', $stats, 5 );
@@ -147,6 +173,11 @@ final class DashboardTest extends ExtensionTestCase {
 		$untouched->set_date_modified( time() - 3 * HOUR_IN_SECONDS );
 		$untouched->save();
 
+		$stale = $this->make_order( $product );
+		$stale->set_date_created( time() - 2 * DAY_IN_SECONDS );
+		$stale->set_date_modified( time() - 2 * DAY_IN_SECONDS );
+		$stale->save();
+
 		$since  = time() - HOUR_IN_SECONDS;
 		$missed = $this->make_order( $product, 2 );
 
@@ -166,11 +197,18 @@ final class DashboardTest extends ExtensionTestCase {
 			$this->assertNotContains( $earlier->get_id(), $found, 'one from before it does not' );
 			$this->assertNotContains( $untouched->get_id(), $found );
 
-			// A status change made while the board was away counts too, on an order of any age.
+			// A status change made while the board was away counts too, on an order placed within the board's day.
 			$earlier->update_status( 'completed' );
+			$stale->update_status( 'completed' );
 			$found = $ids( $since );
-			$this->assertContains( $earlier->get_id(), $found, 'an old order changed after the moment comes back' );
+			$this->assertContains( $earlier->get_id(), $found, 'an earlier order changed after the moment comes back' );
 			$this->assertNotContains( $untouched->get_id(), $found );
+			$this->assertNotContains( $stale->get_id(), $found, 'one placed before the last day does not, whatever happened to it since' );
+
+			// The board's first paint lists the day's orders and nothing older.
+			$listed = array_column( board_orders(), 'order_id' );
+			$this->assertContains( $untouched->get_id(), $listed );
+			$this->assertNotContains( $stale->get_id(), $listed );
 
 			$request = new WP_REST_Request( 'GET', '/' . REST_NS . '/dashboard' );
 			$request->set_query_params( array( 'since' => $since ) );
@@ -204,6 +242,7 @@ final class DashboardTest extends ExtensionTestCase {
 						'id'       => $id,
 						'name'     => 'PHPUnit Widget',
 						'edit_url' => admin_url( 'post.php?post=' . $id . '&action=edit' ),
+						'url'      => get_permalink( $id ),
 					),
 				),
 				$data['products']
@@ -217,6 +256,117 @@ final class DashboardTest extends ExtensionTestCase {
 		$this->assertSame( array( 7, 9 ), parse_product_ids( 'abc,-3,0,,7, 9,7' ) );
 		$this->assertCount( 100, parse_product_ids( implode( ',', range( 1, 150 ) ) ) );
 		$this->assertSame( array(), parse_product_ids( '' ) );
+	}
+
+	public function test_pages_route_is_staff_only_and_resolves_public_content(): void {
+		$product = $this->make_product( 5 );
+		$term    = wp_insert_term( 'PHPUnit Hoodies ' . wp_generate_password( 6, false ), 'product_cat' );
+		$this->assertIsArray( $term );
+		$term_id = (int) $term['term_id'];
+		$about   = (int) wp_insert_post(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+				'post_title'  => 'PHPUnit About',
+			)
+		);
+		$secret  = (int) wp_insert_post(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'private',
+				'post_title'  => 'PHPUnit Private',
+			)
+		);
+		$steps   = implode(
+			',',
+			array(
+				'product:' . $product->get_id(),
+				'category:' . $term_id,
+				'page:' . $about,
+				'page:' . $secret,
+				'post_archive:0',
+				'shop:0',
+				'search:0',
+				'nope:5',
+				'page:999999999',
+			)
+		);
+		$request = new WP_REST_Request( 'GET', '/' . REST_NS . '/pages' );
+		$request->set_param( 'steps', $steps );
+
+		wp_set_current_user( 0 );
+		$this->assertSame( 401, rest_do_request( $request )->get_status(), 'visitors cannot name pages' );
+
+		$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
+		wp_set_current_user( (int) $admins[0] );
+		try {
+			$response = rest_do_request( $request );
+			$this->assertSame( 200, $response->get_status() );
+			$data = $response->get_data();
+			$this->assertSame( array( 'pages' ), array_keys( $data ) );
+			$pages = array_column( $data['pages'], null, 'step' );
+			$this->assertSame(
+				array( 'product:' . $product->get_id(), 'category:' . $term_id, 'page:' . $about, 'post_archive:0' ),
+				array_keys( $pages ),
+				'a private page, the kinds the board labels itself, an unknown kind and a missing post have no row'
+			);
+			$this->assertSame( 'PHPUnit Widget', $pages[ 'product:' . $product->get_id() ]['title'] );
+			$this->assertSame( get_permalink( $product->get_id() ), $pages[ 'product:' . $product->get_id() ]['url'] );
+			$this->assertSame( get_term( $term_id )->name, $pages[ 'category:' . $term_id ]['title'] );
+			$this->assertSame( get_term_link( $term_id ), $pages[ 'category:' . $term_id ]['url'] );
+			$this->assertSame( 'PHPUnit About', $pages[ 'page:' . $about ]['title'] );
+			$this->assertSame( get_permalink( $about ), $pages[ 'page:' . $about ]['url'] );
+			$this->assertSame( get_post_type_object( 'post' )->labels->name, $pages['post_archive:0']['title'] );
+			$this->assertSame( get_post_type_archive_link( 'post' ), $pages['post_archive:0']['url'] );
+		} finally {
+			wp_set_current_user( 0 );
+			wp_delete_term( $term_id, 'product_cat' );
+			wp_delete_post( $about, true );
+			wp_delete_post( $secret, true );
+		}
+	}
+
+	public function test_a_shop_manager_can_read_pages(): void {
+		$manager = wp_insert_user(
+			array(
+				'user_login' => 'phpunit-manager-' . wp_generate_password( 6, false ),
+				'user_pass'  => wp_generate_password(),
+				'role'       => 'shop_manager',
+			)
+		);
+		$this->assertIsInt( $manager );
+		$request = new WP_REST_Request( 'GET', '/' . REST_NS . '/pages' );
+		$request->set_param( 'steps', 'post_archive:0' );
+		wp_set_current_user( $manager );
+		try {
+			$this->assertSame( 200, rest_do_request( $request )->get_status() );
+		} finally {
+			wp_set_current_user( 0 );
+			require_once ABSPATH . 'wp-admin/includes/user.php';
+			wp_delete_user( $manager );
+		}
+	}
+
+	public function test_steps_are_cleaned_and_capped_at_one_hundred(): void {
+		$this->assertSame(
+			array( 'product:1', 'page:3', 'tag:7', 'post_archive:0' ),
+			parse_steps( 'product:1,Product:2,bad,page:x,page:3, page:3,:4,tag:07,post_archive:0,page:3:10' )
+		);
+		$this->assertCount( 100, parse_steps( implode( ',', array_map( static fn( int $i ): string => 'page:' . $i, range( 1, 150 ) ) ) ) );
+		$this->assertSame( array(), parse_steps( '' ) );
+	}
+
+	public function test_a_term_of_the_core_category_taxonomy_resolves_under_the_shared_kind(): void {
+		$term = wp_insert_term( 'PHPUnit News ' . wp_generate_password( 6, false ), 'category' );
+		$this->assertIsArray( $term );
+		$term_id = (int) $term['term_id'];
+		try {
+			$pages = pages_for_board( array( 'category:' . $term_id ) );
+			$this->assertCount( 1, $pages );
+			$this->assertSame( get_term( $term_id )->name, $pages[0]['title'] );
+		} finally {
+			wp_delete_term( $term_id, 'category' );
+		}
 	}
 
 	public function test_products_that_no_longer_exist_are_left_out(): void {
