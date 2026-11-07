@@ -180,11 +180,13 @@ function count_in_carts( int $product_id, string $exclude_ref = '' ): int {
  * Publish the open rows, the carts left behind, their full count and those whose shopper may be back to staff when they differ from the last publish.
  *
  * @since 0.4.0
+ * @since 0.8.0 Publishes `abandoned_totals` and `abandoned_returning` too; takes `$recount`.
  *
+ * @param bool $recount Count the carts left again rather than publish the cached count.
  * @return void
  */
-function publish_carts_changed(): void {
-	$count   = abandoned_count();
+function publish_carts_changed( bool $recount = false ): void {
+	$count   = abandoned_count( $recount );
 	$payload = array(
 		'carts'               => cart_rows(),
 		'abandoned'           => abandoned_rows(),

@@ -9,7 +9,7 @@ import { __, sprintf } from "@wordpress/i18n";
 import { useMemo } from "@wordpress/element";
 import type { OrderRow } from "./useLiveOrders";
 import { adminUrlOrNull } from "./trust";
-import { price } from "./format";
+import { price, when } from "./format";
 import { BoardTable, useNarrow, type Column } from "./ui";
 
 /** How long a row that just changed stays marked, in milliseconds. */
@@ -27,27 +27,6 @@ type Props = {
   currencySymbol: string;
   adminUrl: string;
 };
-
-/**
- * When the order was placed: the time today, the date and time otherwise
- * (time only when there is no room for the date), empty when unknown.
- */
-function timeOf(row: OrderRow, withDate: boolean): string {
-  const when = row.created_at ? new Date(row.created_at) : null;
-  if (!when || Number.isNaN(when.getTime())) return "";
-  const time = when.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  const today = new Date();
-  const sameDay =
-    when.getFullYear() === today.getFullYear() &&
-    when.getMonth() === today.getMonth() &&
-    when.getDate() === today.getDate();
-  return sameDay || !withDate
-    ? time
-    : `${when.toLocaleDateString(undefined, { month: "short", day: "numeric" })} ${time}`;
-}
 
 /**
  * The orders table; a row opens its order's edit screen when that is on this site's admin.
@@ -103,7 +82,7 @@ export function LiveOrders({
                 : undefined
             }
           >
-            {timeOf(row, !narrow)}
+            {row.created_at ? when(row.created_at, !narrow) : ""}
           </span>
         ),
       },

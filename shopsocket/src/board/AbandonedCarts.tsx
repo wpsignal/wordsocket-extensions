@@ -8,7 +8,7 @@
 import { __, _n, sprintf } from "@wordpress/i18n";
 import { useMemo } from "@wordpress/element";
 import { Link, Progress, Radio, RadioGroup, Tabs, Text } from "@wordpress/ui";
-import { money } from "./format";
+import { money, when } from "./format";
 import { adminUrlOrNull, siteUrlOrNull } from "./trust";
 import { useGuestNames } from "./useGuestNames";
 import {
@@ -103,19 +103,6 @@ function framePhrase(hours: number): string {
     _n("the last %d day", "the last %d days", days, "shopsocket"),
     days,
   );
-}
-
-/** A moment in the browser's locale, with the date only when it is not today. */
-function timeOf(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  const today = new Date().toDateString() === date.toDateString();
-  return new Intl.DateTimeFormat(
-    undefined,
-    today
-      ? { timeStyle: "short" }
-      : { dateStyle: "medium", timeStyle: "short" },
-  ).format(date);
 }
 
 /** A line above a tab's table saying what it lists; `name` marks it as `is-<name>`. */
@@ -296,7 +283,7 @@ function LeftCarts({
       id: "left",
       label: __("Left", "shopsocket"),
       value: (row) => row.left_at,
-      render: (row) => <span title={row.left_at}>{timeOf(row.left_at)}</span>,
+      render: (row) => <span title={row.left_at}>{when(row.left_at)}</span>,
     };
     if (!recovered)
       return [
@@ -345,7 +332,7 @@ function LeftCarts({
         value: (row) => row.converted_at ?? "",
         render: (row) =>
           row.converted_at ? (
-            <span title={row.converted_at}>{timeOf(row.converted_at)}</span>
+            <span title={row.converted_at}>{when(row.converted_at)}</span>
           ) : (
             ""
           ),

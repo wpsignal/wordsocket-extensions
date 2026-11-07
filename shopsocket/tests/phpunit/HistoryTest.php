@@ -21,6 +21,7 @@ use function WPSignal\Extensions\ShopSocket\abandoned_limit;
 use function WPSignal\Extensions\ShopSocket\abandonment;
 use function WPSignal\Extensions\ShopSocket\carts_left;
 use function WPSignal\Extensions\ShopSocket\day_strip;
+use function WPSignal\Extensions\ShopSocket\forget_figures;
 use function WPSignal\Extensions\ShopSocket\sales;
 use function WPSignal\Extensions\ShopSocket\seed_journeys;
 use const WPSignal\Extensions\ShopSocket\DB_VERSION;
@@ -231,7 +232,6 @@ final class HistoryTest extends ExtensionTestCase {
 		$this->assertSame( array( $product->get_id() ), $rows[0]['products'] );
 		$this->assertEquals( (object) array( $product->get_id() => 1 ), $rows[0]['quantities'] );
 		$this->assertSame( 9.99, $rows[0]['value'] );
-		$this->assertContains( $rows[0]['journey'], array( 'cart:0:2000', $page . ':3000' ), 'the newest leave, both within the same second here' );
 		$this->assertMatchesRegularExpression( '/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/', $rows[0]['left_at'] );
 		$this->assertNull( $rows[0]['order_id'] );
 		$this->assertNull( $rows[0]['order_value'] );
@@ -309,9 +309,7 @@ final class HistoryTest extends ExtensionTestCase {
 			$this->seed_cart( sprintf( 'ffff%012d', $i ), array( 9009 ), 25.0, array(), 'converted', 2 * HOUR_IN_SECONDS + $i );
 		}
 		$wpdb->query( $wpdb->prepare( 'UPDATE ' . journeys_table() . ' SET data = %s WHERE outcome = %s', wp_json_encode( array( 'c' => get_woocommerce_currency(), 'i' => array( '9009' => 1 ), 'o' => 77 ) ), 'converted' ) );
-		foreach ( array( 24, 48 ) as $hours ) {
-			wp_cache_delete( 'abandonment_' . $hours, 'shopsocket' );
-		}
+		forget_figures();
 		$this->assertSame( 50, abandoned_limit( 24 ) );
 		$this->assertSame( 350, abandoned_limit( 168 ) );
 		$ordered = static fn( array $rows ): int => count( array_filter( $rows, static fn( array $row ): bool => null !== $row['order_id'] ) );
@@ -521,9 +519,7 @@ final class HistoryTest extends ExtensionTestCase {
 				)
 			);
 		}
-		wp_cache_delete( 'day_strip', 'shopsocket' );
-		wp_cache_delete( 'abandonment_24', 'shopsocket' );
-		wp_cache_delete( 'abandonment_48', 'shopsocket' );
+		forget_figures();
 		$strip = day_strip();
 		$day   = abandonment();
 		$this->assertSame( array( 'since', 'journeys', 'trend_days', 'sales', 'left', 'recovered', 'conversion' ), array_keys( $strip ) );
@@ -665,7 +661,7 @@ final class HistoryTest extends ExtensionTestCase {
 			}
 		}
 		// The board's day reads them: the seven days' carts left behind are the carts that were not ordered.
-		wp_cache_delete( 'day_strip', 'shopsocket' );
+		forget_figures();
 		$this->assertSame( $made['carts'] - $made['orders'], array_sum( day_strip()['left']['days'] ) );
 	}
 

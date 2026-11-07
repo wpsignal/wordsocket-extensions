@@ -1,5 +1,5 @@
 /*
- * Number formatting shared by the board's panels.
+ * Number and time formatting shared by the board's panels.
  */
 
 /**
@@ -33,4 +33,22 @@ export function price(amount: number, currency: string, symbol: string): string 
   } catch {
     return `${symbol}${amount.toFixed(2)}`;
   }
+}
+
+/**
+ * A moment in the browser's locale: the time when it is today, the date and time otherwise, the time
+ * alone when `withDate` is false; `iso` itself when it is not a date.
+ *
+ * @since 0.8.0
+ */
+export function when(iso: string, withDate = true): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const today = new Date().toDateString() === date.toDateString();
+  return new Intl.DateTimeFormat(
+    undefined,
+    today || !withDate
+      ? { timeStyle: "short" }
+      : { dateStyle: "medium", timeStyle: "short" },
+  ).format(date);
 }

@@ -58,7 +58,7 @@ function day_strip(): ?array {
 	if ( ! history_enabled() ) {
 		return null;
 	}
-	$cached = wp_cache_get( 'day_strip', 'shopsocket' );
+	$cached = wp_cache_get( STRIP_CACHE_KEY, CACHE_GROUP );
 	if ( is_array( $cached ) ) {
 		return $cached;
 	}
@@ -73,7 +73,7 @@ function day_strip(): ?array {
 		'recovered'  => recovered_orders( $now ),
 		'conversion' => checkout_conversion( $now ),
 	);
-	wp_cache_set( 'day_strip', $strip, 'shopsocket', STRIP_CACHE_TTL );
+	wp_cache_set( STRIP_CACHE_KEY, $strip, CACHE_GROUP, STRIP_CACHE_TTL );
 	return $strip;
 }
 
@@ -89,8 +89,8 @@ function abandonment( int $hours = BOARD_HOURS ): ?array {
 	if ( ! history_enabled() ) {
 		return null;
 	}
-	$key    = 'abandonment_' . $hours;
-	$cached = wp_cache_get( $key, 'shopsocket' );
+	$key    = ABANDONMENT_CACHE_KEY . $hours;
+	$cached = wp_cache_get( $key, CACHE_GROUP );
 	if ( is_array( $cached ) ) {
 		return $cached;
 	}
@@ -107,7 +107,7 @@ function abandonment( int $hours = BOARD_HOURS ): ?array {
 		'products'       => array_slice( $products, 0, $limit ),
 		'products_total' => count( $products ),
 	);
-	wp_cache_set( $key, $abandonment, 'shopsocket', STRIP_CACHE_TTL );
+	wp_cache_set( $key, $abandonment, CACHE_GROUP, STRIP_CACHE_TTL );
 	return $abandonment;
 }
 
@@ -357,20 +357,27 @@ function last_steps( string $since ): array {
 			STRIP_LEAVERS
 		)
 	);
-	$last     = array();
-	foreach ( Journeys::unpack_journeys( $journeys ) as $journey ) {
-		foreach ( array_reverse( explode( '>', (string) $journey ) ) as $step ) {
-			list( $kind, $id, $s ) = array_pad( explode( ':', $step ), 3, '0' );
-			if ( '' === $kind || 'away' === $kind ) {
-				continue;
+	$away     = Journeys::KIND_CODES['away'];
+	$steps    = array();
+	foreach ( $journeys as $stored ) {
+		foreach ( array_reverse( explode( '>', (string) $stored ) ) as $step ) {
+			if ( '' !== $step && 0 !== strpos( $step, $away . ':' ) ) {
+				$steps[] = $step;
+				break;
 			}
-			$last[] = array(
-				'kind' => $kind,
-				'id'   => (int) $id,
-				's'    => (int) $s,
-			);
-			break;
 		}
+	}
+	$last = array();
+	foreach ( Journeys::unpack_journeys( $steps ) as $step ) {
+		list( $kind, $id, $s ) = array_pad( explode( ':', (string) $step ), 3, '0' );
+		if ( '' === $kind ) {
+			continue;
+		}
+		$last[] = array(
+			'kind' => $kind,
+			'id'   => (int) $id,
+			's'    => (int) $s,
+		);
 	}
 	return $last;
 }

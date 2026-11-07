@@ -75,6 +75,27 @@ const STRIP_CARTS = 5000;
 const CACHE_GROUP = 'shopsocket';
 
 /**
+ * Object cache key of the day strip.
+ *
+ * @since 0.8.0
+ */
+const STRIP_CACHE_KEY = 'day_strip';
+
+/**
+ * Object cache key prefix of a time frame's abandonment figures, the hours appended.
+ *
+ * @since 0.8.0
+ */
+const ABANDONMENT_CACHE_KEY = 'abandonment_';
+
+/**
+ * Object cache key of the full abandoned count.
+ *
+ * @since 0.8.0
+ */
+const ABANDONED_COUNT_CACHE_KEY = 'abandoned_count';
+
+/**
  * WordSocket's journeys table.
  *
  * @since 0.8.0
@@ -168,6 +189,21 @@ function invalidate_cart_caches(): void {
 }
 
 /**
+ * Forget the cached board figures: the day strip, every time frame's abandonment and the abandoned count.
+ *
+ * @since 0.8.0
+ *
+ * @return void
+ */
+function forget_figures(): void {
+	wp_cache_delete( STRIP_CACHE_KEY, CACHE_GROUP );
+	wp_cache_delete( ABANDONED_COUNT_CACHE_KEY, CACHE_GROUP );
+	foreach ( ABANDONED_WINDOWS as $hours ) {
+		wp_cache_delete( ABANDONMENT_CACHE_KEY . $hours, CACHE_GROUP );
+	}
+}
+
+/**
  * A journey's cart as its `data` holds it: `product_id => quantity`, empty for no items.
  *
  * @since 0.8.0
@@ -203,7 +239,7 @@ function data_field( ?string $json, string $key ) {
 
 /**
  * The non-open journeys carrying a cart since a moment, newest first, one per cart (its newest, the later row of two in one second):
- * `{ ref, outcome, value, last_seen, items, currency, user_id, journey, order }`.
+ * `{ ref, outcome, value, last_seen, items, currency, user_id, order }`.
  *
  * @since 0.8.0
  *
@@ -214,7 +250,7 @@ function cart_journeys_since( string $since ): array {
 	global $wpdb;
 	$rows = (array) $wpdb->get_results(
 		$wpdb->prepare(
-			'SELECT ref, outcome, value, last_seen, data, user_id, journey FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' AND last_seen >= %s ORDER BY last_seen DESC, id DESC LIMIT %d",
+			'SELECT ref, outcome, value, last_seen, data, user_id FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' AND last_seen >= %s ORDER BY last_seen DESC, id DESC LIMIT %d",
 			$since,
 			STRIP_CARTS
 		),
@@ -236,16 +272,10 @@ function cart_journeys_since( string $since ): array {
 			'items'     => $items,
 			'currency'  => (string) ( data_field( $row['data'], 'c' ) ?? '' ),
 			'user_id'   => (int) ( $row['user_id'] ?? 0 ),
-			'journey'   => (string) ( $row['journey'] ?? '' ),
 			'order'     => (int) ( data_field( $row['data'], 'o' ) ?? 0 ),
 		);
 	}
-	$out      = array_values( $out );
-	$journeys = Journeys::unpack_journeys( array_column( $out, 'journey' ) );
-	foreach ( $out as $i => $cart ) {
-		$out[ $i ]['journey'] = $journeys[ $i ];
-	}
-	return $out;
+	return array_values( $out );
 }
 
 /**
@@ -266,7 +296,7 @@ function mark_converted( string $id, int $order_id, float $total ): void {
 	WPS::journeys()->end_by_ref( $id, 'converted', $total, array( 'o' => $order_id ) );
 	WPS::journeys()->credit( $id, $order_id, $total, attribution_window() );
 	invalidate_cart_caches();
-	publish_carts_changed();
+	publish_carts_changed( true );
 }
 
 /**
@@ -353,7 +383,7 @@ function on_visitor_report( array $report ): void {
 	}
 	list( $cart_id, $state ) = $cart;
 	invalidate_cart_caches();
-	publish_carts_changed();
+	publish_carts_changed( ! empty( $report['leaving'] ) );
 	// A leave dated in the past comes from the browser's outbox with the shopper back: kept, not announced.
 	if ( ! empty( $report['leaving'] ) && null !== $state && empty( $report['ago'] ) ) {
 		cart_left( $cart_id, (string) $report['journey_id'], $state );
@@ -604,12 +634,21 @@ function order_after( array $cart ): int {
 /**
  * The carts left, counted in full: `totals` for each time frame the board offers, those not ordered since with their products and value and those `recovered` by an order, and `returning`, the carts not ordered whose shopper has a journey that has not ended, by cart id.
  *
+ * Cached a minute: `$fresh` counts again, for a leave or an order that moves a cart in or out.
+ *
  * @since 0.8.0
  *
+ * @param bool $fresh Count again rather than read the cached count.
  * @return array{totals: array<int, array{carts: int, products: int, value: float, currency: string, recovered: int}>, returning: array<string, array{left_at: string, value: float}>}
  */
-function abandoned_count(): array {
+function abandoned_count( bool $fresh = false ): array {
 	global $wpdb;
+	if ( ! $fresh ) {
+		$cached = wp_cache_get( ABANDONED_COUNT_CACHE_KEY, CACHE_GROUP );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+	}
 	$now     = time();
 	$rows    = (array) $wpdb->get_results(
 		$wpdb->prepare(
@@ -667,10 +706,12 @@ function abandoned_count(): array {
 		$totals[ $hours ]['products'] = count( $products[ $hours ] );
 		$totals[ $hours ]['value']    = round( $totals[ $hours ]['value'], 2 );
 	}
-	return array(
+	$count = array(
 		'totals'    => $totals,
 		'returning' => $returning,
 	);
+	wp_cache_set( ABANDONED_COUNT_CACHE_KEY, $count, CACHE_GROUP, MINUTE_IN_SECONDS );
+	return $count;
 }
 
 /**
@@ -682,7 +723,19 @@ function abandoned_count(): array {
  * @return int
  */
 function abandoned_limit( int $hours ): int {
-	return max( 1, intdiv( $hours, BOARD_HOURS ) ) * BOARD_ABANDONED;
+	return abandoned_days( $hours ) * BOARD_ABANDONED;
+}
+
+/**
+ * How many BOARD_HOURS a time frame spans, one at least: what its row limit and its scan scale by.
+ *
+ * @since 0.8.0
+ *
+ * @param int $hours The time frame, in hours.
+ * @return int
+ */
+function abandoned_days( int $hours ): int {
+	return max( 1, intdiv( $hours, BOARD_HOURS ) );
 }
 
 /**
@@ -698,10 +751,10 @@ function abandoned_limit( int $hours ): int {
  */
 function abandoned_rows( int $hours = BOARD_HOURS ): array {
 	global $wpdb;
-	$days   = max( 1, intdiv( $hours, BOARD_HOURS ) );
+	$days   = abandoned_days( $hours );
 	$rows   = (array) $wpdb->get_results(
 		$wpdb->prepare(
-			'SELECT ref, user_id, HEX(visitor) AS visitor, value, journey, outcome, last_seen, data FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' AND last_seen >= %s ORDER BY last_seen DESC, id DESC LIMIT %d",
+			'SELECT ref, user_id, HEX(visitor) AS visitor, value, outcome, last_seen, data FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' AND last_seen >= %s ORDER BY last_seen DESC, id DESC LIMIT %d",
 			gmdate( 'Y-m-d H:i:s', time() - $hours * HOUR_IN_SECONDS ),
 			$days * ABANDONED_SCAN
 		),
@@ -733,7 +786,6 @@ function abandoned_rows( int $hours = BOARD_HOURS ): array {
 			'quantities'   => (object) $items,
 			'value'        => round( (float) ( $left['value'] ?? 0 ), 2 ),
 			'currency'     => (string) ( data_field( $left['data'], 'c' ) ?? get_woocommerce_currency() ),
-			'journey'      => (string) ( $left['journey'] ?? '' ),
 			'left_at'      => datetime_to_rfc3339( (string) $left['last_seen'] ),
 			'converted_at' => null === $converted ? null : datetime_to_rfc3339( (string) $converted['last_seen'] ),
 			'order_id'     => $order_id > 0 ? $order_id : null,
@@ -743,10 +795,6 @@ function abandoned_rows( int $hours = BOARD_HOURS ): array {
 			'customer'     => $names[ $user_id ] ?? null,
 			'customer_url' => $user_id > 0 ? customer_edit_url( $user_id ) : '',
 		);
-	}
-	$journeys = Journeys::unpack_journeys( array_column( $out, 'journey' ) );
-	foreach ( $out as $i => $cart ) {
-		$out[ $i ]['journey'] = $journeys[ $i ];
 	}
 	return $out;
 }

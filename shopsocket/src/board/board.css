@@ -263,13 +263,10 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--wpds-dimension-gap-sm, 8px);
 
-  & .shopsocket-stat {
-    border: 1px solid var(--wpds-color-stroke-surface-neutral, #e0e0e0);
-    padding: var(--wpds-dimension-padding-md, 12px)
-      var(--wpds-dimension-padding-lg, 16px);
-  }
 }
 
+/* An inset figure: the parts under a group's headline and the time frames under Abandoned carts. */
+.shopsocket-group__parts .shopsocket-stat,
 .shopsocket-frame .shopsocket-stat {
   border: 1px solid var(--wpds-color-stroke-surface-neutral, #e0e0e0);
   padding: var(--wpds-dimension-padding-md, 12px)

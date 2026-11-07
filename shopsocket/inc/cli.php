@@ -124,7 +124,7 @@ function seed_command( array $args, array $assoc_args ): void {
 	if ( empty( $catalogue['products'] ) ) {
 		WP_CLI::error( 'The shop has no published product with a price to put in a cart.' );
 	}
-	if ( ! history_enabled() || ! \WPSignal\WPS::journeys()->enabled() ) {
+	if ( ! history_enabled() ) {
 		WP_CLI::warning( 'History is off, so the board shows nothing of these journeys until it is on, in WordSocket\'s Settings tab.' );
 	}
 	$made = seed_journeys( $count, $days, (int) ( $assoc_args['seed'] ?? 500 ), $catalogue );
@@ -439,12 +439,9 @@ function seed_journeys( int $count, int $days, int $seed, array $catalogue ): ar
 			$made['orders'] += $visit['converted'] ? 1 : 0;
 		}
 	}
-	forget( 'carts_pub' );
+	forget( CARTS_PUB_HASH );
 	invalidate_cart_caches();
-	wp_cache_delete( 'day_strip', 'shopsocket' );
-	foreach ( ABANDONED_WINDOWS as $hours ) {
-		wp_cache_delete( 'abandonment_' . $hours, 'shopsocket' );
-	}
+	forget_figures();
 	delete_transient( Journeys::VISUALS_TRANSIENT );
 	return $made;
 }

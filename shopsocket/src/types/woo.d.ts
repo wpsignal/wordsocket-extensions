@@ -97,8 +97,6 @@ interface WooCartRow {
 interface WooAbandonedRow extends WooCartRow {
 	/** The visitor who left the cart, the id a best guess is asked by; '' when the journey names none. */
 	v?: string;
-	/** The journey the cart was left in, `kind:id:s` steps joined by `>`, the time in whole seconds. */
-	journey: string;
 	/** When the shopper left, RFC 3339 UTC. */
 	left_at: string;
 	converted_at: string | null;

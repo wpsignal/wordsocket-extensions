@@ -12,11 +12,12 @@
  * - Visitor ids start with WordSocket's seed prefix, so `wp wordsocket journeys unseed` removes the
  *   journeys a rehearsal left behind.
  * - A site or a relay that is not on this machine is refused without `--force`.
+ * - A local site whose relay is not local is refused outright, since certificate checks are off for local hosts.
  */
 
 import { randomUUID } from "node:crypto";
 
-const MAX_CUSTOMERS = 1000;
+const MAX_CUSTOMERS = 200;
 const MAX_SECONDS = 600;
 /** The presence channel ShopSocket's storefront enters (`CARTS_PRESENCE_CHANNEL`). */
 const PRESENCE_CHANNEL = "woo:carts:live";
@@ -358,6 +359,12 @@ async function main() {
   if (!isLocal(relay) && !args.force) {
     console.error(
       `${site} is connected to ${relay}, which is not a local relay: ${customers} connections would count against that account. Pass --force to go ahead.`,
+    );
+    process.exit(1);
+  }
+  if (isLocal(site) && !isLocal(relay)) {
+    console.error(
+      `${site} is local but its relay ${relay} is not: certificate checks are off for the local site and would be off for the relay too. Point the site at a local relay first.`,
     );
     process.exit(1);
   }

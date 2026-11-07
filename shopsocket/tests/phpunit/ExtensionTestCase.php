@@ -132,8 +132,9 @@ abstract class ExtensionTestCase extends TestCase {
 	protected function clear_carts(): void {
 		global $wpdb;
 		$wpdb->query( 'DELETE FROM ' . \WPSignal\Extensions\ShopSocket\journeys_table() ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		\WPSignal\Extensions\ShopSocket\forget( 'carts_pub' );
+		\WPSignal\Extensions\ShopSocket\forget( \WPSignal\Extensions\ShopSocket\CARTS_PUB_HASH );
 		\WPSignal\Extensions\ShopSocket\invalidate_cart_caches();
+		\WPSignal\Extensions\ShopSocket\forget_figures();
 	}
 
 	/**
@@ -161,6 +162,7 @@ abstract class ExtensionTestCase extends TestCase {
 			)
 		);
 		\WPSignal\Extensions\ShopSocket\invalidate_cart_caches();
+		\WPSignal\Extensions\ShopSocket\forget_figures();
 		return $journey_id;
 	}
 
