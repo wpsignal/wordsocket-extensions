@@ -88,7 +88,7 @@ const DAY_FORMAT = new Intl.DateTimeFormat(undefined, {
 
 /**
  * A sparkline under a figure, a point a day: the days before in grey, the step into the last day in the
- * accent, ending in a dot; each day's value in a tooltip.
+ * accent, ending in a dot, a flat series along the bottom; each day's value in a tooltip.
  *
  * @since 0.8.0
  */
@@ -108,7 +108,7 @@ function Sparkline({
   const x = (i: number) => (SPARK_W * i) / (n - 1);
   const y = (v: number) =>
     max === min
-      ? SPARK_H / 2
+      ? SPARK_H - SPARK_PAD
       : SPARK_H -
         SPARK_PAD -
         ((SPARK_H - 2 * SPARK_PAD) * (v - min)) / (max - min);
