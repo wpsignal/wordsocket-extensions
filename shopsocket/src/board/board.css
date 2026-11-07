@@ -47,7 +47,11 @@
       pointer-events: none;
     }
   }
-} 
+}
+
+.shopsocket-muted {
+  color: var(--wpds-color-foreground-content-neutral-weak, #757575);
+}
 
 .shopsocket-section {
   width: 100%;
