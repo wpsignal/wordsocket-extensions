@@ -222,7 +222,7 @@ function carts_left( int $now ): array {
 	$value = 0.0;
 	foreach ( cart_journeys_since( strip_floor( $now ) ) as $cart ) {
 		$day = strip_day( (string) $cart['last_seen'], $now );
-		if ( null === $day || 'left' !== $cart['outcome'] || empty( $cart['items'] ) ) {
+		if ( null === $day || 'left' !== $cart['outcome'] ) {
 			continue;
 		}
 		++$days[ $day ];
@@ -464,9 +464,6 @@ function products_left( string $since ): array {
 	$left   = array();
 	$bought = array();
 	foreach ( cart_journeys_since( $since ) as $cart ) {
-		if ( 'left' !== $cart['outcome'] && 'converted' !== $cart['outcome'] ) {
-			continue;
-		}
 		foreach ( array_keys( $cart['items'] ) as $product_id ) {
 			if ( 'left' === $cart['outcome'] ) {
 				$left[ $product_id ] = ( $left[ $product_id ] ?? 0 ) + 1;

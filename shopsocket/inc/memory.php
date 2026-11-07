@@ -83,12 +83,12 @@ function plant_cache_probe(): void {
  *
  * @since 0.8.0
  *
- * @param mixed $old The option before.
- * @param mixed $new The option after.
+ * @param mixed $before The option before.
+ * @param mixed $after  The option after.
  * @return void
  */
-function on_history_switched( $old, $new ): void {
-	if ( $new && ! $old ) {
+function on_history_switched( $before, $after ): void {
+	if ( $after && ! $before ) {
 		plant_cache_probe();
 	}
 }

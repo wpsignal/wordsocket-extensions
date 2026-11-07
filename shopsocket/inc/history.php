@@ -238,44 +238,25 @@ function data_field( ?string $json, string $key ) {
 }
 
 /**
- * The non-open journeys carrying a cart since a moment, newest first, one per cart (its newest, the later row of two in one second):
- * `{ ref, outcome, value, last_seen, items, currency, user_id, order }`.
+ * The carts whose journeys ended since a moment, one entry per cart as `fold_carts()` shapes it, newest first.
  *
  * @since 0.8.0
+ * @since 0.8.0 Folds with `fold_carts()`, the one grouping the strip and the abandoned carts share.
  *
  * @param string $since SQL UTC.
- * @return array<int, array<string, mixed>>
+ * @return array<string, array<string, mixed>>
  */
 function cart_journeys_since( string $since ): array {
 	global $wpdb;
 	$rows = (array) $wpdb->get_results(
 		$wpdb->prepare(
-			'SELECT ref, outcome, value, last_seen, data, user_id FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome <> 'open' AND last_seen >= %s ORDER BY last_seen DESC, id DESC LIMIT %d",
+			'SELECT ref, outcome, value, last_seen, data, user_id FROM ' . journeys_table() . " WHERE ref IS NOT NULL AND data IS NOT NULL AND outcome IN ('left', 'converted') AND last_seen >= %s ORDER BY last_seen DESC, id DESC LIMIT %d",
 			$since,
 			STRIP_CARTS
 		),
 		ARRAY_A
 	);
-	$out  = array();
-	foreach ( $rows as $row ) {
-		$ref   = (string) $row['ref'];
-		$items = items_of( $row['data'] );
-		// A leave with nothing in the cart is not the cart's story.
-		if ( isset( $out[ $ref ] ) || ( 'left' === $row['outcome'] && empty( $items ) ) ) {
-			continue;
-		}
-		$out[ $ref ] = array(
-			'ref'       => $ref,
-			'outcome'   => (string) $row['outcome'],
-			'value'     => round( (float) ( $row['value'] ?? 0 ), 2 ),
-			'last_seen' => (string) $row['last_seen'],
-			'items'     => $items,
-			'currency'  => (string) ( data_field( $row['data'], 'c' ) ?? '' ),
-			'user_id'   => (int) ( $row['user_id'] ?? 0 ),
-			'order'     => (int) ( data_field( $row['data'], 'o' ) ?? 0 ),
-		);
-	}
-	return array_values( $out );
+	return fold_carts( $rows );
 }
 
 /**
@@ -581,54 +562,62 @@ function taxonomy_kind( string $kind, string $taxonomy ): string {
 add_filter( 'wpsignal_taxonomy_kind', __NAMESPACE__ . '\taxonomy_kind', 10, 2 );
 
 /**
- * Journey rows carrying a cart, newest first, as one entry per cart: its newest leave with items in the cart, the order journey that followed it, and the account seen on any of them.
+ * Journey rows carrying a cart, newest first, folded to one entry per cart: the cart's newest ended journey, a leave with items in the cart or an order (an order wins over a leave in the same second), as
+ * `{ ref, outcome, value, last_seen, items, currency, user_id, order, left }`, `user_id` the account seen on any of its rows and `left` the newest leave with items as `{ value, last_seen, items, currency, visitor }`, null when the cart was never left.
  *
  * @since 0.8.0
  *
- * @param array<int, array<string, mixed>> $rows Rows with `ref`, `outcome`, `last_seen` and `data`, newest first.
- * @return array<string, array{left: array<string, mixed>|null, converted: array<string, mixed>|null, user_id: int}>
+ * @param array<int, array<string, mixed>> $rows Rows with `ref`, `outcome`, `value`, `last_seen`, `data`, and `user_id` or `visitor` where the reader wants them, newest first.
+ * @return array<string, array<string, mixed>>
  */
-function carts_by_leave( array $rows ): array {
+function fold_carts( array $rows ): array {
 	$carts = array();
 	foreach ( $rows as $row ) {
-		$ref  = (string) $row['ref'];
-		$cart = $carts[ $ref ] ?? array(
-			'left'      => null,
-			'converted' => null,
-			'user_id'   => 0,
-		);
-		if ( 0 === $cart['user_id'] && (int) ( $row['user_id'] ?? 0 ) > 0 ) {
-			$cart['user_id'] = (int) $row['user_id'];
+		$ref     = (string) $row['ref'];
+		$outcome = (string) $row['outcome'];
+		$items   = items_of( $row['data'] );
+		$user_id = (int) ( $row['user_id'] ?? 0 );
+		if ( isset( $carts[ $ref ] ) && 0 === $carts[ $ref ]['user_id'] && $user_id > 0 ) {
+			$carts[ $ref ]['user_id'] = $user_id;
 		}
-		// A leave with nothing in the cart (the thank-you page's tab closing) is not a cart left behind.
-		if ( 'left' === $row['outcome'] && empty( items_of( $row['data'] ) ) ) {
-			$carts[ $ref ] = $cart;
+		// A leave with nothing in the cart (the thank-you page's tab closing) is not the cart's story, and nor is a journey nobody saw end.
+		if ( ( 'left' === $outcome && empty( $items ) ) || ( 'left' !== $outcome && 'converted' !== $outcome ) ) {
 			continue;
 		}
-		if ( 'left' === $row['outcome'] && null === $cart['left'] ) {
-			$cart['left'] = $row;
-			// An order placed before this leave is an earlier cart's.
-			if ( null !== $cart['converted'] && $cart['converted']['last_seen'] < $row['last_seen'] ) {
-				$cart['converted'] = null;
-			}
-		} elseif ( 'converted' === $row['outcome'] && null === $cart['converted'] && ( null === $cart['left'] || $row['last_seen'] >= $cart['left']['last_seen'] ) ) {
-			$cart['converted'] = $row;
+		$leaf = array(
+			'value'     => round( (float) ( $row['value'] ?? 0 ), 2 ),
+			'last_seen' => (string) $row['last_seen'],
+			'items'     => $items,
+			'currency'  => (string) ( data_field( $row['data'], 'c' ) ?? '' ),
+			'visitor'   => (string) ( $row['visitor'] ?? '' ),
+		);
+		if ( ! isset( $carts[ $ref ] ) ) {
+			$carts[ $ref ] = array(
+				'ref'       => $ref,
+				'outcome'   => $outcome,
+				'value'     => $leaf['value'],
+				'last_seen' => $leaf['last_seen'],
+				'items'     => $items,
+				'currency'  => $leaf['currency'],
+				'user_id'   => $user_id,
+				'order'     => (int) ( data_field( $row['data'], 'o' ) ?? 0 ),
+				'left'      => 'left' === $outcome ? $leaf : null,
+			);
+			continue;
 		}
-		$carts[ $ref ] = $cart;
+		$cart = &$carts[ $ref ];
+		if ( 'converted' === $outcome && 'left' === $cart['outcome'] && $cart['last_seen'] === $leaf['last_seen'] ) {
+			$cart['outcome']  = 'converted';
+			$cart['value']    = $leaf['value'];
+			$cart['items']    = $items;
+			$cart['currency'] = $leaf['currency'];
+			$cart['order']    = (int) ( data_field( $row['data'], 'o' ) ?? 0 );
+		} elseif ( 'left' === $outcome && null === $cart['left'] ) {
+			$cart['left'] = $leaf;
+		}
+		unset( $cart );
 	}
 	return $carts;
-}
-
-/**
- * The order a left cart became, 0 when it has none.
- *
- * @since 0.8.0
- *
- * @param array{converted: array<string, mixed>|null} $cart One entry of `carts_by_leave()`.
- * @return int
- */
-function order_after( array $cart ): int {
-	return null === $cart['converted'] ? 0 : (int) ( data_field( $cart['converted']['data'], 'o' ) ?? 0 );
 }
 
 /**
@@ -677,15 +666,15 @@ function abandoned_count( bool $fresh = false ): array {
 		);
 		$products[ $hours ] = array();
 	}
-	foreach ( carts_by_leave( $rows ) as $ref => $cart ) {
+	foreach ( fold_carts( $rows ) as $ref => $cart ) {
 		if ( null === $cart['left'] ) {
 			continue;
 		}
-		$ordered = order_after( $cart ) > 0;
+		$ordered = 'converted' === $cart['outcome'];
 		if ( ! $ordered && isset( $unended[ $ref ] ) && count( $returning ) < ABANDONED_RETURNING ) {
 			$returning[ $ref ] = array(
-				'left_at' => datetime_to_rfc3339( (string) $cart['left']['last_seen'] ),
-				'value'   => round( (float) ( $cart['left']['value'] ?? 0 ), 2 ),
+				'left_at' => datetime_to_rfc3339( $cart['left']['last_seen'] ),
+				'value'   => $cart['left']['value'],
 			);
 		}
 		$ago = $now - (int) strtotime( $cart['left']['last_seen'] . ' UTC' );
@@ -698,8 +687,8 @@ function abandoned_count( bool $fresh = false ): array {
 				continue;
 			}
 			++$totals[ $hours ]['carts'];
-			$totals[ $hours ]['value'] += (float) ( $cart['left']['value'] ?? 0 );
-			$products[ $hours ]        += items_of( $cart['left']['data'] );
+			$totals[ $hours ]['value'] += $cart['left']['value'];
+			$products[ $hours ]        += $cart['left']['items'];
 		}
 	}
 	foreach ( ABANDONED_WINDOWS as $hours ) {
@@ -760,7 +749,7 @@ function abandoned_rows( int $hours = BOARD_HOURS ): array {
 		),
 		ARRAY_A
 	);
-	$carts  = carts_by_leave( $rows );
+	$carts  = fold_carts( $rows );
 	$names  = customer_names( array_column( $carts, 'user_id' ) );
 	$limit  = abandoned_limit( $hours );
 	$listed = array( 0, 0 );
@@ -770,27 +759,25 @@ function abandoned_rows( int $hours = BOARD_HOURS ): array {
 		if ( null === $left ) {
 			continue;
 		}
-		$order_id = order_after( $cart );
-		$ordered  = $order_id > 0 ? 1 : 0;
+		$ordered  = 'converted' === $cart['outcome'] ? 1 : 0;
+		$order_id = $ordered ? (int) $cart['order'] : 0;
 		if ( $listed[ $ordered ] >= $limit ) {
 			continue;
 		}
 		++$listed[ $ordered ];
-		$items     = items_of( $left['data'] );
-		$converted = $cart['converted'];
-		$user_id   = (int) $cart['user_id'];
-		$out[]     = array(
+		$user_id = (int) $cart['user_id'];
+		$out[]   = array(
 			'id'           => $ref,
-			'v'            => Journeys::uuid( (string) ( $left['visitor'] ?? '' ) ),
-			'products'     => array_keys( $items ),
-			'quantities'   => (object) $items,
-			'value'        => round( (float) ( $left['value'] ?? 0 ), 2 ),
-			'currency'     => (string) ( data_field( $left['data'], 'c' ) ?? get_woocommerce_currency() ),
-			'left_at'      => datetime_to_rfc3339( (string) $left['last_seen'] ),
-			'converted_at' => null === $converted ? null : datetime_to_rfc3339( (string) $converted['last_seen'] ),
+			'v'            => Journeys::uuid( $left['visitor'] ),
+			'products'     => array_keys( $left['items'] ),
+			'quantities'   => (object) $left['items'],
+			'value'        => $left['value'],
+			'currency'     => '' !== $left['currency'] ? $left['currency'] : get_woocommerce_currency(),
+			'left_at'      => datetime_to_rfc3339( $left['last_seen'] ),
+			'converted_at' => $ordered ? datetime_to_rfc3339( $cart['last_seen'] ) : null,
 			'order_id'     => $order_id > 0 ? $order_id : null,
 			'order_url'    => $order_id > 0 ? order_edit_url( $order_id ) : '',
-			'order_value'  => $order_id > 0 ? round( (float) ( $converted['value'] ?? 0 ), 2 ) : null,
+			'order_value'  => $ordered ? $cart['value'] : null,
 			'user_id'      => $user_id > 0 ? $user_id : null,
 			'customer'     => $names[ $user_id ] ?? null,
 			'customer_url' => $user_id > 0 ? customer_edit_url( $user_id ) : '',

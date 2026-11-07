@@ -265,6 +265,25 @@ final class HistoryTest extends ExtensionTestCase {
 		);
 	}
 
+	public function test_the_strip_and_the_abandoned_carts_read_one_grouping_of_a_carts_journeys(): void {
+		$this->set_history( true );
+		// Left two hours ago, then a return nobody saw end: still a cart left behind, to both cards.
+		$this->seed_cart( 'cccc000000000001', array( 9001 ), 10.0, array(), 'left', 2 * HOUR_IN_SECONDS );
+		$this->seed_cart( 'cccc000000000001', array( 9001 ), 10.0, array(), 'incomplete', HOUR_IN_SECONDS );
+		$this->assertSame( 1, carts_left( time() )['count'], 'the strip counts it' );
+		$this->assertSame( 1, abandoned_count()['totals'][24]['carts'], 'the card counts it' );
+		$rows = abandoned_rows();
+		$this->assertSame( array( 'cccc000000000001' ), array_column( $rows, 'id' ) );
+		$this->assertNull( $rows[0]['order_id'] );
+		// An order after the leave recovers it, for both.
+		$this->seed_cart( 'cccc000000000001', array( 9001 ), 12.0, array(), 'converted', 60 );
+		$this->assertSame( 0, carts_left( time() )['count'], 'the strip no longer counts it' );
+		$this->assertSame( array( 0, 1 ), array( abandoned_count()['totals'][24]['carts'], abandoned_count()['totals'][24]['recovered'] ), 'the card counts it as recovered' );
+		$row = abandoned_rows()[0];
+		$this->assertSame( array( 10.0, 12.0 ), array( $row['value'], $row['order_value'] ), 'the cart as it was left, the order as it was placed' );
+		$this->assertNotNull( $row['converted_at'] );
+	}
+
 	public function test_the_carts_left_are_counted_in_full_past_the_rows_the_board_lists(): void {
 		$this->set_history( true );
 		for ( $i = 0; $i < 60; $i++ ) {
