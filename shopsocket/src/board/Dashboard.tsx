@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "@wordpress/element";
-import { Notice, ToggleControl } from "@wordpress/components";
+import { Notice } from "@wordpress/components";
 import {
   fullscreen as fullscreenIcon,
   fullscreenExit,
@@ -42,6 +42,7 @@ import { LiveJourneys, type RouteNames } from "./LiveJourneys";
 import { useGuestNames } from "./useGuestNames";
 import { routeSteps } from "./journey";
 import { playChime } from "./chime";
+import { soundOff, soundOn } from "./icons";
 import {
   BoardTable,
   Section,
@@ -167,17 +168,13 @@ export function Dashboard() {
   return (
     <div className={`shopsocket-board${fullscreen ? " is-fullscreen" : ""}`}>
       {/* The page title and meta links are PHP-rendered above the board (`render_header()`). */}
-      <div className="shopsocket-board__header">
+      <Stack direction="row" className="shopsocket-board__header">
+        <ConnectionBadge state={connection} />
         <div className="shopsocket-board__controls">
-          <ConnectionBadge state={connection} />
-          <ToggleControl
-            label={__("Sound on new order", "shopsocket")}
-            checked={sound}
-            onChange={setSound}
-          />
           <Button
-            variant="minimal"
+            variant="unstyled"
             size="small"
+            style={{ padding: 0, minWidth: 0, display: "flex" }}
             className="shopsocket-board__alerts-toggle"
             aria-expanded={!minimized}
             disabled={!alerts.length}
@@ -202,10 +199,22 @@ export function Dashboard() {
             onClick={() => setMinimized((m) => !m)}
           >
             <Icon icon={alerts.length ? bellUnread : bell} />{" "}
-            {minimized && alerts.length ? `(${alerts.length})` : ""}
+            {minimized && alerts.length ? <span>({alerts.length})</span> : ""}
           </Button>
           <IconButton
-            variant="minimal"
+            variant="unstyled"
+            size="small"
+            className="shopsocket-board__sound"
+            icon={sound ? soundOn : soundOff}
+            onClick={() => setSound((on) => !on)}
+            label={
+              sound
+                ? __("Mute the new order sound", "shopsocket")
+                : __("Play a sound on a new order", "shopsocket")
+            }
+          />
+          <IconButton
+            variant="unstyled"
             size="small"
             icon={fullscreen ? fullscreenExit : fullscreenIcon}
             onClick={() => setFullscreen((f) => !f)}
@@ -216,7 +225,7 @@ export function Dashboard() {
             }
           />
         </div>
-      </div>
+      </Stack>
 
       <Stack
         direction="column"

@@ -332,6 +332,40 @@ test.describe("ShopSocket dashboard", () => {
     );
   });
 
+  test("the sound button shows whether a new order chimes, and the browser remembers it", async ({
+    admin,
+    page,
+  }) => {
+    await admin.visitAdminPage("admin.php", PAGE);
+    await waitForLive(page);
+    const sound = page.locator(".shopsocket-board__sound");
+    const stored = () =>
+      page.evaluate(() => window.localStorage.getItem("shopsocket-sound"));
+    try {
+      // On until this browser turns it off: the button offers to mute.
+      await expect(sound).toHaveAccessibleName("Mute the new order sound");
+      const on = await sound.locator("svg").innerHTML();
+
+      await sound.click();
+      await expect(sound).toHaveAccessibleName("Play a sound on a new order");
+      expect(await sound.locator("svg").innerHTML()).not.toBe(on);
+      expect(await stored()).toBe("0");
+
+      // Muted still after a reload.
+      await page.reload();
+      await waitForLive(page);
+      await expect(sound).toHaveAccessibleName("Play a sound on a new order");
+
+      await sound.click();
+      await expect(sound).toHaveAccessibleName("Mute the new order sound");
+      expect(await sound.locator("svg").innerHTML()).toBe(on);
+    } finally {
+      await page.evaluate(() =>
+        window.localStorage.removeItem("shopsocket-sound"),
+      );
+    }
+  });
+
   test("the abandoned carts follow the time frame chosen", async ({
     admin,
     page,
@@ -348,14 +382,24 @@ test.describe("ShopSocket dashboard", () => {
       const row = section.locator(".shopsocket-abandoned tbody tr", {
         hasText: "E2E Frame Widget",
       });
-      // The table lists ten carts a page, newest first: page forward until the cart is listed.
+      /*
+       * The table lists ten carts a page, newest first: page forward until the cart is listed, and
+       * back to the first page when it is not, so the next look reads every page again.
+       */
+      const turn = async (name: string) => {
+        const button = section.getByRole("button", { name });
+        if ((await button.count()) === 0 || !(await button.isEnabled()))
+          return false;
+        await button.click();
+        return true;
+      };
       const listed = async () => {
         for (let pages = 0; pages < 40; pages++) {
           if ((await row.count()) > 0) return true;
-          const next = section.getByRole("button", { name: "Next page" });
-          if ((await next.count()) === 0 || !(await next.isEnabled()))
-            return false;
-          await next.click();
+          if (!(await turn("Next page"))) break;
+        }
+        for (let pages = 0; pages < 40; pages++) {
+          if (!(await turn("Previous page"))) break;
         }
         return false;
       };
@@ -451,7 +495,7 @@ test.describe("ShopSocket dashboard", () => {
     /** The carts the server counted for the last 24 hours, as the page was printed. */
     const counted = () =>
       page.evaluate(
-        () => window.shopSocket.snapshot.abandoned_totals?.["24"]?.carts ?? 0,
+        () => window.shopSocket?.snapshot.abandoned_totals?.["24"]?.carts ?? 0,
       );
     try {
       await admin.visitAdminPage("admin.php", PAGE);
