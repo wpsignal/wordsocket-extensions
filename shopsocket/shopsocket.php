@@ -154,3 +154,5 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	require_once DIR . 'inc/cli.php';
 	register_cli();
 }
+
+register_activation_hook( __FILE__, __NAMESPACE__ . '\plant_cache_probe' );

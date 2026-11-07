@@ -3,8 +3,10 @@
  * Short-lived facts, kept in the object cache where one outlives a request and in transients
  * where none does.
  *
- * - `has_persistent_cache()` is the flag: the probe's verdict, kept in an option for a day once
- *   true and ten minutes while false, since the probe needs two requests to see its own marker.
+ * - `has_persistent_cache()` is the flag: WordSocket's probe's verdict, kept in an option for a day
+ *   once true and ten minutes while false, since the probe needs two requests to see its own marker.
+ * - `plant_cache_probe()` plants the marker ahead of the first look, at activation and when History
+ *   turns on, and forgets the verdict.
  * - `remember()`, `recall()` and `forget()` pick the backend by that flag.
  *
  * @package WPSignal\Extensions\ShopSocket
@@ -49,7 +51,7 @@ function has_persistent_cache(): bool {
 			return (bool) $verdict['persists'];
 		}
 	}
-	$persists = object_cache_persists();
+	$persists = method_exists( \WPSignal\Journeys::class, 'cache_persists' ) && \WPSignal\Journeys::cache_persists();
 	update_option(
 		MEMORY_VERDICT_OPTION,
 		array(
@@ -60,6 +62,38 @@ function has_persistent_cache(): bool {
 	);
 	return $persists;
 }
+
+/**
+ * Plant WordSocket's cache marker and forget the verdict, its cached copy too, so the next request judges the cache on a marker that was there to find.
+ *
+ * @since 0.8.0
+ *
+ * @return void
+ */
+function plant_cache_probe(): void {
+	delete_option( MEMORY_VERDICT_OPTION );
+	wp_cache_delete( MEMORY_VERDICT_OPTION, 'options' );
+	if ( method_exists( \WPSignal\Journeys::class, 'plant_cache_probe' ) ) {
+		\WPSignal\Journeys::plant_cache_probe();
+	}
+}
+
+/**
+ * Plant the marker when History turns on.
+ *
+ * @since 0.8.0
+ *
+ * @param mixed $old The option before.
+ * @param mixed $new The option after.
+ * @return void
+ */
+function on_history_switched( $old, $new ): void {
+	if ( $new && ! $old ) {
+		plant_cache_probe();
+	}
+}
+add_action( 'update_option_wpsignal_history_enabled', __NAMESPACE__ . '\on_history_switched', 10, 2 );
+add_action( 'add_option_wpsignal_history_enabled', static fn( string $option, $value ) => on_history_switched( false, $value ), 10, 2 );
 
 /**
  * Keep a fact for `$ttl` seconds.

@@ -52,23 +52,6 @@ export function SettingsTab() {
   );
   const [terms, setTerms] = useState<Term[] | null>(null);
   const [dirty, setDirty] = useState(false);
-  /*
-   * Whether the object cache outlives a request, asked twice: the first call plants a marker, and
-   * only a persistent cache still holds it for the second. Null until both answers are in.
-   */
-  const [cache, setCache] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const probe = () =>
-      apiFetch<{ persistent: boolean }>({ path: "/shopsocket/v1/cache" });
-    probe()
-      .then((first) =>
-        first.persistent ? true : probe().then((second) => second.persistent),
-      )
-      .then(setCache)
-      .catch(() => undefined);
-  }, []);
-
   useEffect(() => {
     /*
      * Every category, empty ones included (an exclusion may be set up before
