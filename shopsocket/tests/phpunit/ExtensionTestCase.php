@@ -44,8 +44,8 @@ abstract class ExtensionTestCase extends TestCase {
 		update_option( 'wpsignal_site_key', 'phpunitkey' );
 		update_option( 'wpsignal_site_secret', 'phpunitsecret' );
 		update_option( 'wpsignal_jwt_secret', 'phpunitjwt' );
-		delete_option( 'shopsocket_storefront' );
-		delete_option( 'wpsignal_history_enabled' );
+		self::drop_option( 'shopsocket_storefront' );
+		self::drop_option( 'wpsignal_history_enabled' );
 		unset( $_SERVER['HTTPS'] );
 		$this->published   = array();
 		$this->clear_carts();
@@ -110,7 +110,7 @@ abstract class ExtensionTestCase extends TestCase {
 		}
 		foreach ( $this->snapshot as $name => $value ) {
 			if ( self::MISSING === $value ) {
-				delete_option( $name );
+				self::drop_option( $name );
 			} else {
 				update_option( $name, $value );
 			}
@@ -164,6 +164,17 @@ abstract class ExtensionTestCase extends TestCase {
 		\WPSignal\Extensions\ShopSocket\invalidate_cart_caches();
 		\WPSignal\Extensions\ShopSocket\forget_figures();
 		return $journey_id;
+	}
+
+	/** Delete an option and the cached copies of it, since the site's drop-in keeps an autoloaded value through a forced reload. */
+	protected static function drop_option( string $name ): void {
+		delete_option( $name );
+		$all = wp_cache_get( 'alloptions', 'options' );
+		if ( is_array( $all ) && isset( $all[ $name ] ) ) {
+			unset( $all[ $name ] );
+			wp_cache_set( 'alloptions', $all, 'options' );
+		}
+		wp_cache_delete( $name, 'options' );
 	}
 
 	/** Switch WordSocket's journey history on or off for the rest of the test; it holds the carts. */
