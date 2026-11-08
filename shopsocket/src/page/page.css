@@ -69,85 +69,124 @@
   animation: shopsocket-shimmer 1.5s ease-in-out infinite;
 }
 
-.shopsocket-skeleton__controls {
+/* The skeleton: the header pill, then the Right now section with its two groups, tabs and rows. */
+.shopsocket-skeleton__header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 16px;
+  padding: 12px 16px;
   margin-block: 8px 16px;
-}
-
-.shopsocket-skeleton__badge {
-  width: 64px;
-  height: 22px;
+  background: #f6f7f7;
+  border: 1px solid #dbdbdb;
   border-radius: 999px;
 }
 
-.shopsocket-skeleton__toggle {
-  width: 170px;
-  height: 20px;
-  border-radius: 10px;
-}
-
-.shopsocket-skeleton__button {
-  width: 100px;
-  height: 32px;
-}
-
-.shopsocket-skeleton__summary {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.6fr);
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.shopsocket-skeleton__tiles {
+.shopsocket-skeleton__controls {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  align-items: center;
+  gap: 12px;
 }
 
-.shopsocket-skeleton__tile,
-.shopsocket-skeleton__panel {
+.shopsocket-skeleton__badge {
+  width: 72px;
+  height: 20px;
+  border-radius: 999px;
+}
+
+.shopsocket-skeleton__control {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.shopsocket-skeleton__section,
+.shopsocket-skeleton__group,
+.shopsocket-skeleton__part {
   background: #fff;
   border: 1px solid #dcdcde;
   border-radius: 8px;
-  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
 
-.shopsocket-skeleton__panel.is-orders {
-  padding: 20px 24px;
+.shopsocket-skeleton__section {
+  padding: 24px;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
+.shopsocket-skeleton__heading {
+  width: 120px;
+  height: 20px;
+}
+
+.shopsocket-skeleton__lede {
+  width: min(360px, 70%);
+  height: 13px;
+  margin-bottom: 8px;
+}
+
+.shopsocket-skeleton__groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.shopsocket-skeleton__group {
+  padding: 24px;
+  gap: 12px;
+}
+
 .shopsocket-skeleton__value {
-  width: 48px;
+  width: 56px;
   height: 32px;
 }
 
 .shopsocket-skeleton__label {
-  width: 120px;
+  width: 60%;
   height: 13px;
 }
 
-.shopsocket-skeleton__detail {
-  width: 70%;
+.shopsocket-skeleton__bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+}
+
+.shopsocket-skeleton__parts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.shopsocket-skeleton__part {
+  padding: 12px;
+  gap: 6px;
+}
+
+.shopsocket-skeleton__figure {
+  width: 40px;
+  height: 22px;
+}
+
+.shopsocket-skeleton__caption {
+  width: 80%;
   height: 11px;
 }
 
-.shopsocket-skeleton__heading {
-  width: 140px;
-  height: 16px;
-  margin-bottom: 6px;
+.shopsocket-skeleton__tabs {
+  display: flex;
+  gap: 24px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dcdcde;
 }
 
-.shopsocket-skeleton__search {
-  width: 220px;
-  height: 32px;
-  margin-bottom: 8px;
+.shopsocket-skeleton__tab {
+  width: 80px;
+  height: 14px;
 }
 
 .shopsocket-skeleton__row {
@@ -156,8 +195,8 @@
 }
 
 @media (max-width: 782px) {
-  .shopsocket-skeleton__summary {
-    grid-template-columns: 1fr;
+  .shopsocket-skeleton__parts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

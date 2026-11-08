@@ -210,24 +210,27 @@ function enqueue_page_styles(): void {
 }
 
 /**
- * What the board looks like before its script runs: the same shapes, shimmering.
- * React replaces it on mount.
+ * What the board looks like before its script runs: the header pill and the Right now section, shimmering. React replaces it on mount.
  *
  * @since 0.1.1
+ * @since 0.8.0 Draws the header pill and the Right now section the board has since 2026-11-05.
  *
  * @return void
  */
 function render_skeleton(): void {
 	$block = static fn( string $name, bool $invert = false ): string => '<div class="shopsocket-skeleton__' . $name . ' shopsocket-skeleton__shimmer' . ( $invert ? ' shopsocket-skeleton__shimmer-invert' : '' ) . '"></div>';
+	$group = '<div class="shopsocket-skeleton__group">'
+		. $block( 'value' ) . $block( 'label' ) . $block( 'bar' )
+		. '<div class="shopsocket-skeleton__parts">' . str_repeat( '<div class="shopsocket-skeleton__part">' . $block( 'figure' ) . $block( 'caption' ) . '</div>', 4 ) . '</div>'
+		. '</div>';
 	echo '<div class="shopsocket-skeleton" aria-hidden="true">';
-	echo '<div class="shopsocket-skeleton__controls">' . $block( 'badge', true ) . $block( 'toggle', true ) . $block( 'button', true ) . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static markup.
-	echo '<div class="shopsocket-skeleton__summary">';
-	echo '<div class="shopsocket-skeleton__tiles">';
-	echo str_repeat( '<div class="shopsocket-skeleton__tile">' . $block( 'value' ) . $block( 'label' ) . $block( 'detail' ) . '</div>', 2 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static markup.
+	echo '<div class="shopsocket-skeleton__header">' . $block( 'badge', true ) . '<div class="shopsocket-skeleton__controls">' . str_repeat( $block( 'control', true ), 3 ) . '</div></div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static markup.
+	echo '<div class="shopsocket-skeleton__section">';
+	echo $block( 'heading' ) . $block( 'lede' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static markup.
+	echo '<div class="shopsocket-skeleton__groups">' . $group . $group . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static markup.
+	echo '<div class="shopsocket-skeleton__tabs">' . $block( 'tab' ) . $block( 'tab' ) . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static markup.
+	echo str_repeat( $block( 'row' ), 4 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static markup.
 	echo '</div>';
-	echo '<div class="shopsocket-skeleton__panel">' . str_repeat( $block( 'row' ), 4 ) . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static markup.
-	echo '</div>';
-	echo '<div class="shopsocket-skeleton__panel is-orders">' . $block( 'heading' ) . $block( 'search' ) . str_repeat( $block( 'row' ), 5 ) . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static markup.
 	echo '</div>';
 }
 
