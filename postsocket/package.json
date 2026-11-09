@@ -1,0 +1,35 @@
+{
+  "name": "postsocket",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PostSocket: live blogs and articles that update in every reader's browser as you publish.",
+  "license": "GPL-2.0-or-later",
+  "scripts": {
+    "build": "wp-scripts build && tsc -p tsconfig.reader.json && node bin/reader-assets.mjs",
+    "start": "concurrently -k -n editor,reader,assets \"wp-scripts start\" \"tsc -p tsconfig.reader.json --watch --preserveWatchOutput\" \"node bin/reader-assets.mjs --watch\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tests/e2e/tsconfig.json",
+    "make-pot": "php -d memory_limit=2G \"$(command -v wp)\" i18n make-pot . languages/postsocket.pot --slug=postsocket --domain=postsocket --exclude=node_modules,vendor,tests,artifacts,src",
+    "test:php": "vendor/bin/phpunit",
+    "test:e2e": "wp-scripts test-playwright",
+    "test": "npm run test:php && npm run test:e2e",
+    "dist": "bash ../bin/dist.sh postsocket",
+    "svn": "bash ../bin/svn.sh postsocket",
+    "release": "bash ../bin/release.sh postsocket"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@wordpress/e2e-test-utils-playwright": "^2.0.0",
+    "@wordpress/scripts": "^35.0.0",
+    "concurrently": "^10.0.5"
+  },
+  "dependencies": {
+    "@wordpress/api-fetch": "^7.0.0",
+    "@wordpress/components": "^40.1.0",
+    "@wordpress/element": "^6.0.0",
+    "@wordpress/i18n": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=22.19.0",
+    "npm": "^11"
+  }
+}

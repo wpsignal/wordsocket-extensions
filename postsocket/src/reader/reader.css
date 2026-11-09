@@ -1,0 +1,185 @@
+/*
+ * PostSocket reader styles: the feed, its entries, the pill, the change highlight.
+ * Colours and spacing lean on the theme through custom properties a theme may set.
+ */
+:root {
+  --postsocket-accent: var(--wp--preset--color--vivid-red, #d63638);
+  --postsocket-muted: var(--wp--preset--color--contrast, currentColor);
+  --postsocket-line: color-mix(in srgb, currentColor 14%, transparent);
+  --postsocket-highlight: color-mix(in srgb, var(--postsocket-accent) 10%, transparent);
+  --postsocket-gap: var(--wp--preset--spacing--40, 1.25rem);
+}
+
+.postsocket-feed {
+  margin-block-start: calc(var(--postsocket-gap) * 1.5);
+  view-transition-name: postsocket-feed;
+}
+
+.postsocket-feed [hidden] {
+  display: none !important;
+}
+
+.postsocket-feed__header {
+  display: flex;
+  align-items: center;
+  gap: var(--postsocket-gap);
+  padding-block-end: calc(var(--postsocket-gap) / 2);
+  border-block-end: 1px solid var(--postsocket-line);
+  margin-block-end: var(--postsocket-gap);
+}
+
+.postsocket-feed__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: 0.75em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--postsocket-accent);
+}
+
+.postsocket-feed__badge::before {
+  content: "";
+  inline-size: 0.6em;
+  block-size: 0.6em;
+  border-radius: 50%;
+  background: currentColor;
+  animation: postsocket-pulse 1.6s ease-in-out infinite;
+}
+
+.postsocket-feed__badge.is-ended {
+  color: inherit;
+  opacity: 0.6;
+}
+
+.postsocket-feed__badge.is-ended::before {
+  animation: none;
+}
+
+.postsocket-feed__pending,
+.postsocket-feed__older {
+  font: inherit;
+  font-size: 0.875em;
+  padding: 0.4em 1em;
+  border: 1px solid var(--postsocket-line);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.postsocket-feed__pending {
+  margin-inline-start: auto;
+  border-color: var(--postsocket-accent);
+  color: var(--postsocket-accent);
+}
+
+.postsocket-feed__older {
+  display: block;
+  margin: var(--postsocket-gap) auto 0;
+}
+
+.postsocket-feed__older:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.postsocket-entry {
+  position: relative;
+  padding-block: var(--postsocket-gap);
+  border-block-end: 1px solid var(--postsocket-line);
+  transition:
+    opacity 0.4s ease,
+    background-color 1.2s ease;
+}
+
+.postsocket-entry.is-pinned {
+  border-inline-start: 3px solid var(--postsocket-accent);
+  padding-inline-start: var(--postsocket-gap);
+}
+
+.postsocket-entry.is-leaving {
+  opacity: 0;
+}
+
+.postsocket-entry__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75em;
+  font-size: 0.8125em;
+  margin-block-end: 0.5em;
+}
+
+.postsocket-entry__pin {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--postsocket-accent);
+}
+
+.postsocket-entry__time {
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.postsocket-entry__time:hover {
+  text-decoration: underline;
+}
+
+.postsocket-entry__author {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.postsocket-entry__avatar {
+  inline-size: 1.75em;
+  block-size: 1.75em;
+  border-radius: 50%;
+}
+
+.postsocket-entry__headline {
+  margin: 0 0 0.5em;
+  font-size: 1.125em;
+}
+
+.postsocket-entry__content > :last-child {
+  margin-block-end: 0;
+}
+
+.postsocket-changed {
+  animation: postsocket-flash 2.5s ease-out;
+}
+
+@keyframes postsocket-flash {
+  0%,
+  40% {
+    background-color: var(--postsocket-highlight);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes postsocket-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .postsocket-feed__badge::before,
+  .postsocket-changed {
+    animation: none;
+  }
+  .postsocket-entry {
+    transition: none;
+  }
+}

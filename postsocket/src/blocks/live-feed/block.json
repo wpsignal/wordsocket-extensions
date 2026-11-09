@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "postsocket/live-feed",
+  "version": "0.1.0",
+  "title": "Live Feed",
+  "category": "widgets",
+  "icon": "megaphone",
+  "description": "Where a live blog's entries appear and update as they are published. Added for you after the content when the block is not placed.",
+  "keywords": ["live blog", "entries", "realtime"],
+  "textdomain": "postsocket",
+  "attributes": {},
+  "usesContext": ["postId", "postType"],
+  "supports": {
+    "html": false,
+    "multiple": false,
+    "reusable": false,
+    "interactivity": true,
+    "spacing": {
+      "margin": true
+    }
+  },
+  "editorScript": "file:./index.js"
+}
