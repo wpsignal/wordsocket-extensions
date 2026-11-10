@@ -19,9 +19,20 @@ const CONNECTIONS_EVENT = "wps.connections";
 const PRESENCE_EVENT = "wps.presence";
 /*
  * A page navigation closes the shopper's socket before the next page has
- * connected and rejoined, so the relay's leave arrives a second or two ahead
- * of the join that reverses it. A leaving member is held this long first.
+ * connected and rejoined. WordSocket 0.32 marks every presence `g: 1` as a
+ * same-site navigation starts, so a marked member's leave is held this long
+ * for the join that reverses it; an unmarked leave is a departure, applied at once.
  */
+const NAVIGATION_HOLD_MS = 30_000;
+
+/*
+ * A reload is a navigation the browser does not announce to the leaving page,
+ * so its leave carries no mark; an unmarked leave is held this long for the
+ * join that follows one, and a closed tab shows after it.
+ */
+const DEPARTURE_HOLD_MS = 2_000;
+
+/* The relay's connection count drops for the same second; a lower figure is shown after this. */
 const LEAVE_GRACE_MS = 6_000;
 
 /** An hour, in milliseconds. */
@@ -42,7 +53,7 @@ type Config = Pick<
  * the journey WordSocket's tracker keeps (0.30), whose last step is `away`
  * while the tab is hidden.
  */
-type Member = { v?: string; b?: string | null; j?: string };
+type Member = { v?: string; b?: string | null; j?: string; g?: boolean };
 
 /** The most of a journey string the board keeps, WordSocket's own limit on one. */
 const JOURNEY_MAX = 4000;
@@ -54,6 +65,7 @@ function member(state: unknown): Member {
     ...(typeof s.v === "string" ? { v: s.v } : {}),
     b: typeof s.b === "string" ? s.b : null,
     j: typeof s.j === "string" ? s.j.slice(-JOURNEY_MAX) : "",
+    ...(s.g ? { g: true } : {}),
   };
 }
 
@@ -331,15 +343,24 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
      */
     let shownConnections = config.snapshot.online?.active_connections ?? 0;
     let holdTimer: ReturnType<typeof setTimeout> | undefined;
+    let heldOnline: NonNullable<WooDashboardData["online"]> | null = null;
     const showOnline = (o: NonNullable<WooDashboardData["online"]>) => {
-      clearTimeout(holdTimer);
       if (o.active_connections < shownConnections) {
-        holdTimer = setTimeout(() => {
-          shownConnections = o.active_connections;
-          setOnline(o);
+        // The newest lower figure shows when the hold that is already running ends.
+        heldOnline = o;
+        holdTimer ??= setTimeout(() => {
+          holdTimer = undefined;
+          if (heldOnline) {
+            shownConnections = heldOnline.active_connections;
+            setOnline(heldOnline);
+            heldOnline = null;
+          }
         }, LEAVE_GRACE_MS);
         return;
       }
+      clearTimeout(holdTimer);
+      holdTimer = undefined;
+      heldOnline = null;
       shownConnections = o.active_connections;
       setOnline(o);
     };
@@ -432,13 +453,20 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
       };
       const handle = (p: PresenceFrame) => {
         if (p.action === "sync") {
-          // The relay's authoritative list: nothing is pending any more.
-          pendingLeaves.forEach((timer) => clearTimeout(timer));
-          pendingLeaves.clear();
+          // The relay's list, plus the members still held through a navigation.
+          const held = new Map<string, Member>();
+          pendingLeaves.forEach((timer, id) => {
+            const m = members.get(id);
+            if (m) held.set(id, m);
+          });
           members.clear();
-          (p.members ?? []).forEach(
-            (m) => m.id && members.set(m.id, member(m.state)),
-          );
+          held.forEach((m, id) => members.set(id, m));
+          (p.members ?? []).forEach((m) => {
+            if (!m.id) return;
+            cancelLeave(m.id);
+            members.delete(m.id);
+            members.set(m.id, member(m.state));
+          });
         } else if (p.action === "join" && p.id) {
           cancelLeave(p.id);
           // A re-announce moves the member to the end.
@@ -446,9 +474,9 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
           members.set(p.id, member(p.state));
         } else if (p.action === "leave" && p.id) {
           /*
-           * Hold the member: if the same person is back on the next page
-           * within the grace, the sets in applyPresent() dedupe the overlap
-           * by visitor and cart id, so nothing flickers and nothing doubles.
+           * A member is held: the same person is back on the next page within
+           * the hold, and the sets in applyPresent() dedupe the overlap by
+           * visitor and cart id, so nothing flickers and nothing doubles.
            */
           const id = p.id;
           cancelLeave(id);
@@ -458,7 +486,7 @@ export function useDashboardSnapshot(config: Config, onOrders?: OnOrders) {
               pendingLeaves.delete(id);
               members.delete(id);
               onChange();
-            }, LEAVE_GRACE_MS),
+            }, members.get(id)?.g ? NAVIGATION_HOLD_MS : DEPARTURE_HOLD_MS),
           );
           return;
         } else {
