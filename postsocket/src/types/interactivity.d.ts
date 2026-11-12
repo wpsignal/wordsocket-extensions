@@ -13,4 +13,6 @@ declare module "@wordpress/interactivity" {
   export function getElement(): { ref: HTMLElement | null };
   /** Register or read a store; the state the server seeded is deep-merged into `T`. */
   export function store<T extends object>(namespace: string, storePart?: StorePart<T>, options?: { lock: boolean | string }): T;
+  /** WordPress's private hydration helpers, unlocked by a consent string; absent or changed in other versions. */
+  export const privateApis: ((lock: string) => unknown) | undefined;
 }

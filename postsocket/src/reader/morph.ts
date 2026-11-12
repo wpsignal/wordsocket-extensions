@@ -3,7 +3,9 @@
  *
  * - Children are matched by their markup, loading hints aside; an unchanged block (an iframe, an embed, a long image) is never touched.
  * - Changed blocks are replaced in place, new ones inserted, missing ones removed, in a view transition where the browser has one.
- * - Children matching `keep` stay where they are and are never removed or duplicated.
+ * - `morphElement()` does the same for a whole part of the page from a fresh copy of it, descending into what differs.
+ * - A live feed is never re-rendered: the relay render marks its place with a slot, blocks compare as if the
+ *   page's feed were that slot, and a changed block that holds one gets the page's feed node moved into it.
  *
  * @since 0.1.0
  */
@@ -12,9 +14,27 @@ import { fragment } from "postsocket/reader/assets";
 const HIGHLIGHT_CLASS = "postsocket-changed";
 const HIGHLIGHT_MS = 2500;
 
-/** What a block is compared by: its markup without the loading hints the front end adds and a save does not. */
+const FEED = "[data-postsocket-feed]";
+const SLOT = "[data-postsocket-feed-slot]";
+
+/** The slot a relay render puts where the feed for `liveblog` sits. */
+function slotFor(liveblog: string): HTMLElement {
+  const slot = document.createElement("div");
+  slot.setAttribute("data-postsocket-feed-slot", liveblog);
+  slot.hidden = true;
+  return slot;
+}
+
+/** What a block is compared by: its markup with any live feed read as its slot, without the loading hints the front end adds. */
 function identity(el: Element): string {
-  return el.outerHTML.replace(/\s(?:loading|decoding|fetchpriority)="[^"]*"/g, "").replace(/\s+/g, " ");
+  let node: Element = el;
+  if (el.matches(FEED)) {
+    node = slotFor(el.getAttribute("data-postsocket-feed") ?? "");
+  } else if (el.querySelector(FEED)) {
+    node = el.cloneNode(true) as Element;
+    for (const feed of node.querySelectorAll(FEED)) feed.replaceWith(slotFor(feed.getAttribute("data-postsocket-feed") ?? ""));
+  }
+  return node.outerHTML.replace(/\s(?:loading|decoding|fetchpriority)="[^"]*"/g, "").replace(/\s+/g, " ");
 }
 
 function nextElement(node: Element | null): Element | null {
@@ -51,15 +71,16 @@ export function highlight(el: Element): void {
 }
 
 /**
- * Reconcile `container`'s element children with `html`. Returns the elements that were inserted or replaced.
+ * Reconcile `container`'s element children with `html`, keeping the page's live feeds wherever they sit. Returns the elements that were inserted or replaced.
  *
  * @since 0.1.0
  */
-export function morphChildren(container: Element, html: string, keep = "[data-postsocket-feed]"): Element[] {
-  const incoming = Array.from(fragment(html).children).filter((el) => !el.matches(keep));
-  const kept = Array.from(container.children).filter((el) => el.matches(keep));
-  const old = Array.from(container.children).filter((el) => !el.matches(keep));
+export function morphChildren(container: Element, html: string): Element[] {
+  const feeds = new Map<string, Element>();
+  for (const feed of container.querySelectorAll(FEED)) feeds.set(feed.getAttribute("data-postsocket-feed") ?? "", feed);
 
+  const incoming = Array.from(fragment(html).children);
+  const old = Array.from(container.children);
   const pool = new Map<string, Element[]>();
   for (const el of old) {
     const list = pool.get(identity(el)) ?? [];
@@ -75,14 +96,19 @@ export function morphChildren(container: Element, html: string, keep = "[data-po
       ordered.push(match);
     } else {
       ordered.push(el);
-      changed.push(el);
+      if (!el.matches(SLOT)) changed.push(el);
     }
   }
 
-  // A kept node holds its place by the number of siblings that were before it.
-  for (const el of kept) {
-    const index = Array.from(container.children).indexOf(el);
-    ordered.splice(Math.min(index, ordered.length), 0, el);
+  // A new block that holds a feed's slot gets the page's feed node, so its entries and state carry over.
+  for (const el of ordered) {
+    const slots = el.matches(SLOT) ? [el] : Array.from(el.querySelectorAll(SLOT));
+    for (const slot of slots) {
+      const feed = feeds.get(slot.getAttribute("data-postsocket-feed-slot") ?? "");
+      if (!feed) continue;
+      if (slot === el) ordered[ordered.indexOf(el)] = feed;
+      else slot.replaceWith(feed);
+    }
   }
 
   const wanted = new Set(ordered);
@@ -106,3 +132,50 @@ export function morphChildren(container: Element, html: string, keep = "[data-po
   }
   return changed;
 }
+
+const POST = "[data-postsocket-post]";
+const UNTOUCHED = "script, style, noscript, template, #wpadminbar";
+
+/** Whether an element holds text of its own beside any child elements. */
+function hasOwnText(el: Element): boolean {
+  return Array.from(el.childNodes).some((node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "");
+}
+
+/** Give `target` the attributes of `source`. */
+function syncAttributes(target: Element, source: Element): void {
+  for (const { name } of Array.from(target.attributes)) {
+    if (!source.hasAttribute(name)) target.removeAttribute(name);
+  }
+  for (const { name, value } of Array.from(source.attributes)) {
+    if (target.getAttribute(name) !== value) target.setAttribute(name, value);
+  }
+}
+
+/**
+ * Make `target` match `source`, a fresh copy of the same part of the page, changing only what differs. Returns the elements that were inserted, replaced or refilled.
+ *
+ * - Live feeds, scripts, styles and the admin bar are left as they are.
+ * - The living wrapper keeps its node and has its blocks reconciled as a content update does.
+ *
+ * @since 0.1.0
+ */
+export function morphElement(target: Element, source: Element): Element[] {
+  if (target.matches(FEED) || target.matches(UNTOUCHED) || target.isEqualNode(source)) return [];
+  syncAttributes(target, source);
+
+  const olds = Array.from(target.children);
+  const news = Array.from(source.children);
+  if (!news.length || !olds.length || hasOwnText(target) || hasOwnText(source)) {
+    if (target.innerHTML === source.innerHTML) return [];
+    target.innerHTML = source.innerHTML;
+    return [target];
+  }
+  const sameShape = olds.length === news.length && olds.every((el, i) => el.tagName === news[i].tagName);
+  if (target.matches(POST) || !sameShape) {
+    const copy = source.cloneNode(true) as Element;
+    for (const feed of copy.querySelectorAll(FEED)) feed.replaceWith(slotFor(feed.getAttribute("data-postsocket-feed") ?? ""));
+    return morphChildren(target, copy.innerHTML);
+  }
+  return olds.flatMap((el, i) => morphElement(el, news[i]));
+}
+

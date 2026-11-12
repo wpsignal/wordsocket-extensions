@@ -19,28 +19,29 @@ PostSocket turns WordPress into a live newsroom. Cover a match, an election nigh
 
 **Live blogs**
 
-* A Live Blog is a post with an intro; its entries are posts of their own, written in the block editor, so any block works: paragraphs, images, embeds, tables, quotes
+* Run each live blog from the Live Desk: every entry, its status and its pin in one list that updates as colleagues publish, with the live or ended switch beside it
+* Entries are written in the block editor, so any block works: paragraphs, images, embeds, tables, quotes
 * Readers see new entries land at the top, edits replace what they were reading, pinned entries stay above the rest, and removed entries leave
 * A reader who has scrolled down gets a quiet "3 new updates" pill instead of a jumping page
 * A live badge while coverage runs, an ended badge when you close it, older entries on request
-* Entries have no pages of their own: each one links to its place on the live blog, so your coverage page keeps every reader and every search result
+* Entries have no pages of their own: each one links to its place on the post the live blog lives on, so your coverage page keeps every reader and every search result
 * `LiveBlogPosting` structured data for Google's live coverage features
-* The feed is added after the intro for you, or place the Live Feed block where you want it
+* Place a live blog on any post or page with the Live Feed block, so the intro, scheduling, revisions and SEO are your normal post's
 
 **Living articles**
 
-Choose post types on the PostSocket tab of WordSocket's settings, and readers of those posts see your saved edits land in place. A correction, a new paragraph or an updated figure appears without a reload, and the parts of the page that did not change, an embedded video for example, are left exactly as they were.
+Choose post types on the PostSocket tab of WordSocket's settings, switch Live editing on in the editor of the posts you want, and readers of those posts see your saved edits land in place. A post showing a live blog is always live. A correction, a new paragraph or an updated figure appears without a reload, and the parts of the page that did not change, an embedded video for example, are left exactly as they were.
 
 **Built for publishers**
 
 * Every editor works in the normal block editor, several at once, each on their own entry
 * Nothing is polled: WordSocket relays each change over a WebSocket to every open page
 * Works with classic and block themes, full-page caches and CDNs (a cached page catches up on its own)
-* No tables of its own: live blogs and entries are posts, kept and backed up like the rest of your content
+* No tables of its own: entries are posts and live blogs are terms, kept and backed up like the rest of your content
 
 **For developers**
 
-Events `postsocket.entry.updated`, `postsocket.entry.removed` and `postsocket.liveblog.state` travel on `postsocket:liveblog:{id}`; `postsocket.post.updated` on `postsocket:post:{id}`. Filters: `postsocket_rewrite_slug`, `postsocket_is_living`, `postsocket_inline_limit`. Routes under `postsocket/v1`.
+Events `postsocket.entry.updated`, `postsocket.entry.removed` and `postsocket.liveblog.state` travel on `postsocket:liveblog:{id}`; `postsocket.post.updated` on `postsocket:post:{id}`. `{id}` on a live blog's channel is its term id in the `postsocket_liveblog` taxonomy. Filters: `postsocket_host_post_type`, `postsocket_is_living`, `postsocket_inline_limit`. Routes under `postsocket/v1`.
 
 WPSignal is an independent service and is not affiliated with Automattic or WordPress.com.
 
@@ -48,8 +49,9 @@ WPSignal is an independent service and is not affiliated with Automattic or Word
 
 1. Install and activate [WordSocket](https://wordpress.org/plugins/wordsocket/) and connect it to your WPSignal account (Settings > WordSocket > Connect).
 2. Install and activate PostSocket.
-3. Add a live blog under Live Blogs > Add New, publish it, then add entries from the Live coverage panel or Live Blogs > Entries.
-4. To make ordinary posts update live too, choose their post types on Settings > WordSocket > PostSocket.
+3. Open Live Blogs, click New live blog, then Create page to place it on a new post (or add the Live Feed block to any post) and publish.
+4. Add entries from the desk with Add entry; each one reaches readers the moment you publish it.
+5. To make ordinary posts update live too, choose their post types on Settings > WordSocket > PostSocket.
 
 == Frequently Asked Questions ==
 
@@ -71,7 +73,11 @@ Yes. A page served from a cache catches up on its own once it connects, and from
 
 = Which post types can be living articles? =
 
-Any public post type. Live blogs are always live; everything else is off until you switch it on under Settings > WordSocket > PostSocket.
+Any public post type. A post showing a live blog is always live; everything else is off until you enable its post type under Settings > WordSocket > PostSocket and switch Live editing on in the post's editor.
+
+= A custom field changed and the page did not update. Why? =
+
+A living article updates its content and title, including anything in the content that reads a custom field. For a custom field your theme prints outside the content, tell PostSocket where it is with the `postsocket_live_fields` filter: `$fields['subtitle'] = array( 'selector' => '.entry-subtitle' );`. Without a selector, PostSocket fills every element marked `data-postsocket-field="subtitle"`. A `render` callback returns the HTML when the value needs formatting. The `postsocket_live_taxonomies` filter does the same for a post's terms: `$taxonomies['category'] = array( 'selector' => '.cat-links' );`. As a catch-all for whatever those do not cover, the `postsocket_refresh_selector` filter names a part of the page, such as `.site-main`, that readers' browsers fetch again and update in place. For a change that brings its own stylesheets or scripts, such as opening comments, name the meta key or post column in `postsocket_reload_live_fields`, or the taxonomy in `postsocket_reload_live_taxonomies`, and readers' pages reload. To have a change ignored altogether, name the meta key in `postsocket_exclude_live_fields` or the taxonomy in `postsocket_exclude_live_taxonomies`.
 
 = What about posts built with a page builder? =
 
@@ -91,7 +97,7 @@ Live blogs and entries are ordinary posts in your WordPress database. Nothing is
 == Changelog ==
 
 = 0.1.0 =
-* First release: live blogs with entries written in the block editor, living articles for the post types you choose, the Live Feed block, `LiveBlogPosting` structured data, and the PostSocket settings tab.
+* First release: live blogs run from the Live Desk with entries written in the block editor, placed on any post with the Live Feed block, living articles for the post types you choose, `LiveBlogPosting` structured data, and the PostSocket settings tab.
 
 == Upgrade Notice ==
 
