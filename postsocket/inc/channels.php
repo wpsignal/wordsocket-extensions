@@ -1,6 +1,6 @@
 <?php
 /**
- * Channels: the catalogue entry, the namespace every token reads, and the channel names.
+ * Channels: the catalogue entry, the namespace every token reads, the desk's staff namespace, and the channel names.
  *
  * @package WPSignal\Extensions\PostSocket
  */
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * @since 0.1.0
  *
- * @param int $liveblog_id Live blog id.
+ * @param int $liveblog_id Live blog term id.
  * @return string
  */
 function liveblog_channel( int $liveblog_id ): string {
@@ -35,6 +35,18 @@ function liveblog_channel( int $liveblog_id ): string {
  */
 function post_channel( int $post_id ): string {
 	return NS . ':post:' . $post_id;
+}
+
+/**
+ * The channel that tells a live blog's open desks to look again.
+ *
+ * @since 0.1.0
+ *
+ * @param int $liveblog_id Live blog term id.
+ * @return string
+ */
+function desk_channel( int $liveblog_id ): string {
+	return DESK_NS . ':liveblog:' . $liveblog_id;
 }
 
 // The catalogue entry carries translated strings, so it waits for `init`.
@@ -57,7 +69,7 @@ add_action(
 	}
 );
 
-// The namespace: readable by every token, written by PHP alone; no generic post events for the two types.
+// The namespaces: one readable by every token, the desk's by staff, both written by PHP alone; no generic post events for entries.
 add_action(
 	'wpsignal_loaded',
 	static function (): void {
@@ -66,7 +78,7 @@ add_action(
 		}
 		$wps = WPS::instance();
 		$wps->channels()->reserve( NS, '__return_true', '__return_false' );
-		$wps->trigger_registry()->exclude_default_post_type( LIVEBLOG_TYPE );
+		$wps->channels()->reserve( DESK_NS, 'edit_posts', '__return_false' );
 		$wps->trigger_registry()->exclude_default_post_type( ENTRY_TYPE );
 	}
 );

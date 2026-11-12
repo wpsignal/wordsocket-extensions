@@ -1,10 +1,9 @@
 <?php
 /**
- * The live feed on a live blog's page.
+ * The live feed, wherever a Live Feed block places a live blog.
  *
- * - `render_feed()` is the markup, used by the block and the auto-append.
- * - The feed is appended to the live blog's content unless the block is placed by hand.
- * - `LiveBlogPosting` JSON-LD in the head.
+ * - `render_feed()` is the block's markup; it enqueues the feed module and seeds its store.
+ * - `LiveBlogPosting` JSON-LD in the head of the live blog's home.
  * - `GET /postsocket/v1/liveblog/{id}/entries` pages older entries and serves the catch-up.
  *
  * @package WPSignal\Extensions\PostSocket
@@ -95,16 +94,15 @@ add_filter(
 );
 
 /**
- * The feed markup for a live blog.
+ * The feed markup for a live blog, with its module enqueued and its store seeded.
  *
  * @since 0.1.0
  *
- * @param int $liveblog_id Live blog id.
- * @return string Empty for anything but a published live blog.
+ * @param int $liveblog_id Live blog term id.
+ * @return string Empty for anything but a live blog.
  */
 function render_feed( int $liveblog_id ): string {
-	$liveblog = get_post( $liveblog_id );
-	if ( ! is_liveblog( $liveblog ) || 'publish' !== $liveblog->post_status ) {
+	if ( ! is_liveblog( $liveblog_id ) ) {
 		return '';
 	}
 	$per_page = settings()['entries_per_page'];
@@ -134,13 +132,24 @@ function render_feed( int $liveblog_id ): string {
 	$oldest    = $latest ? mysql2date( 'c', end( $latest )->post_date_gmt, false ) : '';
 	$oldest_id = $latest ? (int) end( $latest )->ID : 0;
 
+	enqueue_feed();
 	wp_interactivity_state(
 		FEED_STORE,
 		array(
-			'ended'   => 'ended' === $state,
-			'more'    => $more,
-			'pending' => 0,
-			'loading' => false,
+			'channel'    => liveblog_channel( $liveblog_id ),
+			'entriesUrl' => rest_url( REST_NS . '/liveblog/' . $liveblog_id . '/entries' ),
+			'perPage'    => $per_page,
+			'ended'      => 'ended' === $state,
+			'more'       => $more,
+			'pending'    => 0,
+			'loading'    => false,
+			'i18n'       => array(
+				'live'    => __( 'Live', 'postsocket' ),
+				'ended'   => __( 'Ended', 'postsocket' ),
+				/* translators: %d: number of new updates waiting above */
+				'pending' => __( '%d new updates', 'postsocket' ),
+				'one'     => __( '1 new update', 'postsocket' ),
+			),
 		)
 	);
 	$html  = sprintf(
@@ -181,35 +190,20 @@ function render_feed( int $liveblog_id ): string {
 	return $html;
 }
 
-// Appended to the live blog's content unless the block is in it already.
-add_filter(
-	'the_content',
-	static function ( string $content ): string {
-		$post_id = decorating_post();
-		if ( $post_id <= 0 || ! is_liveblog( $post_id ) ) {
-			return $content;
-		}
-		if ( str_contains( $content, 'data-postsocket-feed=' ) || has_block( 'postsocket/live-feed', $post_id ) ) {
-			return $content;
-		}
-		return $content . render_feed( $post_id );
-	},
-	PHP_INT_MAX - 5
-);
-
 /**
- * The `LiveBlogPosting` JSON-LD for a live blog.
+ * The `LiveBlogPosting` JSON-LD for a live blog on its home.
  *
  * @since 0.1.0
  *
- * @param \WP_Post $liveblog The live blog.
+ * @param \WP_Term $liveblog The live blog.
+ * @param \WP_Post $home     The post it lives on.
  * @return array
  */
-function jsonld( \WP_Post $liveblog ): array {
-	$started = (int) get_post_meta( $liveblog->ID, META_STARTED, true );
-	$ended   = (int) get_post_meta( $liveblog->ID, META_ENDED, true );
+function jsonld( \WP_Term $liveblog, \WP_Post $home ): array {
+	$started = (int) get_term_meta( $liveblog->term_id, META_STARTED, true );
+	$ended   = (int) get_term_meta( $liveblog->term_id, META_ENDED, true );
 	$updates = array();
-	foreach ( entries_query( $liveblog->ID, array( 'posts_per_page' => JSONLD_ENTRIES ) )->posts as $entry ) {
+	foreach ( entries_query( $liveblog->term_id, array( 'posts_per_page' => JSONLD_ENTRIES ) )->posts as $entry ) {
 		$update = array(
 			'@type'         => 'BlogPosting',
 			'url'           => entry_link( $entry->ID ),
@@ -229,23 +223,23 @@ function jsonld( \WP_Post $liveblog ): array {
 	$data = array(
 		'@context'          => 'https://schema.org',
 		'@type'             => 'LiveBlogPosting',
-		'@id'               => get_permalink( $liveblog ),
-		'url'               => get_permalink( $liveblog ),
-		'headline'          => get_the_title( $liveblog ),
-		'datePublished'     => mysql2date( 'c', $liveblog->post_date_gmt, false ),
-		'dateModified'      => mysql2date( 'c', $liveblog->post_modified_gmt, false ),
-		'coverageStartTime' => $started > 0 ? gmdate( 'c', $started ) : mysql2date( 'c', $liveblog->post_date_gmt, false ),
+		'@id'               => get_permalink( $home ),
+		'url'               => get_permalink( $home ),
+		'headline'          => get_the_title( $home ),
+		'datePublished'     => mysql2date( 'c', $home->post_date_gmt, false ),
+		'dateModified'      => mysql2date( 'c', $home->post_modified_gmt, false ),
+		'coverageStartTime' => $started > 0 ? gmdate( 'c', $started ) : mysql2date( 'c', $home->post_date_gmt, false ),
 		'author'            => array(
 			'@type' => 'Person',
-			'name'  => get_the_author_meta( 'display_name', (int) $liveblog->post_author ),
+			'name'  => get_the_author_meta( 'display_name', (int) $home->post_author ),
 		),
 		'liveBlogUpdate'    => $updates,
 	);
-	if ( 'ended' === liveblog_state( $liveblog->ID ) && $ended > 0 ) {
+	if ( 'ended' === liveblog_state( $liveblog->term_id ) && $ended > 0 ) {
 		$data['coverageEndTime'] = gmdate( 'c', $ended );
 	}
-	if ( has_post_thumbnail( $liveblog ) ) {
-		$data['image'] = get_the_post_thumbnail_url( $liveblog, 'full' );
+	if ( has_post_thumbnail( $home ) ) {
+		$data['image'] = get_the_post_thumbnail_url( $home, 'full' );
 	}
 	return $data;
 }
@@ -253,14 +247,20 @@ function jsonld( \WP_Post $liveblog ): array {
 add_action(
 	'wp_head',
 	static function (): void {
-		if ( ! is_singular( LIVEBLOG_TYPE ) ) {
+		if ( ! is_singular() ) {
 			return;
 		}
-		$liveblog = get_queried_object();
-		if ( ! $liveblog instanceof \WP_Post || 'publish' !== $liveblog->post_status ) {
+		$home = get_queried_object();
+		if ( ! $home instanceof \WP_Post || 'publish' !== $home->post_status ) {
 			return;
 		}
-		echo '<script type="application/ld+json" id="postsocket-jsonld">' . wp_json_encode( jsonld( $liveblog ), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . '</script>' . "\n";
+		foreach ( feed_liveblogs( $home->post_content ) as $liveblog_id ) {
+			$liveblog = get_liveblog( $liveblog_id );
+			if ( $liveblog && home_of( $liveblog_id ) === $home->ID ) {
+				echo '<script type="application/ld+json" id="postsocket-jsonld">' . wp_json_encode( jsonld( $liveblog, $home ), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . '</script>' . "\n";
+				return;
+			}
+		}
 	}
 );
 
@@ -304,8 +304,8 @@ add_action(
  * @return \WP_REST_Response|\WP_Error
  */
 function handle_entries( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
-	$liveblog = get_post( (int) $request['id'] );
-	if ( ! is_liveblog( $liveblog ) || 'publish' !== $liveblog->post_status ) {
+	$liveblog = get_liveblog( (int) $request['id'] );
+	if ( ! $liveblog ) {
 		return new \WP_Error( 'postsocket_not_found', __( 'No such live blog.', 'postsocket' ), array( 'status' => 404 ) );
 	}
 	$limit     = (int) ( $request['limit'] ?? settings()['entries_per_page'] );
@@ -323,26 +323,27 @@ function handle_entries( \WP_REST_Request $request ): \WP_REST_Response|\WP_Erro
 		};
 		add_filter( 'posts_where', $cursor );
 	}
-	$posts = entries_query( $liveblog->ID, array( 'posts_per_page' => $limit + 1 ) )->posts;
+	$posts = entries_query( $liveblog->term_id, array( 'posts_per_page' => $limit + 1 ) )->posts;
 	if ( $cursor ) {
 		remove_filter( 'posts_where', $cursor );
 	}
 	$more  = count( $posts ) > $limit;
 	$items = array();
 	foreach ( array_slice( $posts, 0, $limit ) as $entry ) {
-		$items[] = array(
+		$rendered = rendered_entry( $entry );
+		$items[]  = array(
 			'id'       => (int) $entry->ID,
-			'html'     => render_entry( $entry ),
+			'html'     => $rendered['html'],
 			'date'     => mysql2date( 'c', $entry->post_date_gmt, false ),
 			'modified' => mysql2date( 'c', $entry->post_modified_gmt, false ),
 			'pinned'   => is_pinned( $entry->ID ),
-			'assets'   => assets_for( $entry ),
+			'assets'   => $rendered['assets'],
 		);
 	}
 	$response = rest_ensure_response(
 		array(
-			'liveblog' => (int) $liveblog->ID,
-			'state'    => liveblog_state( $liveblog->ID ),
+			'liveblog' => (int) $liveblog->term_id,
+			'state'    => liveblog_state( $liveblog->term_id ),
 			'entries'  => $items,
 			'more'     => $more,
 		)

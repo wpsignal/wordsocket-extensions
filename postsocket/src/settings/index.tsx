@@ -5,6 +5,8 @@
  */
 import { __, sprintf } from "@wordpress/i18n";
 import { registerPlugin } from "@wordpress/plugins";
+import { ButtonLink, Text } from "@wordpress/ui";
+import PostSocketLogo from "../PostSocketLogo";
 import { SettingsTab } from "./SettingsTab";
 
 const SLUG = "postsocket";
@@ -28,30 +30,26 @@ function Panel(): JSX.Element | null {
       name={SLUG}
       title={__("PostSocket", "postsocket")}
       description={__("Live blogs and articles that update in every reader's browser as you publish.", "postsocket")}
-      icon="megaphone"
+      icon={<PostSocketLogo size={24} />}
       docsUrl="https://wpsignal.io/extensions/postsocket"
     >
       {!config.wordsocketOk && (
-        <p>
+        <Text variant="body-md" render={<p />}>
           {sprintf(
             /* translators: %s: the oldest WordSocket version PostSocket runs with */
             __("PostSocket needs WordSocket %s or newer to publish live updates.", "postsocket"),
             config.minVersion,
           )}
-        </p>
+        </Text>
       )}
-      <p>
+      <Text variant="body-md" render={<p />}>
         {live
           ? __("Live: this browser is receiving events.", "postsocket")
           : connection.isConnected
             ? __("Site connected; this browser is not receiving events.", "postsocket")
             : __("Connect the site on the Connect tab to go live.", "postsocket")}
-      </p>
-      <p>
-        <a className="button button-primary" href={config.liveblogsUrl}>
-          {__("Live Blogs", "postsocket")}
-        </a>
-      </p>
+      </Text>
+      <ButtonLink href={config.liveblogsUrl}>{__("Open the Live Desk", "postsocket")}</ButtonLink>
     </ExtensionPanel>
   );
 }

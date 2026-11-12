@@ -8,7 +8,7 @@
  * @since 0.1.0
  */
 import { store } from "@wordpress/interactivity";
-import { activateScripts, ensureAssets, fragment } from "postsocket/reader/assets";
+import { activateMarkup, ensureAssets, fragment } from "postsocket/reader/assets";
 import { highlight, transition } from "postsocket/reader/morph";
 import { debug, jitter, onRelay, subscribe } from "postsocket/reader/relay";
 
@@ -75,7 +75,7 @@ const { state } = store<FeedStore>(STORE, {
           const el = element(item.html);
           if (el && !find(item.id)) {
             (item.pinned ? pinnedList : entryList)?.appendChild(el);
-            activateScripts(el);
+            activateMarkup(el);
           }
         }
         const last = data.entries[data.entries.length - 1];
@@ -131,7 +131,7 @@ function place(el: HTMLElement): void {
     }
   }
   list.insertBefore(el, before);
-  activateScripts(el);
+  activateMarkup(el);
   highlight(el);
 }
 

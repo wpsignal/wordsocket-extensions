@@ -25,12 +25,25 @@ declare module "@wordpress/core-data" {
     query?: Record<string, unknown>,
     options?: { enabled?: boolean },
   ): { records: T[] | null; isResolving: boolean; hasResolved: boolean; totalItems: number | null };
+  export function useEntityRecord<T = Record<string, unknown>>(
+    kind: string,
+    name: string,
+    id: number,
+    options?: { enabled?: boolean },
+  ): { record: T | null; isResolving: boolean; hasResolved: boolean };
+  export const store: string;
 }
 
 declare module "@wordpress/data" {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  export function select(store: string): any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export function useSelect<T>(mapSelect: (select: (store: string) => any) => T, deps?: unknown[]): T;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  export function useDispatch(store: string): Record<string, (...args: any[]) => Promise<unknown>>;
 }
+
+declare module "*.css";
 
 declare module "@wordpress/blocks" {
   export function registerBlockType(name: string, settings: Record<string, unknown>): void;

@@ -25,8 +25,14 @@
   "dependencies": {
     "@wordpress/api-fetch": "^7.0.0",
     "@wordpress/components": "^40.1.0",
+    "@wordpress/compose": "^9.1.0",
+    "@wordpress/dataviews": "^19.1.0",
     "@wordpress/element": "^6.0.0",
-    "@wordpress/i18n": "^5.0.0"
+    "@wordpress/i18n": "^5.0.0",
+    "@wordpress/icons": "^20.0.0",
+    "@wordpress/style-runtime": "^0.15.0",
+    "@wordpress/theme": "^2.3.0",
+    "@wordpress/ui": "^0.24.0"
   },
   "engines": {
     "node": ">=22.19.0",

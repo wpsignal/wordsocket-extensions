@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin: the editor panels on both post types, the settings tab on WordSocket's page, and the WordSocket version notice.
+ * Admin: the entry editor's panel, the live editing panel of the enabled post types, the settings tab on WordSocket's page, and the WordSocket version notice.
  *
  * @package WPSignal\Extensions\PostSocket
  */
@@ -27,12 +27,12 @@ function built_asset( string $name ): array {
 	);
 }
 
-// The document panels: "Live coverage" on a live blog, "Live blog" on an entry.
+// The entry editor's "Live blog" panel, and the "Live editing" panel of a post of an enabled type.
 add_action(
 	'enqueue_block_editor_assets',
 	static function (): void {
 		$screen = get_current_screen();
-		if ( ! $screen || ! in_array( $screen->post_type, array( LIVEBLOG_TYPE, ENTRY_TYPE ), true ) || ! file_exists( DIR . 'build/editor.js' ) ) {
+		if ( ! $screen || ( ENTRY_TYPE !== $screen->post_type && ! in_array( $screen->post_type, living_types(), true ) ) || ! file_exists( DIR . 'build/editor.js' ) ) {
 			return;
 		}
 		$asset = built_asset( 'editor' );
@@ -42,16 +42,15 @@ add_action(
 			SLUG . '-editor',
 			'window.postsocketEditor = ' . wp_json_encode(
 				array(
-					'liveblogType' => LIVEBLOG_TYPE,
+					'taxonomy'     => LIVEBLOG_TAX,
+					'restBase'     => LIVEBLOG_REST_BASE,
 					'entryType'    => ENTRY_TYPE,
+					'livingTypes'  => living_types(),
 					'preselected'  => isset( $_GET['liveblog'] ) ? absint( $_GET['liveblog'] ) : 0, // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-					'addEntryUrl'  => add_query_arg( 'post_type', ENTRY_TYPE, admin_url( 'post-new.php' ) ),
-					'entriesUrl'   => add_query_arg( array( 'post_type' => ENTRY_TYPE ), admin_url( 'edit.php' ) ),
+					'deskUrl'      => desk_url(),
 					'meta'         => array(
-						'state'   => META_STATE,
-						'started' => META_STARTED,
-						'ended'   => META_ENDED,
-						'pinned'  => META_PINNED,
+						'state'  => META_STATE,
+						'pinned' => META_PINNED,
 					),
 					'wordsocketOk' => wordsocket_ready(),
 				)
@@ -77,7 +76,7 @@ add_action(
 				array(
 					'version'      => VERSION,
 					'settingsUrl'  => rest_url( REST_NS . '/settings' ),
-					'liveblogsUrl' => add_query_arg( array( 'post_type' => LIVEBLOG_TYPE ), admin_url( 'edit.php' ) ),
+					'liveblogsUrl' => desk_url(),
 					'wordsocketOk' => wordsocket_ready(),
 					'minVersion'   => MIN_WORDSOCKET,
 				)

@@ -35,17 +35,88 @@ function reader_asset( string $name ): array {
 }
 
 /**
- * Whether this request is a page whose content readers see live: a live blog or an enabled post type's singular.
+ * Register the reader's script modules once.
+ *
+ * @since 0.1.0
+ *
+ * @return void
+ */
+function register_reader_modules(): void {
+	static $done = false;
+	if ( $done ) {
+		return;
+	}
+	$done = true;
+	wp_register_script_module(
+		READER_MODULE . '/assets',
+		URL . 'build/reader/assets.js',
+		array(
+			array(
+				'id'     => '@wordpress/interactivity',
+				'import' => 'dynamic',
+			),
+		),
+		reader_asset( 'assets.js' )['version']
+	);
+	wp_register_script_module( READER_MODULE . '/relay', URL . 'build/reader/relay.js', array(), reader_asset( 'relay.js' )['version'] );
+	wp_register_script_module( READER_MODULE . '/morph', URL . 'build/reader/morph.js', array( READER_MODULE . '/assets' ), reader_asset( 'morph.js' )['version'] );
+	wp_register_script_module(
+		READER_MODULE . '/living',
+		URL . 'build/reader/living.js',
+		array( READER_MODULE . '/assets', READER_MODULE . '/relay', READER_MODULE . '/morph' ),
+		reader_asset( 'living.js' )['version']
+	);
+	wp_register_script_module(
+		READER_MODULE . '/feed',
+		URL . 'build/reader/feed.js',
+		array( '@wordpress/interactivity', READER_MODULE . '/assets', READER_MODULE . '/relay' ),
+		reader_asset( 'feed.js' )['version']
+	);
+	wp_register_style( SLUG . '-reader', URL . 'build/reader/reader.css', array(), reader_asset( 'reader.css' )['version'] );
+}
+
+/**
+ * Enqueue the feed's module and stylesheet; called by every feed that renders.
+ *
+ * @since 0.1.0
+ *
+ * @return void
+ */
+function enqueue_feed(): void {
+	register_reader_modules();
+	wp_enqueue_script_module( READER_MODULE . '/feed' );
+	wp_enqueue_style( SLUG . '-reader' );
+	feed_rendered( true );
+}
+
+/**
+ * Whether a feed has rendered in this request.
+ *
+ * @since 0.1.0
+ *
+ * @param bool|null $set True to mark one; null reads.
+ * @return bool
+ */
+function feed_rendered( ?bool $set = null ): bool {
+	static $rendered = false;
+	if ( true === $set ) {
+		$rendered = true;
+	}
+	return $rendered;
+}
+
+/**
+ * Whether this request is a page readers see live: a living post, or one a feed rendered on before the head.
  *
  * @since 0.1.0
  *
  * @return bool
  */
 function is_live_page(): bool {
-	if ( is_admin() || ! is_singular() ) {
+	if ( is_admin() ) {
 		return false;
 	}
-	return is_living( get_queried_object_id() );
+	return feed_rendered() || ( is_singular() && is_living( get_queried_object_id() ) );
 }
 
 // The client runs for every reader of a live page, and tokens refresh over REST.
@@ -62,50 +133,15 @@ add_filter(
 	}
 );
 
-// The modules, the stylesheet and the feed state.
+// The living module and the stylesheet on a living post's page.
 add_action(
 	'wp_enqueue_scripts',
 	static function (): void {
-		if ( ! is_live_page() ) {
+		if ( ! is_singular() || ! is_living( get_queried_object_id() ) ) {
 			return;
 		}
-		$post_id = (int) get_queried_object_id();
-
-		wp_register_script_module( READER_MODULE . '/assets', URL . 'build/reader/assets.js', array(), reader_asset( 'assets.js' )['version'] );
-		wp_register_script_module( READER_MODULE . '/relay', URL . 'build/reader/relay.js', array(), reader_asset( 'relay.js' )['version'] );
-		wp_register_script_module( READER_MODULE . '/morph', URL . 'build/reader/morph.js', array( READER_MODULE . '/assets' ), reader_asset( 'morph.js' )['version'] );
-		wp_register_script_module(
-			READER_MODULE . '/living',
-			URL . 'build/reader/living.js',
-			array( READER_MODULE . '/assets', READER_MODULE . '/relay', READER_MODULE . '/morph' ),
-			reader_asset( 'living.js' )['version']
-		);
-		wp_register_script_module(
-			READER_MODULE . '/feed',
-			URL . 'build/reader/feed.js',
-			array( '@wordpress/interactivity', READER_MODULE . '/assets', READER_MODULE . '/relay' ),
-			reader_asset( 'feed.js' )['version']
-		);
+		register_reader_modules();
 		wp_enqueue_script_module( READER_MODULE . '/living' );
-		wp_enqueue_style( SLUG . '-reader', URL . 'build/reader/reader.css', array(), reader_asset( 'reader.css' )['version'] );
-
-		if ( is_liveblog( $post_id ) ) {
-			wp_enqueue_script_module( READER_MODULE . '/feed' );
-			wp_interactivity_state(
-				FEED_STORE,
-				array(
-					'channel'    => liveblog_channel( $post_id ),
-					'entriesUrl' => rest_url( REST_NS . '/liveblog/' . $post_id . '/entries' ),
-					'perPage'    => settings()['entries_per_page'],
-					'i18n'       => array(
-						'live'    => __( 'Live', 'postsocket' ),
-						'ended'   => __( 'Ended', 'postsocket' ),
-						/* translators: %d: number of new updates waiting above */
-						'pending' => __( '%d new updates', 'postsocket' ),
-						'one'     => __( '1 new update', 'postsocket' ),
-					),
-				)
-			);
-		}
+		wp_enqueue_style( SLUG . '-reader' );
 	}
 );

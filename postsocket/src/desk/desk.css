@@ -1,0 +1,45 @@
+/* The page header PHP prints above the desk, in WordSocket's shape: title, links, mark. */
+.postsocket-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--wpds-dimension-gap-lg, 16px);
+
+	& > *:not(h1, .postsocket-meta-nav) {
+		display: none;
+	}
+}
+
+.postsocket-meta-nav {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--wpds-dimension-gap-sm, 8px);
+
+	& a {
+		display: flex;
+		align-items: center;
+	}
+}
+
+.postsocket-logo {
+	color: var(--wpds-color-fg-content-neutral-weak, #757575);
+
+	& svg {
+		width: 18px;
+		height: auto;
+	}
+
+	&:hover {
+		color: var(--wpds-color-fg-content-neutral, #1e1e1e);
+	}
+}
+
+/* The desk's width on wide screens; everything inside is laid out by the components. */
+#postsocket-desk {
+	padding-block: var(--wpds-dimension-padding-lg, 16px);
+
+	/* Keeps the table's sticky layers under a dialog, which is rendered outside the desk. */
+	isolation: isolate;
+}

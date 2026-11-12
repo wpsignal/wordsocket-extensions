@@ -1,6 +1,6 @@
 <?php
 /**
- * The `postsocket/live-feed` block, rendered by `render_feed()`.
+ * The `postsocket/live-feed` block: the live blog named by its `liveblog` attribute, rendered by `render_feed()`.
  *
  * @package WPSignal\Extensions\PostSocket
  */
@@ -23,24 +23,48 @@ add_action(
 				'render_callback' => __NAMESPACE__ . '\render_live_feed_block',
 			)
 		);
+		wp_add_inline_script(
+			generate_block_asset_handle( FEED_BLOCK, 'editorScript' ),
+			'window.postsocketBlock = ' . wp_json_encode(
+				array(
+					'taxonomy'  => LIVEBLOG_TAX,
+					'deskUrl'   => desk_url(),
+					'canManage' => current_user_can( 'edit_others_posts' ),
+					'meta'      => array( 'state' => META_STATE ),
+				)
+			) . ';',
+			'before'
+		);
 	}
 );
 
 /**
- * Render the block: the feed of the post it sits in, or nothing outside a live blog.
+ * The empty marker a relay render puts where a feed sits, so the browser keeps its own feed there.
  *
  * @since 0.1.0
  *
- * @param array     $attributes Block attributes.
- * @param string    $content    Inner content, unused.
- * @param \WP_Block $block      The block, for its post context.
+ * @param int $liveblog_id Live blog id.
  * @return string
  */
-function render_live_feed_block( array $attributes, string $content, \WP_Block $block ): string {
-	unset( $attributes, $content );
-	$post_id = (int) ( $block->context['postId'] ?? get_the_ID() );
-	if ( $post_id <= 0 || ! is_liveblog( $post_id ) || rendering_for_relay() ) {
+function feed_slot( int $liveblog_id ): string {
+	return '<div data-postsocket-feed-slot="' . $liveblog_id . '" hidden></div>';
+}
+
+/**
+ * Render the block: the feed of the live blog it names, a slot for it in a relay render, or nothing.
+ *
+ * @since 0.1.0
+ *
+ * @param array $attributes Block attributes.
+ * @return string
+ */
+function render_live_feed_block( array $attributes ): string {
+	$liveblog_id = (int) ( $attributes['liveblog'] ?? 0 );
+	if ( $liveblog_id <= 0 ) {
 		return '';
 	}
-	return render_feed( $post_id );
+	if ( rendering_for_relay() ) {
+		return feed_slot( $liveblog_id );
+	}
+	return render_feed( $liveblog_id );
 }
