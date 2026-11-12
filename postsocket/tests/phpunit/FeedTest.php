@@ -1,9 +1,12 @@
 <?php
 /**
- * The feed on the page: the markup, the auto-append and its guards, the JSON-LD, the entries route.
+ * The feed on the page: the markup, the block in a host post, the JSON-LD on the home, the entries route.
  */
 
+use const WPSignal\Extensions\PostSocket\LIVEBLOG_TAX;
+use const WPSignal\Extensions\PostSocket\META_ENDED;
 use const WPSignal\Extensions\PostSocket\META_PINNED;
+use const WPSignal\Extensions\PostSocket\META_STATE;
 use const WPSignal\Extensions\PostSocket\REST_NS;
 
 use function WPSignal\Extensions\PostSocket\jsonld;
@@ -49,47 +52,59 @@ final class FeedTest extends ExtensionTestCase {
 		$this->assertSame( '', render_feed( 0 ) );
 	}
 
-	public function test_the_feed_is_appended_to_the_live_blog_page_but_not_to_excerpts_or_the_relay_render(): void {
+	public function test_the_block_shows_its_live_blog_in_the_host_post_but_not_in_excerpts_or_the_relay_render(): void {
 		$liveblog = $this->make_liveblog();
 		$this->make_entry( $liveblog );
+		$host = $this->make_host( $liveblog );
 
-		$this->visit( $liveblog );
-		$this->assertTrue( is_singular( \WPSignal\Extensions\PostSocket\LIVEBLOG_TYPE ) );
+		$this->visit( $host );
 		ob_start();
 		while ( have_posts() ) {
 			the_post();
 			the_content();
 		}
 		$page = (string) ob_get_clean();
-		$this->assertSame( 1, substr_count( $page, 'data-postsocket-feed=' ), 'the feed is appended once' );
-		$this->assertStringContainsString( 'data-postsocket-post="' . $liveblog . '"', $page, 'the intro is wrapped for living updates' );
-		$this->assertLessThan( strpos( $page, 'data-postsocket-feed=' ), strpos( $page, 'data-postsocket-post=' ), 'the feed follows the wrapper' );
-		$this->assertStringNotContainsString( 'data-postsocket-feed', substr( $page, 0, strpos( $page, '</div>' ) ), 'the wrapper does not enclose the feed' );
+		$this->assertSame( 1, substr_count( $page, 'data-postsocket-feed="' . $liveblog . '"' ), 'the block renders the feed once' );
+		$this->assertStringContainsString( 'data-postsocket-post="' . $host . '"', $page, 'the host is wrapped for living updates' );
+		$this->assertTrue( \WPSignal\Extensions\PostSocket\feed_rendered(), 'the feed marks the page live and enqueues its module' );
 
-		$excerpt = get_the_excerpt( $liveblog );
-		$this->assertStringNotContainsString( 'postsocket', $excerpt );
+		$this->assertStringNotContainsString( 'postsocket', get_the_excerpt( $host ) );
+		$relay = \WPSignal\Extensions\PostSocket\render_content( get_post( $host ) );
+		$this->assertStringNotContainsString( 'data-postsocket-feed=', $relay, 'the relay render carries no feed' );
+		$this->assertStringContainsString( 'data-postsocket-feed-slot="' . $liveblog . '"', $relay, 'only a slot where it sits' );
+		$this->assertStringContainsString( 'Kick-off at three.', $relay );
 
-		$relay = \WPSignal\Extensions\PostSocket\render_content( get_post( $liveblog ) );
-		$this->assertStringNotContainsString( 'data-postsocket', $relay );
+		$this->assertSame( '', do_blocks( '<!-- wp:postsocket/live-feed /-->' ), 'a block naming no live blog renders nothing' );
 	}
 
-	public function test_the_json_ld_describes_a_live_blog_posting(): void {
+	public function test_the_json_ld_describes_a_live_blog_posting_on_its_home_only(): void {
 		$liveblog = $this->make_liveblog();
 		$entry    = $this->make_entry( $liveblog, array( 'post_content' => '<!-- wp:paragraph --><p>Body text.</p><!-- /wp:paragraph -->' ) );
+		$home     = $this->make_host( $liveblog );
+		$elsewhere = $this->make_host( $liveblog, array( 'post_title' => 'Sidebar' ) );
 
-		$data = jsonld( get_post( $liveblog ) );
+		$data = jsonld( get_term( $liveblog, LIVEBLOG_TAX ), get_post( $home ) );
 		$this->assertSame( 'LiveBlogPosting', $data['@type'] );
-		$this->assertSame( get_permalink( $liveblog ), $data['url'] );
+		$this->assertSame( get_permalink( $home ), $data['url'] );
+		$this->assertSame( 'Match day', $data['headline'] );
 		$this->assertArrayHasKey( 'coverageStartTime', $data );
 		$this->assertArrayNotHasKey( 'coverageEndTime', $data );
 		$this->assertCount( 1, $data['liveBlogUpdate'] );
-		$this->assertSame( 'BlogPosting', $data['liveBlogUpdate'][0]['@type'] );
 		$this->assertSame( 'Body text.', $data['liveBlogUpdate'][0]['articleBody'] );
-		$this->assertSame( get_permalink( $liveblog ) . '#postsocket-' . $entry, $data['liveBlogUpdate'][0]['url'] );
+		$this->assertSame( get_permalink( $home ) . '#postsocket-' . $entry, $data['liveBlogUpdate'][0]['url'] );
 
-		update_post_meta( $liveblog, \WPSignal\Extensions\PostSocket\META_STATE, 'ended' );
-		update_post_meta( $liveblog, \WPSignal\Extensions\PostSocket\META_ENDED, 1767265200 );
-		$this->assertSame( gmdate( 'c', 1767265200 ), jsonld( get_post( $liveblog ) )['coverageEndTime'] );
+		update_term_meta( $liveblog, META_STATE, 'ended' );
+		update_term_meta( $liveblog, META_ENDED, 1767265200 );
+		$this->assertSame( gmdate( 'c', 1767265200 ), jsonld( get_term( $liveblog, LIVEBLOG_TAX ), get_post( $home ) )['coverageEndTime'] );
+
+		$this->visit( $home );
+		ob_start();
+		do_action( 'wp_head' );
+		$this->assertStringContainsString( 'id="postsocket-jsonld"', (string) ob_get_clean() );
+		$this->visit( $elsewhere );
+		ob_start();
+		do_action( 'wp_head' );
+		$this->assertStringNotContainsString( 'id="postsocket-jsonld"', (string) ob_get_clean(), 'a second placement prints no JSON-LD' );
 	}
 
 	public function test_the_entries_route_pages_by_date_and_is_public(): void {
@@ -121,7 +136,7 @@ final class FeedTest extends ExtensionTestCase {
 		$this->assertFalse( $second->get_data()['more'] );
 		$this->assertStringContainsString( 'E2', strip_tags( $second->get_data()['entries'][0]['html'] ) );
 
-		$same_second = $this->make_liveblog( array( 'post_title' => 'Same second' ) );
+		$same_second = $this->make_liveblog( 'Same second' );
 		$ids         = array();
 		for ( $i = 1; $i <= 3; $i++ ) {
 			$ids[] = $this->make_entry( $same_second, array( 'post_date' => '2026-02-02 12:00:00', 'post_date_gmt' => '2026-02-02 12:00:00', 'post_title' => "S{$i}" ) );
@@ -131,7 +146,6 @@ final class FeedTest extends ExtensionTestCase {
 		$this->assertSame( array( $ids[2], $ids[1] ), wp_list_pluck( $page_one['entries'], 'id' ) );
 		$this->assertSame( array( $ids[0] ), wp_list_pluck( $page_two['entries'], 'id' ), 'entries sharing a second are paged by id' );
 
-		$draft = $this->make_liveblog( array( 'post_status' => 'draft' ) );
-		$this->assertSame( 404, $this->rest( 'GET', '/' . REST_NS . '/liveblog/' . $draft . '/entries' )->get_status() );
+		$this->assertSame( 404, $this->rest( 'GET', '/' . REST_NS . '/liveblog/999999999/entries' )->get_status(), 'no such live blog' );
 	}
 }

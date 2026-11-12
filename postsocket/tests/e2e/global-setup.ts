@@ -1,5 +1,7 @@
 import { WPS_API_URL, WPS_E2E_EMAIL, WP_PASSWORD, WP_USERNAME, dashboardLogin, storedSiteKey, wp } from "./env";
 import { request, type FullConfig } from "@playwright/test";
+import { existsSync, symlinkSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { RequestUtils } from "@wordpress/e2e-test-utils-playwright";
 
 /**
@@ -16,6 +18,11 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
       throw new Error(`${plugin} is not active on the target site.`);
     }
   }
+  // The fixture blocks, linked into the site's plugins and active.
+  const fixture = join(wp("eval", "echo WP_PLUGIN_DIR;"), "postsocket-test-blocks");
+  if (!existsSync(fixture)) symlinkSync(resolve(__dirname, "../fixtures/postsocket-test-blocks"), fixture);
+  wp("plugin", "activate", "postsocket-test-blocks");
+
   const serverUrl = wp("eval", "echo \\WPSignal\\WPS::instance()->config()->base_url();");
   if (serverUrl.replace(/\/$/, "") !== WPS_API_URL.replace(/\/$/, "")) {
     throw new Error(`The target site talks to ${serverUrl}, not the rehearsal server ${WPS_API_URL}.`);

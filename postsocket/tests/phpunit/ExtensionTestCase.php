@@ -1,13 +1,14 @@
 <?php
 /**
- * Shared fixture: fake credentials, intercepted HTTP, captured publishes, posts deleted afterwards.
+ * Shared fixture: fake credentials, intercepted HTTP, captured publishes, posts and live blogs deleted afterwards.
  */
 
 use PHPUnit\Framework\TestCase;
 use WPSignal\WPS;
 
 use const WPSignal\Extensions\PostSocket\ENTRY_TYPE;
-use const WPSignal\Extensions\PostSocket\LIVEBLOG_TYPE;
+use const WPSignal\Extensions\PostSocket\FEED_BLOCK;
+use const WPSignal\Extensions\PostSocket\LIVEBLOG_TAX;
 use const WPSignal\Extensions\PostSocket\OPTION;
 
 abstract class ExtensionTestCase extends TestCase {
@@ -33,6 +34,9 @@ abstract class ExtensionTestCase extends TestCase {
 	/** @var int[] Posts to delete in tearDown. */
 	protected array $posts = array();
 
+	/** @var int[] Live blogs to delete in tearDown. */
+	protected array $terms = array();
+
 	/** Fake credentials, default settings, an administrator, and an HTTP interceptor that records every publish. */
 	protected function setUp(): void {
 		parent::setUp();
@@ -43,7 +47,6 @@ abstract class ExtensionTestCase extends TestCase {
 		update_option( 'wpsignal_site_secret', 'phpunitsecret' );
 		update_option( 'wpsignal_jwt_secret', 'phpunitjwt' );
 		self::drop_option( OPTION );
-		self::drop_option( OPTION . '_flush' );
 		wp_set_current_user( $this->admin_id() );
 		$this->published   = array();
 		$this->http_filter = function ( $pre, $args, $url ) {
@@ -88,13 +91,18 @@ abstract class ExtensionTestCase extends TestCase {
 		add_filter( 'pre_http_request', $this->http_filter, 10, 3 );
 	}
 
-	/** Drop the interceptor and this test's posts, then restore the options. */
+	/** Drop this test's posts and live blogs, the desk notices and reader updates they queued and the interceptor, then restore the options. */
 	protected function tearDown(): void {
 		foreach ( array_reverse( $this->posts ) as $id ) {
 			if ( get_post( $id ) ) {
 				wp_delete_post( $id, true );
 			}
 		}
+		foreach ( $this->terms as $id ) {
+			wp_delete_term( $id, LIVEBLOG_TAX );
+		}
+		\WPSignal\Extensions\PostSocket\desk_queue();
+		\WPSignal\Extensions\PostSocket\living_queue();
 		remove_filter( 'pre_http_request', $this->http_filter, 10 );
 		foreach ( $this->snapshot as $name => $value ) {
 			if ( self::MISSING === $value ) {
@@ -140,14 +148,27 @@ abstract class ExtensionTestCase extends TestCase {
 		);
 	}
 
-	/** A published live blog with an intro paragraph. */
-	protected function make_liveblog( array $args = array() ): int {
+	/** A live blog, named uniquely so reruns never meet a leftover term. */
+	protected function make_liveblog( string $name = 'Match day' ): int {
+		$term = wp_insert_term( $name . ' ' . wp_generate_password( 6, false ), LIVEBLOG_TAX );
+		$this->assertIsArray( $term );
+		$this->terms[] = (int) $term['term_id'];
+		return (int) $term['term_id'];
+	}
+
+	/** The Live Feed block's markup for a live blog. */
+	protected static function feed_block( int $liveblog ): string {
+		return '<!-- wp:' . FEED_BLOCK . ' {"liveblog":' . $liveblog . '} /-->';
+	}
+
+	/** A published post with an intro paragraph and the Live Feed block for a live blog. */
+	protected function make_host( int $liveblog, array $args = array() ): int {
 		$id = wp_insert_post(
 			array_merge(
 				array(
-					'post_type'    => LIVEBLOG_TYPE,
+					'post_type'    => 'post',
 					'post_title'   => 'Match day',
-					'post_content' => '<!-- wp:paragraph --><p>Kick-off at three.</p><!-- /wp:paragraph -->',
+					'post_content' => '<!-- wp:paragraph --><p>Kick-off at three.</p><!-- /wp:paragraph -->' . self::feed_block( $liveblog ),
 					'post_status'  => 'publish',
 					'post_author'  => $this->admin_id(),
 				),
@@ -166,7 +187,6 @@ abstract class ExtensionTestCase extends TestCase {
 			array_merge(
 				array(
 					'post_type'    => ENTRY_TYPE,
-					'post_parent'  => $liveblog,
 					'post_title'   => 'Goal',
 					'post_content' => '<!-- wp:paragraph --><p>One nil.</p><!-- /wp:paragraph -->',
 					'post_status'  => 'publish',
@@ -178,6 +198,9 @@ abstract class ExtensionTestCase extends TestCase {
 		);
 		$this->assertIsInt( $id );
 		$this->posts[] = $id;
+		if ( $liveblog > 0 ) {
+			wp_set_object_terms( $id, $liveblog, LIVEBLOG_TAX );
+		}
 		return $id;
 	}
 
@@ -203,6 +226,7 @@ abstract class ExtensionTestCase extends TestCase {
 			parse_str( $parts['query'], $_GET );
 		}
 		$_SERVER['REQUEST_URI'] = ( $parts['path'] ?? '/' ) . ( isset( $parts['query'] ) ? '?' . $parts['query'] : '' );
+		$_SERVER['SERVER_NAME'] = $parts['host'] ?? 'localhost';
 		unset( $_SERVER['PATH_INFO'] );
 		$public_vars                       = $GLOBALS['wp']->public_query_vars;
 		$private_vars                      = $GLOBALS['wp']->private_query_vars;

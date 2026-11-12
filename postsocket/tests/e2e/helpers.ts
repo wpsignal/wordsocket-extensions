@@ -1,5 +1,6 @@
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import type { RequestUtils } from "@wordpress/e2e-test-utils-playwright";
+import { wp } from "./env";
 
 /** Wait until window.WPS reports a connection on the current page, then move the pointer so a journey begins. */
 export async function waitForLive(page: Page): Promise<void> {
@@ -19,12 +20,41 @@ interface PostRecord {
   status: string;
 }
 
-/** Create a published live blog through REST. */
-export async function createLiveblog(requestUtils: RequestUtils, title: string, content = "<!-- wp:paragraph --><p>Kick-off at three.</p><!-- /wp:paragraph -->"): Promise<PostRecord> {
+interface TermRecord {
+  id: number;
+  name: string;
+}
+
+/** Create a live blog (a term) through REST. */
+export async function createLiveblog(requestUtils: RequestUtils, name: string): Promise<TermRecord> {
   return (await requestUtils.rest({
     method: "POST",
-    path: "/wp/v2/postsocket_liveblog",
-    data: { title, content, status: "publish" },
+    path: "/wp/v2/liveblogs",
+    data: { name: `${name} ${Date.now().toString(36)}` },
+  })) as TermRecord;
+}
+
+/** Update a live blog's fields or meta through REST. */
+export async function updateLiveblog(requestUtils: RequestUtils, id: number, data: Record<string, unknown>): Promise<TermRecord> {
+  return (await requestUtils.rest({ method: "POST", path: `/wp/v2/liveblogs/${id}`, data })) as TermRecord;
+}
+
+/** Delete a live blog through REST, ignoring one that is gone. */
+export async function deleteLiveblog(requestUtils: RequestUtils, id: number): Promise<void> {
+  await requestUtils.rest({ method: "DELETE", path: `/wp/v2/liveblogs/${id}`, params: { force: true } }).catch(() => undefined);
+}
+
+/** The Live Feed block for a live blog. */
+export function feedBlock(liveblog: number): string {
+  return `<!-- wp:postsocket/live-feed {"liveblog":${liveblog}} /-->`;
+}
+
+/** Create a published post that shows a live blog through REST. */
+export async function createHost(requestUtils: RequestUtils, liveblog: number, title: string): Promise<PostRecord> {
+  return (await requestUtils.rest({
+    method: "POST",
+    path: "/wp/v2/posts",
+    data: { title, content: paragraph("Kick-off at three.") + feedBlock(liveblog), status: "publish" },
   })) as PostRecord;
 }
 
@@ -33,7 +63,7 @@ export async function createEntry(requestUtils: RequestUtils, liveblog: number, 
   return (await requestUtils.rest({
     method: "POST",
     path: "/wp/v2/postsocket_entry",
-    data: { liveblog, content, status: "publish", ...extra },
+    data: { liveblogs: [liveblog], content, status: "publish", ...extra },
   })) as PostRecord;
 }
 
@@ -55,4 +85,24 @@ export async function saveSettings(requestUtils: RequestUtils, settings: Record<
 /** A paragraph block. */
 export function paragraph(text: string): string {
   return `<!-- wp:paragraph --><p>${text}</p><!-- /wp:paragraph -->`;
+}
+
+/** Snapshot PostSocket's settings on the site; the returned function puts them back exactly, deleting them when there were none. */
+export function keepSettings(): () => void {
+  let saved: string | null = null;
+  try {
+    saved = wp("option", "get", "postsocket_settings", "--format=json").trim() || null;
+  } catch {
+    saved = null;
+  }
+  return () => {
+    if (saved) wp("option", "update", "postsocket_settings", saved, "--format=json");
+    else {
+      try {
+        wp("option", "delete", "postsocket_settings");
+      } catch {
+        /* Already gone. */
+      }
+    }
+  };
 }
