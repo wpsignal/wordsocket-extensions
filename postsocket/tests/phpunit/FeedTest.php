@@ -148,4 +148,35 @@ final class FeedTest extends ExtensionTestCase {
 
 		$this->assertSame( 404, $this->rest( 'GET', '/' . REST_NS . '/liveblog/999999999/entries' )->get_status(), 'no such live blog' );
 	}
+
+	public function test_the_drafts_route_shows_editors_the_unpublished_entries_and_readers_none(): void {
+		$liveblog  = $this->make_liveblog();
+		$published = $this->make_entry( $liveblog );
+		$draft     = $this->make_entry( $liveblog, array( 'post_status' => 'draft', 'post_title' => 'Not yet' ) );
+		$pending   = $this->make_entry( $liveblog, array( 'post_status' => 'pending' ) );
+		$elsewhere = $this->make_entry( $this->make_liveblog( 'Other' ), array( 'post_status' => 'draft' ) );
+		$route     = '/' . REST_NS . '/liveblog/' . $liveblog . '/drafts';
+
+		wp_set_current_user( 0 );
+		$this->assertContains( $this->rest( 'GET', $route )->get_status(), array( 401, 403 ), 'a visitor is refused' );
+
+		wp_set_current_user( $this->admin_id() );
+		$response = $this->rest( 'GET', $route );
+		$rows     = array_column( $response->get_data()['entries'], null, 'id' );
+		$this->assertEqualsCanonicalizing( array( $draft, $pending ), array_keys( $rows ), 'the unpublished entries of this live blog only' );
+		$this->assertNotContains( $published, array_keys( $rows ) );
+		$this->assertNotContains( $elsewhere, array_keys( $rows ) );
+		$this->assertSame( 'draft', $rows[ $draft ]['status'] );
+		$this->assertStringContainsString( 'data-postsocket-status="draft"', $rows[ $draft ]['html'] );
+		$this->assertStringContainsString( 'postsocket-entry__status', $rows[ $draft ]['html'], 'labelled' );
+		$this->assertStringContainsString( 'Not yet', $rows[ $draft ]['html'] );
+		$this->assertStringNotContainsString( '-0001', $rows[ $draft ]['html'], 'a draft is dated by its last save' );
+		$this->assertSame( 'private, no-store', $response->get_headers()['Cache-Control'] );
+
+		$feed = render_feed( $liveblog );
+		$this->assertStringNotContainsString( 'data-postsocket-status', $feed, 'the page itself carries no draft' );
+		$this->assertStringNotContainsString( 'Not yet', $feed );
+		$this->assertStringNotContainsString( 'postsocket-entry__status', render_feed( $liveblog ) );
+		$this->assertSame( 404, $this->rest( 'GET', '/' . REST_NS . '/liveblog/999999999/drafts' )->get_status() );
+	}
 }

@@ -115,6 +115,12 @@ interface EntryItem {
   assets?: PostSocketAssets;
 }
 
+/** `GET /postsocket/v1/liveblog/{id}/drafts`: the unpublished entries the signed-in user may edit. */
+interface DraftsResponse {
+  liveblog: number;
+  entries: Array<Omit<EntryItem, "date"> & { status: string }>;
+}
+
 /** `GET /postsocket/v1/liveblog/{id}/entries`. */
 interface EntriesResponse {
   liveblog: number;

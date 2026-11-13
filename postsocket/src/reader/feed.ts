@@ -4,6 +4,7 @@
  * - Subscribes to `postsocket:liveblog:{id}`; inserts, replaces, re-pins and removes entries by id.
  * - A new entry lands at the top at once while the reader is at the top, otherwise waits behind the "N new updates" pill.
  * - Loads older entries from the entries route; catches up from its first page when the page was served stale and on every reconnect.
+ * - For a signed-in editor, fetches the live blog's unpublished entries and shows them in place, labelled, and again whenever the desk channel says one changed.
  *
  * @since 0.1.0
  */
@@ -22,6 +23,9 @@ const SCROLLED_PAST_PX = 120;
 interface FeedState {
   channel: string;
   entriesUrl: string;
+  draftsUrl: string;
+  nonceUrl: string;
+  deskChannel: string;
   perPage: number;
   i18n: { live: string; ended: string; pending: string; one: string };
   ended: boolean;
@@ -229,6 +233,7 @@ async function refresh(): Promise<void> {
     feed.querySelectorAll<HTMLElement>("[data-postsocket-entry]").forEach((el) => {
       const id = Number(el.dataset.postsocketEntry);
       const date = el.dataset.postsocketDate ?? "";
+      if (el.dataset.postsocketStatus) return;
       if (!ids.has(id) && (el.dataset.postsocketPinned === "1" || date >= floor)) remove(id);
     });
     if (!oldest && data.entries.length) {
@@ -238,6 +243,49 @@ async function refresh(): Promise<void> {
     if (data.more) state.more = true;
   } finally {
     refreshing = false;
+  }
+}
+
+let draftsLoading = false;
+let draftsAgain = false;
+let watchingDesk = false;
+
+/** Fetch the unpublished entries a signed-in editor may see and make the feed match: each placed, and one no longer among them taken out. */
+async function loadDrafts(): Promise<void> {
+  if (!feed || !state.draftsUrl || !document.body.classList.contains("logged-in")) return;
+  if (draftsLoading) {
+    draftsAgain = true;
+    return;
+  }
+  draftsLoading = true;
+  try {
+    draftsAgain = false;
+    const asked = await fetch(state.nonceUrl, { credentials: "same-origin", cache: "no-store" });
+    const nonce = asked.ok ? (await asked.text()).trim() : "";
+    if (!nonce || nonce === "0") return;
+    const response = await fetch(state.draftsUrl, { credentials: "same-origin", cache: "no-store", headers: { "X-WP-Nonce": nonce } });
+    if (!response.ok) return;
+    const data = (await response.json()) as DraftsResponse;
+    const ids = new Set(data.entries.map((item) => item.id));
+    for (const item of data.entries) {
+      await ensureAssets(item.assets);
+      const el = element(item.html);
+      if (el) await transition(() => flip(() => place(el)));
+    }
+    feed.querySelectorAll<HTMLElement>("[data-postsocket-entry][data-postsocket-status]").forEach((el) => {
+      const id = Number(el.dataset.postsocketEntry);
+      if (!ids.has(id)) remove(id);
+    });
+    if (!watchingDesk && state.deskChannel) {
+      watchingDesk = true;
+      onRelay("postsocket.desk.changed", state.deskChannel, () => void loadDrafts());
+      void subscribe(state.deskChannel);
+    }
+  } catch (err) {
+    debug("drafts fetch failed", err);
+  } finally {
+    draftsLoading = false;
+    if (draftsAgain) void loadDrafts();
   }
 }
 
@@ -259,8 +307,12 @@ function boot(): void {
   void subscribe(channel).then((wps) => {
     if (!wps) return;
     if (renderedAt > 0 && Date.now() - renderedAt > STALE_PAGE_MS) void refresh();
-    wps.onReconnect(() => void refresh());
+    wps.onReconnect(() => {
+      void refresh();
+      void loadDrafts();
+    });
   });
+  void loadDrafts();
 }
 
 boot();

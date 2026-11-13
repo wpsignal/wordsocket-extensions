@@ -4,7 +4,8 @@ import { createEntry, createHost, createLiveblog, deleteLiveblog, deletePost, fe
 
 /**
  * A reader of a post showing a live blog sees entries arrive, change, pin, and leave without a refresh,
- * waits behind the pill when scrolled down, and loads older entries on request.
+ * waits behind the pill when scrolled down, and loads older entries on request. An editor also sees the
+ * live blog's unpublished entries there, labelled, which a visitor never receives.
  */
 test.describe("live blog", () => {
   let liveblog = 0;
@@ -74,6 +75,37 @@ test.describe("live blog", () => {
     await deletePost(requestUtils, "postsocket_entry", first.id);
     await expect(feed.locator(`[data-postsocket-entry="${first.id}"]`)).toHaveCount(0, { timeout: 15_000 });
     await reader.context().close();
+  });
+
+  test("an editor sees drafts in the feed, labelled and live, and a visitor never does", async ({ page, browser, requestUtils, baseURL }) => {
+    const draft = await createEntry(requestUtils, liveblog, paragraph("Still being written."), { title: "Draft entry", status: "draft" });
+    entries.push(draft.id);
+    const visitor = await (await visitorContext(browser, baseURL)).newPage();
+    await visitor.goto(link);
+    await waitForLive(visitor);
+    await page.goto(link);
+    const mine = page.locator(`[data-postsocket-feed] [data-postsocket-entry="${draft.id}"]`);
+    await expect(mine).toContainText("Still being written.", { timeout: 15_000 });
+    await expect(mine.locator(".postsocket-entry__status")).toHaveText("Draft");
+    expect(await page.content()).toContain("Still being written.");
+    const theirs = visitor.locator(`[data-postsocket-entry="${draft.id}"]`);
+    await expect(theirs).toHaveCount(0);
+
+    await updatePost(requestUtils, "postsocket_entry", draft.id, { content: paragraph("Rewritten before publishing.") });
+    await expect(mine).toContainText("Rewritten before publishing.", { timeout: 15_000 });
+    await expect(theirs).toHaveCount(0);
+
+    await updatePost(requestUtils, "postsocket_entry", draft.id, { status: "publish" });
+    await expect(theirs).toContainText("Rewritten before publishing.", { timeout: 15_000 });
+    await expect(mine.locator(".postsocket-entry__status")).toHaveCount(0, { timeout: 15_000 });
+
+    await updatePost(requestUtils, "postsocket_entry", draft.id, { status: "draft" });
+    await expect(theirs).toHaveCount(0, { timeout: 15_000 });
+    await expect(mine.locator(".postsocket-entry__status")).toHaveText("Draft", { timeout: 15_000 });
+
+    await deletePost(requestUtils, "postsocket_entry", draft.id);
+    await expect(mine).toHaveCount(0, { timeout: 15_000 });
+    await visitor.context().close();
   });
 
   test("a scrolled reader gets a pill, and older entries load on request", async ({ browser, requestUtils, baseURL }) => {

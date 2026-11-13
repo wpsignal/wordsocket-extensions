@@ -483,6 +483,23 @@ function rendered_post( \WP_Post $post ): array {
 }
 
 /**
+ * The label an entry that readers cannot see carries where its editors preview it, empty for a published one.
+ *
+ * @since 0.1.0
+ *
+ * @param string $status The entry's post status.
+ * @return string
+ */
+function unpublished_label( string $status ): string {
+	$labels = array(
+		'draft'   => __( 'Draft', 'postsocket' ),
+		'pending' => __( 'Pending review', 'postsocket' ),
+		'future'  => __( 'Scheduled', 'postsocket' ),
+	);
+	return $labels[ $status ] ?? '';
+}
+
+/**
  * An entry as the feed shows it.
  *
  * @since 0.1.0
@@ -493,18 +510,24 @@ function rendered_post( \WP_Post $post ): array {
 function render_entry( \WP_Post $entry ): string {
 	$settings = settings();
 	$pinned   = is_pinned( $entry->ID );
+	$status   = unpublished_label( $entry->post_status );
+	$date_gmt = '0000-00-00 00:00:00' === $entry->post_date_gmt ? $entry->post_modified_gmt : $entry->post_date_gmt;
 	$modified = mysql2date( 'c', $entry->post_modified_gmt, false );
-	$date     = mysql2date( 'c', $entry->post_date_gmt, false );
+	$date     = mysql2date( 'c', $date_gmt, false );
 
 	$html  = sprintf(
-		'<article id="postsocket-%1$d" class="postsocket-entry%2$s" data-postsocket-entry="%1$d" data-postsocket-modified="%3$s" data-postsocket-date="%4$s" data-postsocket-pinned="%5$s">',
+		'<article id="postsocket-%1$d" class="postsocket-entry%2$s" data-postsocket-entry="%1$d" data-postsocket-modified="%3$s" data-postsocket-date="%4$s" data-postsocket-pinned="%5$s"%6$s>',
 		(int) $entry->ID,
-		$pinned ? ' is-pinned' : '',
+		( $pinned ? ' is-pinned' : '' ) . ( '' !== $status ? ' is-unpublished' : '' ),
 		esc_attr( $modified ),
 		esc_attr( $date ),
-		$pinned ? '1' : '0'
+		$pinned ? '1' : '0',
+		'' !== $status ? ' data-postsocket-status="' . esc_attr( $entry->post_status ) . '"' : ''
 	);
 	$html .= '<header class="postsocket-entry__header">';
+	if ( '' !== $status ) {
+		$html .= '<span class="postsocket-entry__status">' . esc_html( $status ) . '</span>';
+	}
 	if ( $pinned ) {
 		$html .= '<span class="postsocket-entry__pin">' . esc_html__( 'Pinned', 'postsocket' ) . '</span>';
 	}
@@ -513,7 +536,7 @@ function render_entry( \WP_Post $entry ): string {
 			'<a class="postsocket-entry__time" href="%s"><time datetime="%s">%s</time></a>',
 			esc_url( entry_link( $entry->ID ) ),
 			esc_attr( $date ),
-			esc_html( wp_date( get_option( 'time_format' ), strtotime( $entry->post_date_gmt ) ) )
+			esc_html( wp_date( get_option( 'time_format' ), strtotime( $date_gmt ) ) )
 		);
 	}
 	if ( $settings['show_author'] && $entry->post_author ) {

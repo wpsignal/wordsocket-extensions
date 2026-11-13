@@ -136,14 +136,17 @@ function render_feed( int $liveblog_id ): string {
 	wp_interactivity_state(
 		FEED_STORE,
 		array(
-			'channel'    => liveblog_channel( $liveblog_id ),
-			'entriesUrl' => rest_url( REST_NS . '/liveblog/' . $liveblog_id . '/entries' ),
-			'perPage'    => $per_page,
-			'ended'      => 'ended' === $state,
-			'more'       => $more,
-			'pending'    => 0,
-			'loading'    => false,
-			'i18n'       => array(
+			'channel'     => liveblog_channel( $liveblog_id ),
+			'entriesUrl'  => rest_url( REST_NS . '/liveblog/' . $liveblog_id . '/entries' ),
+			'draftsUrl'   => rest_url( REST_NS . '/liveblog/' . $liveblog_id . '/drafts' ),
+			'nonceUrl'    => admin_url( 'admin-ajax.php?action=rest-nonce' ),
+			'deskChannel' => desk_channel( $liveblog_id ),
+			'perPage'     => $per_page,
+			'ended'       => 'ended' === $state,
+			'more'        => $more,
+			'pending'     => 0,
+			'loading'     => false,
+			'i18n'        => array(
 				'live'    => __( 'Live', 'postsocket' ),
 				'ended'   => __( 'Ended', 'postsocket' ),
 				/* translators: %d: number of new updates waiting above */
@@ -292,6 +295,15 @@ add_action(
 				'callback'            => __NAMESPACE__ . '\handle_entries',
 			)
 		);
+		register_rest_route(
+			REST_NS,
+			'/liveblog/(?P<id>\d+)/drafts',
+			array(
+				'methods'             => 'GET',
+				'permission_callback' => static fn(): bool => current_user_can( 'edit_posts' ),
+				'callback'            => __NAMESPACE__ . '\handle_drafts',
+			)
+		);
 	}
 );
 
@@ -349,5 +361,61 @@ function handle_entries( \WP_REST_Request $request ): \WP_REST_Response|\WP_Erro
 		)
 	);
 	$response->header( 'Cache-Control', '' !== $before ? 'public, max-age=300' : 'public, max-age=15' );
+	return $response;
+}
+
+/**
+ * The most unpublished entries the drafts route answers with.
+ *
+ * @since 0.1.0
+ */
+const DRAFTS_MAX = 50;
+
+/**
+ * Serve a live blog's draft, pending and scheduled entries that the current user may edit, as rendered items, never cached.
+ *
+ * @since 0.1.0
+ *
+ * @param \WP_REST_Request $request The request.
+ * @return \WP_REST_Response|\WP_Error
+ */
+function handle_drafts( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
+	$liveblog = get_liveblog( (int) $request['id'] );
+	if ( ! $liveblog ) {
+		return new \WP_Error( 'postsocket_not_found', __( 'No such live blog.', 'postsocket' ), array( 'status' => 404 ) );
+	}
+	$posts = entries_query(
+		$liveblog->term_id,
+		array(
+			'post_status'    => array( 'draft', 'pending', 'future' ),
+			'posts_per_page' => DRAFTS_MAX,
+			'orderby'        => array(
+				'modified' => 'DESC',
+				'ID'       => 'DESC',
+			),
+		)
+	)->posts;
+	$items = array();
+	foreach ( $posts as $entry ) {
+		if ( ! current_user_can( 'edit_post', $entry->ID ) ) {
+			continue;
+		}
+		$rendered = rendered_entry( $entry );
+		$items[]  = array(
+			'id'       => (int) $entry->ID,
+			'html'     => $rendered['html'],
+			'status'   => $entry->post_status,
+			'modified' => mysql2date( 'c', $entry->post_modified_gmt, false ),
+			'pinned'   => is_pinned( $entry->ID ),
+			'assets'   => $rendered['assets'],
+		);
+	}
+	$response = rest_ensure_response(
+		array(
+			'liveblog' => (int) $liveblog->term_id,
+			'entries'  => $items,
+		)
+	);
+	$response->header( 'Cache-Control', 'private, no-store' );
 	return $response;
 }

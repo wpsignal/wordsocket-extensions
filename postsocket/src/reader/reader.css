@@ -99,6 +99,20 @@
   padding-inline-start: var(--postsocket-gap);
 }
 
+.postsocket-entry.is-unpublished {
+  border-inline-start: 3px dashed var(--postsocket-line);
+  padding-inline-start: var(--postsocket-gap);
+}
+
+.postsocket-entry__status {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.1em 0.5em;
+  border: 1px dashed currentColor;
+  border-radius: 3px;
+}
+
 .postsocket-entry.is-leaving {
   opacity: 0;
 }
