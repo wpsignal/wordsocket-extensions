@@ -7,7 +7,7 @@ import { DataViews, type Action, type Field, type View } from "@wordpress/datavi
 import { useCallback, useMemo, useState } from "@wordpress/element";
 import { decodeEntities } from "@wordpress/html-entities";
 import { __, _n, sprintf } from "@wordpress/i18n";
-import { AlertDialog, Badge, Button, ButtonLink, EmptyState, Link, Stack, Tabs, Text } from "@wordpress/ui";
+import { AlertDialog, Badge, Button, ButtonLink, Card, EmptyState, Link, Stack, Tabs, Text } from "@wordpress/ui";
 import { createLiveblog, deleteLiveblog, entriesPath, liveblogsPath, orphanedQuery, renameLiveblog, usePage, type Entry, type Liveblog } from "./api";
 import { OrphanedTrash } from "./OrphanedTrash";
 import { NameDialog } from "./NameDialog";
@@ -145,6 +145,8 @@ export function LiveblogsView({ open }: { open: (id: number) => void }): JSX.Ele
         </Tabs.Root>
       )}
 
+<Card.Root>
+  <Card.Content>
       {tab === "trash" ? (
         <OrphanedTrash onChange={refresh} />
       ) : (
@@ -170,6 +172,8 @@ export function LiveblogsView({ open }: { open: (id: number) => void }): JSX.Ele
         }
       />
       )}
+  </Card.Content>
+</Card.Root>
 
       {creating && (
         <NameDialog

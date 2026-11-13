@@ -69,7 +69,8 @@ test.describe("live desk", () => {
     posts.push(await currentPostId(page));
 
     await admin.visitAdminPage("admin.php", `page=postsocket&liveblog=${id}`);
-    await expect(page.getByRole("link", { name })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(`${name}:`)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: "View", exact: true })).toBeVisible();
   });
 
   test("an entry added from the desk is preselected, publishes, and is listed back on the desk", async ({ admin, editor, page, requestUtils }) => {

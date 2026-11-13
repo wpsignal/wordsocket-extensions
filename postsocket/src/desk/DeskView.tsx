@@ -437,8 +437,9 @@ export function DeskView({
         <Link
           href={cfg.deskUrl}
           onClick={(event) => (event.preventDefault(), back())}
+          style={{ width: "fit-content" }}
         >
-          {__("All live blogs", "postsocket")}
+          {__("Back", "postsocket")}
         </Link>
         <Stack
           direction="row"
@@ -530,10 +531,6 @@ export function DeskView({
               {cfg.canManage && (
                 <SwitchControl
                   label={__("End Live Blog", "postsocket")}
-                  description={__(
-                    "End the live blog and readers see the feed marked as ended.",
-                    "postsocket",
-                  )}
                   checked={ended}
                   onCheckedChange={(on) =>
                     void run(
