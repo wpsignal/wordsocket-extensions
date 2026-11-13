@@ -86,6 +86,19 @@ const oneOf = (list) => list[Math.floor(Math.random() * list.length)];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** WordSocket's config as a page prints it: the `wpsignal-config` JSON block, or the inline `wpSignalConfig` object older versions print. */
+function printedConfig(html) {
+  const block = html.match(
+    /<script\b[^>]*\bid=["']wpsignal-config["'][^>]*>([\s\S]*?)<\/script>/,
+  );
+  if (!block) return printedObject(html, "wpSignalConfig");
+  try {
+    return JSON.parse(block[1]);
+  } catch {
+    return null;
+  }
+}
+
 /** The object printed after `name =` in a page, read by its braces so a `};` inside a string does not end it. */
 function printedObject(html, name) {
   const at = html.search(new RegExp(`\\b${name}\\s*=\\s*\\{`));
@@ -135,7 +148,7 @@ class Jar {
 async function loadPage(jar, url) {
   const res = await jar.fetch(url);
   if (!res.ok) return null;
-  return printedObject(await res.text(), "wpSignalConfig");
+  return printedConfig(await res.text());
 }
 
 /** The shop's pages a customer can walk: one list of `{ kind, id, url }` per kind, the products with their ids to add. */
