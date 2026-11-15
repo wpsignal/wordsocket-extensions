@@ -100,6 +100,20 @@ const META_HASH    = '_postsocket_content_hash';
 const META_LIVE    = '_postsocket_live';
 
 /**
+ * Term meta key for the synced pattern a live blog's entries are printed in.
+ *
+ * @since 0.1.0
+ */
+const META_TEMPLATE = '_postsocket_template';
+
+/**
+ * Term meta key for the synced pattern a live blog's pinned entries are printed in.
+ *
+ * @since 0.1.0
+ */
+const META_PINNED_TEMPLATE = '_postsocket_pinned_template';
+
+/**
  * Oldest WordSocket this plugin runs with.
  *
  * @since 0.1.0

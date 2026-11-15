@@ -28,6 +28,35 @@ function rendering_for_relay( ?bool $set = null ): bool {
 }
 
 /**
+ * Run a render with a post as the global post and the page decorations held off.
+ *
+ * @since 0.1.0
+ *
+ * @param \WP_Post $post   The post.
+ * @param callable $render Returns the markup.
+ * @return string
+ */
+function with_post( \WP_Post $post, callable $render ): string {
+	global $wp_query;
+	$was = rendering_for_relay();
+	rendering_for_relay( true );
+	$previous = $GLOBALS['post'] ?? null;
+	setup_postdata( $post ); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+	$GLOBALS['post'] = $post; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+	try {
+		return (string) $render();
+	} finally {
+		$GLOBALS['post'] = $previous; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+		if ( $previous instanceof \WP_Post ) {
+			setup_postdata( $previous );
+		} elseif ( $wp_query instanceof \WP_Query ) {
+			$wp_query->reset_postdata();
+		}
+		rendering_for_relay( $was );
+	}
+}
+
+/**
  * A post's content through `the_content`, with the page decorations held off.
  *
  * @since 0.1.0
@@ -36,21 +65,7 @@ function rendering_for_relay( ?bool $set = null ): bool {
  * @return string
  */
 function render_content( \WP_Post $post ): string {
-	global $wp_query;
-	$was = rendering_for_relay();
-	rendering_for_relay( true );
-	$previous = $GLOBALS['post'] ?? null;
-	setup_postdata( $post ); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
-	$GLOBALS['post'] = $post; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
-	$html            = (string) apply_filters( 'the_content', $post->post_content ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
-	$GLOBALS['post'] = $previous; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
-	if ( $previous instanceof \WP_Post ) {
-		setup_postdata( $previous );
-	} elseif ( $wp_query instanceof \WP_Query ) {
-		$wp_query->reset_postdata();
-	}
-	rendering_for_relay( $was );
-	return $html;
+	return with_post( $post, static fn(): string => (string) apply_filters( 'the_content', $post->post_content ) ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 }
 
 /**
@@ -500,7 +515,58 @@ function unpublished_label( string $status ): string {
 }
 
 /**
- * An entry as the feed shows it.
+ * The date an entry is placed in the feed by, GMT: its publish date, or its last save while it has none.
+ *
+ * @since 0.1.0
+ *
+ * @param \WP_Post $entry The entry.
+ * @return string
+ */
+function entry_date_gmt( \WP_Post $entry ): string {
+	return '0000-00-00 00:00:00' === $entry->post_date_gmt ? $entry->post_modified_gmt : $entry->post_date_gmt;
+}
+
+/**
+ * The id, classes and data attributes of an entry's element, which the feed's script reads.
+ *
+ * @since 0.1.0
+ *
+ * @param \WP_Post $entry The entry.
+ * @return array<string, string>
+ */
+function entry_attributes( \WP_Post $entry ): array {
+	$pinned      = is_pinned( $entry->ID );
+	$unpublished = '' !== unpublished_label( $entry->post_status );
+	$attributes  = array(
+		'id'                       => 'postsocket-' . $entry->ID,
+		'class'                    => 'postsocket-entry' . ( $pinned ? ' is-pinned' : '' ) . ( $unpublished ? ' is-unpublished' : '' ),
+		'data-postsocket-entry'    => (string) $entry->ID,
+		'data-postsocket-modified' => mysql2date( 'c', $entry->post_modified_gmt, false ),
+		'data-postsocket-date'     => mysql2date( 'c', entry_date_gmt( $entry ), false ),
+		'data-postsocket-pinned'   => $pinned ? '1' : '0',
+	);
+	if ( $unpublished ) {
+		$attributes['data-postsocket-status'] = $entry->post_status;
+	}
+	return $attributes;
+}
+
+/**
+ * The labels for an entry's state: unpublished, pinned, or neither.
+ *
+ * @since 0.1.0
+ *
+ * @param \WP_Post $entry The entry.
+ * @return string
+ */
+function entry_labels( \WP_Post $entry ): string {
+	$status = unpublished_label( $entry->post_status );
+	$html   = '' !== $status ? '<span class="postsocket-entry__status">' . esc_html( $status ) . '</span>' : '';
+	return $html;
+}
+
+/**
+ * An entry as the feed shows it: in its live blog's template, or the default layout.
  *
  * @since 0.1.0
  *
@@ -508,10 +574,37 @@ function unpublished_label( string $status ): string {
  * @return string
  */
 function render_entry( \WP_Post $entry ): string {
+	$template = entry_template( liveblog_id_of( $entry ), is_pinned( $entry->ID ) );
+	if ( ! $template ) {
+		return render_default_entry( $entry );
+	}
+	$context = array(
+		'postId'   => (int) $entry->ID,
+		'postType' => $entry->post_type,
+	);
+	// Anyone may read this entry while its template renders.
+	$readable = static fn( array $caps, string $cap, int $user_id, array $args ): array => 'read_post' === $cap && (int) ( $args[0] ?? 0 ) === (int) $entry->ID ? array( 'exist' ) : $caps;
+	add_filter( 'map_meta_cap', $readable, 10, 4 );
+	try {
+		return with_post( $entry, static fn(): string => ( new \WP_Block( $template, $context ) )->render() );
+	} finally {
+		remove_filter( 'map_meta_cap', $readable, 10 );
+	}
+}
+
+/**
+ * An entry in the default layout: state, time, author, headline and content.
+ *
+ * @since 0.1.0
+ *
+ * @param \WP_Post $entry The entry.
+ * @return string
+ */
+function render_default_entry( \WP_Post $entry ): string {
 	$settings = settings();
 	$pinned   = is_pinned( $entry->ID );
 	$status   = unpublished_label( $entry->post_status );
-	$date_gmt = '0000-00-00 00:00:00' === $entry->post_date_gmt ? $entry->post_modified_gmt : $entry->post_date_gmt;
+	$date_gmt = entry_date_gmt( $entry );
 	$modified = mysql2date( 'c', $entry->post_modified_gmt, false );
 	$date     = mysql2date( 'c', $date_gmt, false );
 
@@ -524,13 +617,7 @@ function render_entry( \WP_Post $entry ): string {
 		$pinned ? '1' : '0',
 		'' !== $status ? ' data-postsocket-status="' . esc_attr( $entry->post_status ) . '"' : ''
 	);
-	$html .= '<header class="postsocket-entry__header">';
-	if ( '' !== $status ) {
-		$html .= '<span class="postsocket-entry__status">' . esc_html( $status ) . '</span>';
-	}
-	if ( $pinned ) {
-		$html .= '<span class="postsocket-entry__pin">' . esc_html__( 'Pinned', 'postsocket' ) . '</span>';
-	}
+	$html .= '<header class="postsocket-entry__header">' . entry_labels( $entry );
 	if ( $settings['show_times'] ) {
 		$html .= sprintf(
 			'<a class="postsocket-entry__time" href="%s"><time datetime="%s">%s</time></a>',

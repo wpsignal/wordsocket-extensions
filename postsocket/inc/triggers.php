@@ -127,7 +127,16 @@ function claim_publish( string $event, int $post_id, ?bool $release = null ): bo
  */
 function rendered_entry( \WP_Post $entry ): array {
 	static $cache = array();
-	$key          = $entry->ID . ':' . md5( $entry->post_title . "\0" . $entry->post_content ) . ':' . ( is_pinned( $entry->ID ) ? 1 : 0 );
+	$key          = implode(
+		':',
+		array(
+			$entry->ID,
+			md5( $entry->post_title . "\0" . $entry->post_content . "\0" . entry_template_markup( liveblog_id_of( $entry ), is_pinned( $entry->ID ) ) ),
+			is_pinned( $entry->ID ) ? 1 : 0,
+			(int) get_post_thumbnail_id( $entry ),
+			render_generation( $entry->ID ),
+		)
+	);
 	if ( ! isset( $cache[ $key ] ) ) {
 		$rendered         = with_render_assets( static fn() => render_entry( $entry ) );
 		$rendered['hash'] = content_hash( $rendered['html'] );
@@ -745,6 +754,66 @@ add_action(
 	6
 );
 
+// An entry's terms changing makes its earlier render in this request stale.
+add_action(
+	'set_object_terms',
+	static function ( int $object_id ): void {
+		if ( is_entry( $object_id ) ) {
+			render_generation( $object_id, true );
+		}
+	},
+	5
+);
+
+/**
+ * Tell a live blog's readers that its entry template changed, once per request.
+ *
+ * @since 0.1.0
+ *
+ * @param int $liveblog_id Live blog id.
+ * @return void
+ */
+function template_changed( int $liveblog_id ): void {
+	if ( ! is_liveblog( $liveblog_id ) || ! claim_publish( 'liveblog.template', $liveblog_id ) ) {
+		return;
+	}
+	/**
+	 * Fires when the template a live blog's entries are printed in was chosen, changed or removed.
+	 *
+	 * @since 0.1.0
+	 *
+	 * @param int $liveblog_id Live blog id.
+	 */
+	do_action( 'postsocket_template_changed', $liveblog_id );
+}
+
+// A live blog choosing another template, and a save or removal of the pattern it uses, change every entry it shows.
+foreach ( array( 'updated_term_meta', 'added_term_meta', 'deleted_term_meta' ) as $postsocket_hook ) {
+	add_action(
+		$postsocket_hook,
+		static function ( $meta_id, int $term_id, string $key ): void {
+			if ( in_array( $key, array( META_TEMPLATE, META_PINNED_TEMPLATE ), true ) ) {
+				template_changed( $term_id );
+			}
+		},
+		10,
+		3
+	);
+}
+foreach ( array( 'wp_after_insert_post', 'deleted_post' ) as $postsocket_hook ) {
+	add_action(
+		$postsocket_hook,
+		static function ( int $post_id, ?\WP_Post $post = null ): void {
+			if ( $post && 'wp_block' === $post->post_type ) {
+				array_map( __NAMESPACE__ . '\template_changed', template_liveblogs( $post_id ) );
+			}
+		},
+		10,
+		2
+	);
+}
+unset( $postsocket_hook );
+
 // An editor opening an entry, taking it over or closing it is news for its desk; a renewal of the same lock is not.
 add_filter(
 	'update_post_metadata',
@@ -784,7 +853,7 @@ add_action(
 			WPS::trigger( 'postsocket.entry.updated' )
 				->on( $hook, 10, 4 )
 				->channel( static fn( $meta_id, int $post_id ): string => $entry_channel( $post_id ), $label )
-				->when( static fn( $meta_id, int $post_id, string $key ): bool => META_PINNED === $key && entry_publishable( get_post( $post_id ) ) )
+				->when( static fn( $meta_id, int $post_id, string $key ): bool => in_array( $key, array( META_PINNED, '_thumbnail_id' ), true ) && entry_publishable( get_post( $post_id ) ) )
 				->data( static fn( $meta_id, int $post_id ): array => entry_payload( get_post( $post_id ) ) )
 				->register();
 		}
@@ -811,7 +880,7 @@ add_action(
 		WPS::trigger( 'postsocket.entry.updated' )
 			->on( 'set_object_terms', 20, 4 )
 			->channel( static fn( int $id ): string => $entry_channel( $id ), $label )
-			->when( static fn( int $id, array $terms, array $tt_ids, string $taxonomy ): bool => LIVEBLOG_TAX === $taxonomy && entry_publishable( get_post( $id ) ) )
+			->when( static fn( int $id ): bool => is_entry( $id ) && entry_publishable( get_post( $id ) ) )
 			->data( static fn( int $id ): array => entry_payload( get_post( $id ) ) )
 			->register();
 
@@ -870,6 +939,17 @@ add_action(
 				->data( $state_data )
 				->register();
 		}
+
+		WPS::trigger( 'postsocket.liveblog.template' )
+			->on( 'postsocket_template_changed', 10, 1 )
+			->channel( static fn( int $id ): string => liveblog_channel( $id ), $label )
+			->data(
+				static fn( int $id ): array => array(
+					'id' => $id,
+					'v'  => substr( md5( entry_template_markup( $id ) . "\0" . entry_template_markup( $id, true ) ), 0, 8 ),
+				)
+			)
+			->register();
 
 		WPS::trigger( 'postsocket.desk.changed' )
 			->on( 'postsocket_desk_changed', 10, 1 )

@@ -67,6 +67,13 @@ interface LiveblogState {
   ended: number;
 }
 
+/** `postsocket.liveblog.template`. */
+interface LiveblogTemplate {
+  id: number;
+  /** Names the template's markup, so each version is fetched once. */
+  v: string;
+}
+
 /** `postsocket.post.updated`. */
 interface PostUpdated {
   id: number;

@@ -204,6 +204,37 @@ export function setEnded(liveblog: Liveblog, ended: boolean): Promise<Liveblog> 
 }
 
 /**
+ * A synced pattern that can be a live blog's entry template.
+ *
+ * @since 0.1.0
+ */
+export interface Template {
+  id: number;
+  title: string;
+}
+
+/**
+ * The published synced patterns that hold a Live Blog Entry block.
+ *
+ * @since 0.1.0
+ */
+export async function fetchTemplates(): Promise<Template[]> {
+  const patterns = await apiFetch<{ id: number; title: { raw: string }; content: { raw: string } }[]>({
+    path: addQueryArgs("/wp/v2/blocks", { context: "edit", status: "publish", per_page: 100, _fields: "id,title,content" }),
+  });
+  return patterns.filter((pattern) => pattern.content.raw.includes("<!-- wp:postsocket/entry ")).map((pattern) => ({ id: pattern.id, title: pattern.title.raw }));
+}
+
+/**
+ * Choose the synced pattern a live blog's entries, or its pinned entries, are printed in; 0 is none.
+ *
+ * @since 0.1.0
+ */
+export function setTemplate(id: number, key: string, pattern: number): Promise<Liveblog> {
+  return apiFetch<Liveblog>({ path: `${liveblogsPath}/${id}`, method: "POST", data: { meta: { [key]: pattern } } });
+}
+
+/**
  * Update an entry's fields.
  *
  * @since 0.1.0

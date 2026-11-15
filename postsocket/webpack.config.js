@@ -31,6 +31,8 @@ module.exports = {
 		settings: path.resolve( __dirname, 'src/settings/index.tsx' ),
 		desk: path.resolve( __dirname, 'src/desk/index.tsx' ),
 		'blocks/live-feed/index': path.resolve( __dirname, 'src/blocks/live-feed/index.tsx' ),
+		'blocks/entry/index': path.resolve( __dirname, 'src/blocks/entry/index.tsx' ),
+		'blocks/entry-content/index': path.resolve( __dirname, 'src/blocks/entry-content/index.tsx' ),
 	},
 	output: {
 		...defaultConfig.output,

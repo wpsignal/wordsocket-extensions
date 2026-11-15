@@ -5,6 +5,8 @@ declare global {
     postsocketEditor?: PostSocketEditorConfig;
     /** Printed by inc/blocks.php with the Live Feed block's editor script. */
     postsocketBlock?: PostSocketBlockConfig;
+    /** Printed by inc/blocks.php with the Live Blog Entry block's editor script, which adds `restore`; `restricted` only where the site limits its blocks. */
+    postsocketEntryBlock?: { blocks?: string[]; restricted?: string[]; restore?: () => void };
     /** Printed by inc/desk.php on the Live Desk. */
     postsocketDesk?: PostSocketDeskConfig;
     /** Printed by inc/admin.php on WordSocket's settings screen. */
@@ -55,7 +57,8 @@ interface PostSocketDeskConfig {
   addEntryUrl: string;
   createPageUrl: string;
   editUrl: string;
-  meta: { state: string; started: string; ended: string; home: string; pinned: string };
+  templateUrl: string;
+  meta: { state: string; started: string; ended: string; home: string; pinned: string; template: string; pinnedTemplate: string };
   channel: string;
   deskChannel: string;
   restNamespace: string;

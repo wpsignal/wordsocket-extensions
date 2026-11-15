@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "postsocket/entry",
+  "version": "0.1.0",
+  "title": "Live Blog Entry",
+  "category": "theme",
+  "description": "The layout of one live blog entry. Place Entry Content, Date, Featured Image and other post blocks inside it, save it as a synced pattern, and choose that pattern on a live blog's desk.",
+  "keywords": ["live blog", "entry", "template"],
+  "textdomain": "postsocket",
+  "usesContext": ["postId", "postType"],
+  "supports": {
+    "html": false,
+    "align": ["wide", "full"],
+    "color": {
+      "background": true,
+      "text": true,
+      "link": true
+    },
+    "spacing": {
+      "margin": true,
+      "padding": true,
+      "blockGap": true
+    },
+    "typography": {
+      "fontSize": true,
+      "lineHeight": true
+    },
+    "__experimentalBorder": {
+      "color": true,
+      "radius": true,
+      "style": true,
+      "width": true
+    },
+    "layout": true
+  },
+  "styles": [
+    { "name": "default", "label": "Default", "isDefault": true },
+    { "name": "card", "label": "Card" },
+    { "name": "timeline", "label": "Timeline" },
+    { "name": "highlight", "label": "Highlight" }
+  ],
+  "editorScript": "file:./index.js",
+  "style": "file:./style-index.css"
+}

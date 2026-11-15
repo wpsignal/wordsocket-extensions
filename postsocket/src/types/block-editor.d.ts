@@ -47,8 +47,12 @@ declare module "*.css";
 
 declare module "@wordpress/blocks" {
   export function registerBlockType(name: string, settings: Record<string, unknown>): void;
+  export function getBlockType(name: string): Record<string, unknown> | undefined;
 }
 
 declare module "@wordpress/block-editor" {
   export function useBlockProps(props?: Record<string, unknown>): Record<string, unknown>;
+  export function useInnerBlocksProps(props?: Record<string, unknown>, options?: Record<string, unknown>): Record<string, unknown>;
+  export const InnerBlocks: { Content: React.ComponentType };
+  export const BlockContextProvider: React.ComponentType<{ value: Record<string, unknown>; children?: React.ReactNode }>;
 }

@@ -45,6 +45,7 @@ let oldestId = Number(feed?.dataset.postsocketOldestId ?? 0);
 const queue: HTMLElement[] = [];
 const leaving = new Map<number, number>();
 let refreshing = false;
+let templateNext = "";
 
 interface FeedStore {
   state: FeedState;
@@ -213,13 +214,18 @@ async function getEntries(params: { before?: string; beforeId?: number; limit?: 
   }
 }
 
-/** Fetch the newest page and reconcile: every entry in it is upserted, and an entry it should hold but does not is removed. */
-async function refresh(): Promise<void> {
-  if (refreshing || !feed) return;
+/** Fetch the newest page and reconcile: every entry in it is upserted, and an entry it should hold but does not is removed; a template version asks for that template's copy, after any refresh under way. */
+async function refresh(template = ""): Promise<void> {
+  if (!feed) return;
+  if (refreshing) {
+    if (template) templateNext = template;
+    return;
+  }
   refreshing = true;
   try {
     await jitter(CATCH_UP_JITTER_MS);
-    const data = await getEntries({ limit: state.perPage, v: String(Math.floor(Date.now() / 60_000)) });
+    const minute = String(Math.floor(Date.now() / 60_000));
+    const data = await getEntries({ limit: state.perPage, v: template ? `${minute}-${template}` : minute });
     if (!data) return;
     state.ended = data.state === "ended";
     const ids = new Set(data.entries.map((e) => e.id));
@@ -243,6 +249,11 @@ async function refresh(): Promise<void> {
     if (data.more) state.more = true;
   } finally {
     refreshing = false;
+    if (templateNext) {
+      const next = templateNext;
+      templateNext = "";
+      void refresh(next);
+    }
   }
 }
 
@@ -297,6 +308,9 @@ function boot(): void {
   onRelay<EntryUpdated>("postsocket.entry.updated", channel, (data) => void upsert(data));
   onRelay<EntryRemoved>("postsocket.entry.removed", channel, (data) => {
     if (data.liveblog === liveblogId) remove(data.id);
+  });
+  onRelay<LiveblogTemplate>("postsocket.liveblog.template", channel, (data) => {
+    if (data.id === liveblogId) void refresh(data.v);
   });
   onRelay<LiveblogState>("postsocket.liveblog.state", channel, (data) => {
     if (data.id !== liveblogId) return;

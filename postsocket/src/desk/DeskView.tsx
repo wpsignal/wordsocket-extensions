@@ -27,6 +27,7 @@ import {
   EmptyState,
   Link,
   Notice,
+  SearchableSelectControl,
   Stack,
   SwitchControl,
   Tabs,
@@ -36,14 +37,17 @@ import {
   coalesce,
   deleteEntry,
   entriesPath,
+  fetchTemplates,
   liveblogsPath,
   restoreEntry,
   setEnded,
+  setTemplate,
   trashEntry,
   updateEntry,
   usePage,
   type Entry,
   type Liveblog,
+  type Template,
 } from "./api";
 import { formatTime, isEnded } from "./format";
 import { useLiveRefresh } from "./useLiveRefresh";
@@ -183,6 +187,20 @@ export function DeskView({
   );
   useEffect(loadLiveblog, [loadLiveblog]);
 
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const loadTemplates = useMemo(
+    () =>
+      coalesce(() =>
+        cfg.canManage
+          ? fetchTemplates()
+              .then(setTemplates)
+              .catch(() => undefined)
+          : Promise.resolve(),
+      ),
+    [],
+  );
+  useEffect(loadTemplates, [loadTemplates]);
+
   const query = {
     context: "edit",
     [cfg.restBase]: id,
@@ -207,7 +225,8 @@ export function DeskView({
     entries.reload();
     trashed.reload();
     loadLiveblog();
-  }, [entries.reload, trashed.reload, loadLiveblog]);
+    loadTemplates();
+  }, [entries.reload, trashed.reload, loadLiveblog, loadTemplates]);
   useLiveRefresh([`${cfg.channel}${id}`, `${cfg.deskChannel}${id}`], refresh);
 
   /* Look again once the soonest edit lock on screen has lapsed, since a lapse is not announced. */
@@ -430,6 +449,57 @@ export function DeskView({
 
   const ended = liveblog ? isEnded(liveblog) : false;
   const home = liveblog?.postsocket.home ?? null;
+  const templateSelect = (
+    label: string,
+    key: string,
+    none: string,
+  ): JSX.Element | null => {
+    if (!liveblog) return null;
+    const chosen = Number(liveblog.meta[key] ?? 0);
+    const items = [
+      { value: "0", label: none },
+      ...templates.map((template) => ({
+        value: String(template.id),
+        label: decodeEntities(template.title) || __("(no title)", "postsocket"),
+      })),
+    ];
+    return (
+      <Stack direction="row" gap="sm" align="end">
+        <SearchableSelectControl
+          label={label}
+          items={items}
+          value={
+            items.find((item) => item.value === String(chosen)) ?? items[0]
+          }
+          onValueChange={(item) => {
+            const next = item ? Number(item.value) : 0;
+            void run(
+              () =>
+                setLiveblog({
+                  ...liveblog,
+                  meta: { ...liveblog.meta, [key]: next },
+                }),
+              () => setTemplate(liveblog.id, key, next).then(setLiveblog),
+            );
+          }}
+        />
+        {chosen > 0 && (
+          <ButtonLink
+            variant="outline"
+            size="compact"
+            href={`${cfg.editUrl}${chosen}`}
+            aria-label={sprintf(
+              /* translators: %s: which template, such as "Entry template" */
+              __("Edit: %s", "postsocket"),
+              label,
+            )}
+          >
+            {__("Edit", "postsocket")}
+          </ButtonLink>
+        )}
+      </Stack>
+    );
+  };
 
   return (
     <Stack direction="column" gap="lg">
@@ -528,6 +598,28 @@ export function DeskView({
                   </Stack>
                 )}
               </Stack>
+              {cfg.canManage && (
+                <Stack direction="row" gap="sm" align="end" wrap="wrap">
+                  {templateSelect(
+                    __("Entry template", "postsocket"),
+                    cfg.meta.template,
+                    __("Default layout", "postsocket"),
+                  )}
+                  {templateSelect(
+                    __("Pinned entry template", "postsocket"),
+                    cfg.meta.pinnedTemplate,
+                    __("Same as entries", "postsocket"),
+                  )}
+                  {cfg.templateUrl}
+                  <ButtonLink
+                    variant="outline"
+                    size="compact"
+                    href={cfg.templateUrl}
+                  >
+                    {__("Create template", "postsocket")}
+                  </ButtonLink>
+                </Stack>
+              )}
               {cfg.canManage && (
                 <SwitchControl
                   label={__("End Live Blog", "postsocket")}

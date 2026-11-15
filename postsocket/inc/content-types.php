@@ -25,6 +25,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 const FEED_BLOCK = 'postsocket/live-feed';
 
 /**
+ * The block an entry template is built in.
+ *
+ * @since 0.1.0
+ */
+const ENTRY_BLOCK = 'postsocket/entry';
+
+/**
+ * The block that prints an entry's content inside an entry template.
+ *
+ * @since 0.1.0
+ */
+const ENTRY_CONTENT_BLOCK = 'postsocket/entry-content';
+
+/**
+ * The query argument that opens a new synced pattern as an entry template.
+ *
+ * @since 0.1.0
+ */
+const TEMPLATE_ARG = 'postsocket_template';
+
+/**
  * Register the entry type, the live blog taxonomy and their meta.
  *
  * @since 0.1.0
@@ -58,7 +79,14 @@ function register_content_types(): void {
 			'show_in_rest'        => true,
 			'show_in_nav_menus'   => false,
 			'rewrite'             => false,
-			'taxonomies'          => array( LIVEBLOG_TAX ),
+			/**
+			 * Filters the taxonomies entries carry beside their live blog.
+			 *
+			 * @since 0.1.0
+			 *
+			 * @param string[] $taxonomies Taxonomy names.
+			 */
+			'taxonomies'          => array_merge( array( LIVEBLOG_TAX ), (array) apply_filters( 'postsocket_entry_taxonomies', array() ) ),
 			'supports'            => array( 'title', 'editor', 'author', 'thumbnail', 'revisions', 'custom-fields' ),
 			'template'            => array(
 				array( 'core/paragraph', array( 'placeholder' => __( 'What just happened?', 'postsocket' ) ) ),
@@ -129,6 +157,17 @@ function register_content_types(): void {
 			'default' => 0,
 		)
 	);
+	foreach ( array( META_TEMPLATE, META_PINNED_TEMPLATE ) as $key ) {
+		register_term_meta(
+			LIVEBLOG_TAX,
+			$key,
+			$term_meta + array(
+				'type'              => 'integer',
+				'default'           => 0,
+				'sanitize_callback' => __NAMESPACE__ . '\valid_template',
+			)
+		);
+	}
 	register_term_meta(
 		LIVEBLOG_TAX,
 		META_HOME,
@@ -154,6 +193,172 @@ function register_content_types(): void {
 	);
 }
 add_action( 'init', __NAMESPACE__ . '\register_content_types' );
+
+/**
+ * The id when it is a published synced pattern holding a Live Blog Entry block, else 0.
+ *
+ * @since 0.1.0
+ *
+ * @param mixed $pattern_id Synced pattern id.
+ * @return int
+ */
+function valid_template( mixed $pattern_id ): int {
+	$pattern = get_post( absint( $pattern_id ) );
+	if ( ! $pattern || 'wp_block' !== $pattern->post_type || 'publish' !== $pattern->post_status ) {
+		return 0;
+	}
+	return has_block( ENTRY_BLOCK, $pattern->post_content ) ? (int) $pattern->ID : 0;
+}
+
+/**
+ * The block markup a live blog's entries are printed in, empty for the default layout; a pinned entry's is the pinned template, or the entries' when there is none.
+ *
+ * @since 0.1.0
+ *
+ * @param int  $liveblog_id Live blog id.
+ * @param bool $pinned      Whether the entry is pinned.
+ * @return string
+ */
+function entry_template_markup( int $liveblog_id, bool $pinned = false ): string {
+	$pattern_id = 0;
+	if ( $liveblog_id > 0 ) {
+		$pattern_id = $pinned ? valid_template( get_term_meta( $liveblog_id, META_PINNED_TEMPLATE, true ) ) : 0;
+		$pattern_id = $pattern_id > 0 ? $pattern_id : valid_template( get_term_meta( $liveblog_id, META_TEMPLATE, true ) );
+	}
+	$markup = $pattern_id > 0 ? (string) get_post( $pattern_id )->post_content : '';
+	/**
+	 * Filters the block markup a live blog's entries are printed in; its first Live Blog Entry block is used.
+	 *
+	 * @since 0.1.0
+	 *
+	 * @param string $markup      Block markup, empty for the default layout.
+	 * @param int    $liveblog_id Live blog id.
+	 * @param bool   $pinned      Whether the markup is for a pinned entry.
+	 */
+	return (string) apply_filters( 'postsocket_entry_template', $markup, $liveblog_id, $pinned );
+}
+
+/**
+ * The parsed Live Blog Entry block a live blog's entries, or its pinned entries, are printed in, or null for the default layout.
+ *
+ * @since 0.1.0
+ *
+ * @param int  $liveblog_id Live blog id.
+ * @param bool $pinned      Whether the entry is pinned.
+ * @return array|null
+ */
+function entry_template( int $liveblog_id, bool $pinned = false ): ?array {
+	static $cache = array();
+	$markup       = entry_template_markup( $liveblog_id, $pinned );
+	if ( '' === $markup ) {
+		return null;
+	}
+	$key = md5( $markup );
+	if ( ! array_key_exists( $key, $cache ) ) {
+		$cache[ $key ] = find_block( parse_blocks( $markup ), ENTRY_BLOCK );
+	}
+	return $cache[ $key ];
+}
+
+/**
+ * The first block of a name in a parsed block tree, depth first, or null.
+ *
+ * @since 0.1.0
+ *
+ * @param array  $blocks Parsed blocks.
+ * @param string $name   Block name.
+ * @return array|null
+ */
+function find_block( array $blocks, string $name ): ?array {
+	foreach ( $blocks as $block ) {
+		if ( ( $block['blockName'] ?? '' ) === $name ) {
+			return $block;
+		}
+		$found = find_block( $block['innerBlocks'] ?? array(), $name );
+		if ( $found ) {
+			return $found;
+		}
+	}
+	return null;
+}
+
+/**
+ * The ids of the live blogs whose entry template or pinned entry template is this synced pattern.
+ *
+ * @since 0.1.0
+ *
+ * @param int $pattern_id Synced pattern id.
+ * @return int[]
+ */
+function template_liveblogs( int $pattern_id ): array {
+	$ids = get_terms(
+		array(
+			'taxonomy'   => LIVEBLOG_TAX,
+			'hide_empty' => false,
+			'fields'     => 'ids',
+			'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+				'relation' => 'OR',
+				array(
+					'key'   => META_TEMPLATE,
+					'value' => (string) $pattern_id,
+				),
+				array(
+					'key'   => META_PINNED_TEMPLATE,
+					'value' => (string) $pattern_id,
+				),
+			),
+		)
+	);
+	return is_array( $ids ) ? array_map( 'intval', $ids ) : array();
+}
+
+/**
+ * The editor URL for a new synced pattern that starts as an entry template.
+ *
+ * @since 0.1.0
+ *
+ * @return string
+ */
+function create_template_url(): string {
+	return add_query_arg(
+		array(
+			'post_type'  => 'wp_block',
+			TEMPLATE_ARG => 1,
+		),
+		admin_url( 'post-new.php' )
+	);
+}
+
+/**
+ * Whether the request opens a new synced pattern as an entry template.
+ *
+ * @since 0.1.0
+ *
+ * @param \WP_Post|null $post The post being started.
+ * @return bool
+ */
+function starting_template( ?\WP_Post $post ): bool {
+	return $post && 'wp_block' === $post->post_type && isset( $_GET[ TEMPLATE_ARG ] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+}
+
+// A synced pattern opened from "Create template" starts with a Live Blog Entry block and its usual blocks.
+add_filter(
+	'default_content',
+	static function ( string $content, ?\WP_Post $post = null ): string {
+		if ( ! starting_template( $post ) ) {
+			return $content;
+		}
+		return '<!-- wp:' . ENTRY_BLOCK . " -->\n<!-- wp:post-date {\"metadata\":{\"bindings\":{\"datetime\":{\"source\":\"core/post-data\",\"args\":{\"field\":\"date\"}}}}} /-->\n\n<!-- wp:post-title {\"level\":3} /-->\n\n<!-- wp:" . ENTRY_CONTENT_BLOCK . " /-->\n<!-- /wp:" . ENTRY_BLOCK . ' -->';
+	},
+	10,
+	2
+);
+add_filter(
+	'default_title',
+	static fn( string $title, ?\WP_Post $post = null ): string => starting_template( $post ) ? __( 'Live blog entry', 'postsocket' ) : $title,
+	10,
+	2
+);
 
 /**
  * The live blog term with this id, or null.
