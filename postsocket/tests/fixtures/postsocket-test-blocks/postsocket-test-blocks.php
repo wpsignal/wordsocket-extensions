@@ -136,3 +136,22 @@ add_action(
 		);
 	}
 );
+
+// An editor opened with `postsocket_test_allowlist` allows only paragraphs and headings, as a site that limits its blocks does.
+add_filter(
+	'allowed_block_types_all',
+	static fn( $allowed ) => isset( $_GET['postsocket_test_allowlist'] ) ? array( 'core/paragraph', 'core/heading' ) : $allowed // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+);
+
+// An editor opened with `postsocket_test_unregister` has two post blocks unregistered once it is ready, as a theme that removes blocks does.
+add_action(
+	'enqueue_block_editor_assets',
+	static function (): void {
+		if ( ! isset( $_GET['postsocket_test_unregister'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return;
+		}
+		wp_register_script( 'postsocket-test-unregister', false, array( 'wp-blocks', 'wp-dom-ready' ), '1', true );
+		wp_enqueue_script( 'postsocket-test-unregister' );
+		wp_add_inline_script( 'postsocket-test-unregister', "wp.domReady( function () { [ 'core/post-date', 'core/post-featured-image' ].forEach( function ( name ) { wp.blocks.unregisterBlockType( name ); } ); } );" );
+	}
+);
