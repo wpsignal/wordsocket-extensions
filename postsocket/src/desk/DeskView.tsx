@@ -610,7 +610,6 @@ export function DeskView({
                     cfg.meta.pinnedTemplate,
                     __("Same as entries", "postsocket"),
                   )}
-                  {cfg.templateUrl}
                   <ButtonLink
                     variant="outline"
                     size="compact"
