@@ -24,8 +24,6 @@
   align-items: center;
   gap: var(--postsocket-gap);
   padding-block-end: calc(var(--postsocket-gap) / 2);
-  border-block-end: 1px solid var(--postsocket-line);
-  margin-block-end: var(--postsocket-gap);
 }
 
 .postsocket-feed__badge {

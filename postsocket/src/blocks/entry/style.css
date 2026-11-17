@@ -25,8 +25,7 @@
     --postsocket-entry-dot: 8px;
 
     margin-inline-start: calc(var(--postsocket-entry-dot) / 2);
-    padding-block: 0 calc(var(--postsocket-entry-gap) * 1.5);
-    padding-inline-start: calc(var(--postsocket-entry-gap) * 1.25);
+    padding: calc(var(--postsocket-entry-gap) * 1.5);
     border: 0;
     border-inline-start: var(--postsocket-entry-rail) solid var(--postsocket-entry-line);
     border-block-end: var(--postsocket-entry-rail) solid var(--postsocket-entry-line);
@@ -42,13 +41,21 @@
       background: var(--wp--preset--color--black, #000);
     }
 
-    &.is-pinned::before {
-      background: var(--postsocket-entry-accent);
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--postsocket-entry-accent) 25%, transparent);
-      animation: postsocket-entry-pulse 1.6s ease-out infinite;
-
-      @media (prefers-reduced-motion: reduce) {
-        animation: none;
+    &.is-pinned{
+      margin-inline: inherit;
+      
+      &::before {
+        background: var(--postsocket-entry-accent);
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--postsocket-entry-accent) 25%, transparent);
+        animation: postsocket-entry-pulse 1.6s ease-out infinite;
+        
+        @media (prefers-reduced-motion: reduce) {
+          animation: none;
+        }
+      }
+      
+      @media (min-width: 782px) {
+        margin-inline: calc(var(--postsocket-entry-gap) * -1);
       }
     }
   }
