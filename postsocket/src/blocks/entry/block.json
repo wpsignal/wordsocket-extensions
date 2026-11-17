@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "title": "Live Blog Entry",
   "category": "theme",
-  "description": "The layout of one live blog entry. Place Entry Content, Date, Featured Image and other post blocks inside it, save it as a synced pattern, and choose that pattern on a live blog's desk.",
+  "description": "The layout of one live blog entry. Place Entry Content, Date, Featured Image and other post blocks inside it, save it as a pattern, and choose that pattern on a live blog's desk.",
   "keywords": ["live blog", "entry", "template"],
   "textdomain": "postsocket",
   "usesContext": ["postId", "postType"],

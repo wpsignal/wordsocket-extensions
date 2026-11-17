@@ -204,7 +204,7 @@ export function setEnded(liveblog: Liveblog, ended: boolean): Promise<Liveblog> 
 }
 
 /**
- * A synced pattern that can be a live blog's entry template.
+ * A pattern that can be a live blog's entry template.
  *
  * @since 0.1.0
  */
@@ -214,7 +214,7 @@ export interface Template {
 }
 
 /**
- * The published synced patterns that hold a Live Blog Entry block.
+ * The published patterns that hold a Live Blog Entry block.
  *
  * @since 0.1.0
  */
@@ -226,7 +226,7 @@ export async function fetchTemplates(): Promise<Template[]> {
 }
 
 /**
- * Choose the synced pattern a live blog's entries, or its pinned entries, are printed in; 0 is none.
+ * Choose the pattern a live blog's entries, or its pinned entries, are printed in; 0 is none.
  *
  * @since 0.1.0
  */

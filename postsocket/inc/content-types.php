@@ -39,7 +39,7 @@ const ENTRY_BLOCK = 'postsocket/entry';
 const ENTRY_CONTENT_BLOCK = 'postsocket/entry-content';
 
 /**
- * The query argument that opens a new synced pattern as an entry template.
+ * The query argument that opens a new pattern as an entry template.
  *
  * @since 0.1.0
  */
@@ -86,7 +86,7 @@ function register_content_types(): void {
 			 *
 			 * @param string[] $taxonomies Taxonomy names.
 			 */
-			'taxonomies'          => array_merge( array( LIVEBLOG_TAX ), (array) apply_filters( 'postsocket_entry_taxonomies', array() ) ),
+			'taxonomies'          => array_merge( array( LIVEBLOG_TAX ), (array) apply_filters( 'postsocket_entry_taxonomies', array('post_tag', 'category') ) ),
 			'supports'            => array( 'title', 'editor', 'author', 'thumbnail', 'revisions', 'custom-fields' ),
 			'template'            => array(
 				array( 'core/paragraph', array( 'placeholder' => __( 'What just happened?', 'postsocket' ) ) ),
@@ -195,11 +195,11 @@ function register_content_types(): void {
 add_action( 'init', __NAMESPACE__ . '\register_content_types' );
 
 /**
- * The id when it is a published synced pattern holding a Live Blog Entry block, else 0.
+ * The id when it is a published pattern holding a Live Blog Entry block, else 0.
  *
  * @since 0.1.0
  *
- * @param mixed $pattern_id Synced pattern id.
+ * @param mixed $pattern_id Pattern id.
  * @return int
  */
 function valid_template( mixed $pattern_id ): int {
@@ -283,11 +283,11 @@ function find_block( array $blocks, string $name ): ?array {
 }
 
 /**
- * The ids of the live blogs whose entry template or pinned entry template is this synced pattern.
+ * The ids of the live blogs whose entry template or pinned entry template is this pattern.
  *
  * @since 0.1.0
  *
- * @param int $pattern_id Synced pattern id.
+ * @param int $pattern_id Pattern id.
  * @return int[]
  */
 function template_liveblogs( int $pattern_id ): array {
@@ -313,7 +313,7 @@ function template_liveblogs( int $pattern_id ): array {
 }
 
 /**
- * The editor URL for a new synced pattern that starts as an entry template.
+ * The editor URL for a new pattern that starts as an entry template.
  *
  * @since 0.1.0
  *
@@ -330,32 +330,41 @@ function create_template_url(): string {
 }
 
 /**
- * Whether the request opens a new synced pattern as an entry template.
+ * Whether the request starts a new pattern as an entry template.
  *
  * @since 0.1.0
  *
- * @param \WP_Post|null $post The post being started.
+ * @param string $post_type The type of the post being started.
  * @return bool
  */
-function starting_template( ?\WP_Post $post ): bool {
-	return $post && 'wp_block' === $post->post_type && isset( $_GET[ TEMPLATE_ARG ] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+function starting_template( string $post_type ): bool {
+	return 'wp_block' === $post_type && isset( $_GET[ TEMPLATE_ARG ] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 }
 
-// A synced pattern opened from "Create template" starts with a Live Blog Entry block and its usual blocks.
+/**
+ * The content a new entry template starts with: an empty Live Blog Entry block in the Timeline style on a pale yellow background, which the editor fills with its usual blocks.
+ *
+ * @since 0.1.0
+ *
+ * @return string
+ */
+function template_seed(): string {
+	return '<!-- wp:' . ENTRY_BLOCK . ' {"className":"is-style-timeline"} /-->';
+}
+
+// A pattern started from "Create template" is stored with its starting content, and the editor is handed the same content.
 add_filter(
-	'default_content',
-	static function ( string $content, ?\WP_Post $post = null ): string {
-		if ( ! starting_template( $post ) ) {
-			return $content;
+	'wp_insert_post_data',
+	static function ( array $data ): array {
+		if ( 'auto-draft' === $data['post_status'] && starting_template( $data['post_type'] ) ) {
+			$data['post_content'] = wp_slash( template_seed() );
 		}
-		return '<!-- wp:' . ENTRY_BLOCK . " -->\n<!-- wp:post-date {\"metadata\":{\"bindings\":{\"datetime\":{\"source\":\"core/post-data\",\"args\":{\"field\":\"date\"}}}}} /-->\n\n<!-- wp:post-title {\"level\":3} /-->\n\n<!-- wp:" . ENTRY_CONTENT_BLOCK . " /-->\n<!-- /wp:" . ENTRY_BLOCK . ' -->';
-	},
-	10,
-	2
+		return $data;
+	}
 );
 add_filter(
-	'default_title',
-	static fn( string $title, ?\WP_Post $post = null ): string => starting_template( $post ) ? __( 'Live blog entry', 'postsocket' ) : $title,
+	'default_content',
+	static fn( string $content, ?\WP_Post $post = null ): string => $post && starting_template( $post->post_type ) ? template_seed() : $content,
 	10,
 	2
 );

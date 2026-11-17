@@ -132,7 +132,7 @@ test.describe("entry templates", () => {
     await reader.context().close();
   });
 
-  test("Create template opens a pattern holding the entry block and its usual blocks", async ({
+  test("Create template asks for a name and whether to sync, then holds the entry block and its usual blocks", async ({
     admin,
     editor,
     page,
@@ -142,9 +142,17 @@ test.describe("entry templates", () => {
       "post_type=wp_block&postsocket_template=1",
     );
     await editor.setPreferences("core/edit-post", { welcomeGuide: false });
+    const prompt = page.getByRole("dialog", { name: "Create pattern" });
+    await expect(prompt).toBeVisible({ timeout: 15_000 });
+    await prompt.getByLabel("Name").fill("Entry layout");
+    await prompt.getByLabel("Synced").uncheck();
+    await prompt.getByRole("button", { name: "Create" }).click();
     const entry = editor.canvas.locator('[data-type="postsocket/entry"]');
     await expect(entry).toBeVisible({ timeout: 15_000 });
-    await expect(entry.locator('[data-type="core/post-date"]')).toBeVisible();
+    await expect(entry).toHaveClass(/is-style-timeline/);
+    await expect(
+      entry.locator('[data-type="core/post-date"]').first(),
+    ).toBeVisible();
     await expect(entry.locator('[data-type="core/post-title"]')).toBeVisible();
     await expect(
       entry.locator('[data-type="postsocket/entry-content"]'),
@@ -152,8 +160,16 @@ test.describe("entry templates", () => {
     await expect(editor.canvas.locator(".block-editor-warning")).toHaveCount(0);
     await expect(entry).not.toContainText("Invalid date");
     await expect(page.locator(".editor-document-bar")).toContainText(
-      "Live blog entry",
+      "Entry layout",
     );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sync = await page.evaluate(
+      () =>
+        (window as any).wp.data
+          .select("core/editor")
+          .getEditedPostAttribute("meta").wp_pattern_sync_status,
+    );
+    expect(sync).toBe("unsynced");
   });
 
   test("on a site that limits its blocks, the template's blocks are offered inside the entry block only", async ({
@@ -210,9 +226,8 @@ test.describe("entry templates", () => {
     await editor.setPreferences("core/edit-post", { welcomeGuide: false });
     const entry = editor.canvas.locator('[data-type="postsocket/entry"]');
     await expect(entry).toBeVisible({ timeout: 15_000 });
-    await expect(
-      entry.locator('[data-type="core/post-date"] time'),
-    ).toBeVisible();
+    await expect(entry.locator('[data-type="core/post-date"] time').first()).toBeVisible();
+    await expect(entry).not.toContainText("Invalid date");
     const can = await page.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const store = (window as any).wp.data.select("core/block-editor");

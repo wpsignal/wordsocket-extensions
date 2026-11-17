@@ -14,32 +14,38 @@ import { useEntityRecords } from "@wordpress/core-data";
 import { select } from "@wordpress/data";
 import { useMemo } from "@wordpress/element";
 import { addFilter } from "@wordpress/hooks";
-import LiveBlogIcon from "../../LiveBlogIcon";
 import metadata from "./block.json";
 import "./style.css";
+import PostSocketLogo from "../../PostSocketLogo";
 
 const ENTRY_TYPE = "postsocket_entry";
 
 const TEMPLATE = [
   [
-    "core/post-date",
-    {
-      metadata: {
-        bindings: {
-          datetime: { source: "core/post-data", args: { field: "date" } },
-        },
-      },
-    },
+    "core/group",
+    { layout: { type: "flex", flexWrap: "wrap", justifyContent: "space-between" } },
+    [
+      [
+        "core/group",
+        { layout: { type: "flex", flexWrap: "nowrap" } },
+        [
+          ["core/post-date", { metadata: { bindings: { datetime: { source: "core/post-data", args: { field: "date" } } } } }],
+          ["core/avatar", { size: 24 }],
+          ["core/post-author-name", { fontSize: "small" }],
+        ],
+      ],
+      [
+        "core/group",
+        { layout: { type: "flex", flexWrap: "nowrap" } },
+        [
+          ["core/post-terms", { term: "post_tag" }],
+          ["core/post-terms", { term: "category" }],
+        ],
+      ],
+    ],
   ],
   ["core/post-title", { level: 3 }],
   ["postsocket/entry-content"],
-  ["core/post-terms"],
-  ["core/post-date"],
-  ["core/post-author"],
-  ["core/post-author-name"],
-  ["core/post-navigation-link"],
-  ["core/read-more"],
-  ["core/avatar"],
 ];
 
 function Edit(): JSX.Element {
@@ -134,7 +140,7 @@ addFilter(
 registerBlockType(metadata.name, {
   title: metadata.title,
   category: metadata.category,
-  icon: <LiveBlogIcon />,
+  icon: <PostSocketLogo />,
   edit: Edit,
   save: () => <InnerBlocks.Content />,
 });
