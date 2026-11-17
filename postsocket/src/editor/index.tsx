@@ -25,7 +25,7 @@ import {
   SwitchControl,
   Text,
 } from "@wordpress/ui";
-import LiveBlogIcon from "../LiveBlogIcon";
+import PostSocketLogo from "../PostSocketLogo";
 
 const cfg = window.postsocketEditor;
 
@@ -299,4 +299,4 @@ function Panels(): JSX.Element | null {
   ) : null;
 }
 
-registerPlugin("postsocket", { render: Panels, icon: <LiveBlogIcon /> });
+registerPlugin("postsocket", { render: Panels, icon: <PostSocketLogo /> });

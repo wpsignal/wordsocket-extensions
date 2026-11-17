@@ -13,7 +13,6 @@ import { decodeEntities } from "@wordpress/html-entities";
 import { __, _n, sprintf } from "@wordpress/i18n";
 import { registerDocument } from "@wordpress/style-runtime";
 import { Badge, Button, Card, InputControl, Link, SearchableSelectControl, Stack, Text } from "@wordpress/ui";
-import LiveBlogIcon from "../../LiveBlogIcon";
 import metadata from "./block.json";
 import PostSocketLogo from "../../PostSocketLogo";
 

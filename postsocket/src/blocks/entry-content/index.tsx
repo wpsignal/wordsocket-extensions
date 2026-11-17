@@ -6,8 +6,8 @@
 import { useBlockProps } from "@wordpress/block-editor";
 import { registerBlockType } from "@wordpress/blocks";
 import { __ } from "@wordpress/i18n";
-import LiveBlogIcon from "../../LiveBlogIcon";
 import metadata from "./block.json";
+import PostSocketLogo from "../../PostSocketLogo";
 
 function Edit(): JSX.Element {
   const blockProps = useBlockProps({ className: "postsocket-entry__content" });
@@ -21,7 +21,7 @@ function Edit(): JSX.Element {
 registerBlockType(metadata.name, {
   title: metadata.title,
   category: metadata.category,
-  icon: <LiveBlogIcon />,
+  icon: <PostSocketLogo />,
   edit: Edit,
   save: () => null,
 });
