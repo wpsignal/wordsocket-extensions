@@ -23,13 +23,31 @@ const ENTRY_TYPE = "postsocket_entry";
 const TEMPLATE = [
   [
     "core/group",
-    { layout: { type: "flex", flexWrap: "wrap", justifyContent: "space-between" } },
+    {
+      layout: {
+        type: "flex",
+        flexWrap: "wrap",
+        justifyContent: "space-between",
+      },
+    },
     [
       [
         "core/group",
         { layout: { type: "flex", flexWrap: "nowrap" } },
         [
-          ["core/post-date", { metadata: { bindings: { datetime: { source: "core/post-data", args: { field: "date" } } } } }],
+          [
+            "core/post-date",
+            {
+              metadata: {
+                bindings: {
+                  datetime: {
+                    source: "core/post-data",
+                    args: { field: "date" },
+                  },
+                },
+              },
+            },
+          ],
           ["core/avatar", { size: 24 }],
           ["core/post-author-name", { fontSize: "small" }],
         ],
@@ -44,8 +62,8 @@ const TEMPLATE = [
       ],
     ],
   ],
-  ["core/post-title", { level: 3 }],
-  ["postsocket/entry-content"],
+  ["core/post-title", { level: 3, fontSize: "large" }],
+  ["postsocket/entry-content", { fontSize: "medium" }],
 ];
 
 function Edit(): JSX.Element {

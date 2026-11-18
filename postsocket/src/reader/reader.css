@@ -85,14 +85,18 @@
 
 .postsocket-entry {
   position: relative;
-  padding-block: var(--postsocket-gap);
-  border-block-end: 1px solid var(--postsocket-line);
   transition:
     opacity 0.4s ease,
     background-color 1.2s ease;
 }
 
-.postsocket-entry.is-pinned {
+/* The default layout's spacing and markers; an entry printed by a template's block takes its own from the editor. */
+.postsocket-entry:not(.wp-block-postsocket-entry) {
+  padding-block: var(--postsocket-gap);
+  border-block-end: 1px solid var(--postsocket-line);
+}
+
+.postsocket-entry.is-pinned:not(.wp-block-postsocket-entry) {
   border-inline-start: 3px solid var(--postsocket-accent);
   padding-inline-start: var(--postsocket-gap);
 }

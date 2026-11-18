@@ -1,85 +1,83 @@
 /*
- * Live Blog Entry block styles: Card, Timeline and Highlight.
+ * Live Blog Entry block style: Timeline.
+ * It draws the rail, the dot and the pinned pulse; spacing, colour and borders are the editor's.
  * The custom properties are the feed's, with fallbacks for the editor, where the feed's stylesheet is not loaded.
  */
-.postsocket-entry.wp-block-postsocket-entry {
-  --postsocket-entry-accent: var(--postsocket-accent, var(--wp--preset--color--vivid-red, #d63638));
-  --postsocket-entry-line: var(--postsocket-line, color-mix(in srgb, currentColor 14%, transparent));
-  --postsocket-entry-gap: var(--postsocket-gap, var(--wp--preset--spacing--40, 1.25rem));
+.postsocket-entry.wp-block-postsocket-entry.is-style-timeline {
+  --postsocket-entry-accent: var(
+    --postsocket-accent,
+    var(--wp--preset--color--vivid-red, #d63638)
+  );
+  --postsocket-entry-line: var(
+    --postsocket-line,
+    color-mix(in srgb, currentColor 14%, transparent)
+  );
+  --postsocket-entry-rail: 1px;
+  --postsocket-entry-dot: 8px;
+  --postsocket-entry-pinned-dot: 12px;
+
   position: relative;
+  border-inline-start: var(--postsocket-entry-rail) solid
+    var(--postsocket-entry-line);
 
-  &.is-style-card {
-    padding: var(--postsocket-entry-gap);
-    margin-block-end: var(--postsocket-entry-gap);
-    border: 1px solid var(--postsocket-entry-line);
-    border-radius: 8px;
-    box-shadow: 0 1px 2px color-mix(in srgb, currentColor 8%, transparent);
-
-    &.is-pinned {
-      border-color: var(--postsocket-entry-accent);
-    }
+  &::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: calc(
+      (var(--postsocket-entry-dot) + var(--postsocket-entry-rail)) / -2
+    );
+    inline-size: var(--postsocket-entry-dot);
+    block-size: var(--postsocket-entry-dot);
+    border-radius: 50%;
+    background: var(--wp--preset--color--black, #000);
   }
 
-  &.is-style-timeline {
-    --postsocket-entry-rail: 1px;
-    --postsocket-entry-dot: 8px;
-
-    margin-inline-start: calc(var(--postsocket-entry-dot) / 2);
-    padding: calc(var(--postsocket-entry-gap) * 1.5);
-    border: 0;
-    border-inline-start: var(--postsocket-entry-rail) solid var(--postsocket-entry-line);
-    border-block-end: var(--postsocket-entry-rail) solid var(--postsocket-entry-line);
+  &.is-pinned {
+    border: var(--postsocket-entry-rail) solid
+      var(--postsocket-entry-line);
 
     &::before {
-      content: "";
-      position: absolute;
-      inset-block-start: calc((var(--postsocket-entry-dot) / 2) * -1);
-      inset-inline-start: calc((var(--postsocket-entry-dot) + var(--postsocket-entry-rail)) / -2);
-      inline-size: var(--postsocket-entry-dot);
-      block-size: var(--postsocket-entry-dot);
-      border-radius: 50%;
-      background: var(--wp--preset--color--black, #000);
-    }
+      animation: postsocket-entry-pulse 1.6s ease-out infinite;
+      background: var(--postsocket-entry-accent);
+      box-shadow: 0 0 0 4px
+        color-mix(in srgb, var(--postsocket-entry-accent) 25%, transparent);
+      block-size: var(--postsocket-entry-pinned-dot);
+      inline-size: var(--postsocket-entry-pinned-dot);
+      inset-block-start: calc((var(--postsocket-entry-pinned-dot) / 2) * -1);
+      inset-inline-start: calc(
+        (var(--postsocket-entry-pinned-dot) + var(--postsocket-entry-rail)) / -2
+      );
 
-    &.is-pinned{
-      margin-inline: inherit;
-      
-      &::before {
-        background: var(--postsocket-entry-accent);
-        box-shadow: 0 0 0 4px color-mix(in srgb, var(--postsocket-entry-accent) 25%, transparent);
-        animation: postsocket-entry-pulse 1.6s ease-out infinite;
-        
-        @media (prefers-reduced-motion: reduce) {
-          animation: none;
-        }
-      }
-      
-      @media (min-width: 782px) {
-        margin-inline: calc(var(--postsocket-entry-gap) * -1);
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
       }
     }
   }
+}
 
-  &.is-style-highlight {
-    padding: var(--postsocket-entry-gap);
-    margin-block-end: var(--postsocket-entry-gap);
-    border: 0;
-    border-inline-start: 4px solid var(--postsocket-entry-accent);
-    border-start-end-radius: 6px;
-    border-end-end-radius: 6px;
-    background: color-mix(in srgb, var(--postsocket-entry-accent) 8%, transparent);
+.postsocket-feed__pinned:not(:empty) {
+  & + .postsocket-feed__entries .postsocket-entry {
+    &:first-child {
+      padding-top: calc(var(--postsocket-entry-dot) * 2);
+      &::before {
+        inset-block-start: calc(var(--postsocket-entry-dot) * 2);
+      }
+    }
   }
 }
 
 @keyframes postsocket-entry-pulse {
   0% {
-    box-shadow:
-      0 0 0 4px color-mix(in srgb, var(--postsocket-entry-accent) 25%, transparent),
-      0 0 0 4px color-mix(in srgb, var(--postsocket-entry-accent) 35%, transparent);
+    box-shadow: 0 0 0 0
+      color-mix(in srgb, var(--postsocket-entry-accent) 75%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 8px
+      color-mix(in srgb, var(--postsocket-entry-accent) 0%, transparent);
   }
   100% {
-    box-shadow:
-      0 0 0 4px color-mix(in srgb, var(--postsocket-entry-accent) 25%, transparent),
-      0 0 0 10px color-mix(in srgb, var(--postsocket-entry-accent) 0%, transparent);
+    box-shadow: 0 0 0 0
+      color-mix(in srgb, var(--postsocket-entry-accent) 0%, transparent);
   }
 }
