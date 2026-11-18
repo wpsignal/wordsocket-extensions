@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "postsocket/live-feed",
+  "version": "0.1.0",
+  "title": "Live Feed",
+  "category": "widgets",
+  "description": "Shows a live blog's entries, newest first, updating in every reader's browser as they are published.",
+  "keywords": ["live blog", "entries", "realtime"],
+  "textdomain": "postsocket",
+  "attributes": {
+    "liveblog": { "type": "number", "default": 0 },
+    "template": { "type": "number", "default": 0 },
+    "pinnedTemplate": { "type": "number", "default": 0 }
+  },
+  "supports": {
+    "html": false,
+    "reusable": false,
+    "interactivity": true,
+    "spacing": {
+      "margin": true
+    }
+  },
+  "editorScript": "file:./index.js"
+}

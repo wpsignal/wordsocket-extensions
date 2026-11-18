@@ -1,0 +1,97 @@
+<?php
+/**
+ * Channels: the catalogue entry, the namespace every token reads, the desk's staff namespace, and the channel names.
+ *
+ * @package WPSignal\Extensions\PostSocket
+ */
+
+namespace WPSignal\Extensions\PostSocket;
+
+use WPSignal\WPS;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/**
+ * The channel a live blog's entries and state travel on.
+ *
+ * @since 0.1.0
+ *
+ * @param int $liveblog_id Live blog term id.
+ * @return string
+ */
+function liveblog_channel( int $liveblog_id ): string {
+	return NS . ':liveblog:' . $liveblog_id;
+}
+
+/**
+ * The channel a live blog's entries travel on as one variant prints them.
+ *
+ * @since 0.1.0
+ *
+ * @param int    $liveblog_id Live blog term id.
+ * @param string $variant     Variant.
+ * @return string
+ */
+function variant_channel( int $liveblog_id, string $variant ): string {
+	return liveblog_channel( $liveblog_id ) . ':t:' . $variant;
+}
+
+/**
+ * The channel a post's content updates travel on.
+ *
+ * @since 0.1.0
+ *
+ * @param int $post_id Post id.
+ * @return string
+ */
+function post_channel( int $post_id ): string {
+	return NS . ':post:' . $post_id;
+}
+
+/**
+ * The channel that tells a live blog's open desks to look again.
+ *
+ * @since 0.1.0
+ *
+ * @param int $liveblog_id Live blog term id.
+ * @return string
+ */
+function desk_channel( int $liveblog_id ): string {
+	return DESK_NS . ':liveblog:' . $liveblog_id;
+}
+
+// The catalogue entry carries translated strings, so it waits for `init`.
+add_action(
+	'init',
+	static function (): void {
+		if ( ! class_exists( WPS::class ) ) {
+			return;
+		}
+		WPS::instance()->extensions()->register(
+			SLUG,
+			array(
+				'title'       => __( 'PostSocket', 'postsocket' ),
+				'description' => __( 'Live blogs and articles that update in every reader\'s browser as you publish.', 'postsocket' ),
+				'version'     => VERSION,
+				'docs_url'    => 'https://wpsignal.io/extensions/postsocket',
+				'file'        => plugin_basename( DIR . 'postsocket.php' ),
+			)
+		);
+	}
+);
+
+// The namespaces: one readable by every token, the desk's by staff, both written by PHP alone; no generic post events for entries.
+add_action(
+	'wpsignal_loaded',
+	static function (): void {
+		if ( ! wordsocket_ready() ) {
+			return;
+		}
+		$wps = WPS::instance();
+		$wps->channels()->reserve( NS, '__return_true', '__return_false' );
+		$wps->channels()->reserve( DESK_NS, 'edit_posts', '__return_false' );
+		$wps->trigger_registry()->exclude_default_post_type( ENTRY_TYPE );
+	}
+);

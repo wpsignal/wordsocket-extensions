@@ -1,0 +1,83 @@
+/*
+ * Live Blog Entry block style: Timeline.
+ * It draws the rail, the dot and the pinned pulse; spacing, colour and borders are the editor's.
+ * The custom properties are the feed's, with fallbacks for the editor, where the feed's stylesheet is not loaded.
+ */
+.postsocket-entry.wp-block-postsocket-entry.is-style-timeline {
+  --postsocket-entry-accent: var(
+    --postsocket-accent,
+    var(--wp--preset--color--vivid-red, #d63638)
+  );
+  --postsocket-entry-line: var(
+    --postsocket-line,
+    color-mix(in srgb, currentColor 14%, transparent)
+  );
+  --postsocket-entry-rail: 1px;
+  --postsocket-entry-dot: 8px;
+  --postsocket-entry-pinned-dot: 12px;
+
+  position: relative;
+  border-inline-start: var(--postsocket-entry-rail) solid
+    var(--postsocket-entry-line);
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: calc(
+      (var(--postsocket-entry-dot) + var(--postsocket-entry-rail)) / -2
+    );
+    inline-size: var(--postsocket-entry-dot);
+    block-size: var(--postsocket-entry-dot);
+    border-radius: 50%;
+    background: var(--wp--preset--color--black, #000);
+  }
+
+  &.is-pinned {
+    border: var(--postsocket-entry-rail) solid
+      var(--postsocket-entry-line);
+
+    &::before {
+      animation: postsocket-entry-pulse 1.6s ease-out infinite;
+      background: var(--postsocket-entry-accent);
+      box-shadow: 0 0 0 4px
+        color-mix(in srgb, var(--postsocket-entry-accent) 25%, transparent);
+      block-size: var(--postsocket-entry-pinned-dot);
+      inline-size: var(--postsocket-entry-pinned-dot);
+      inset-block-start: calc((var(--postsocket-entry-pinned-dot) / 2) * -1);
+      inset-inline-start: calc(
+        (var(--postsocket-entry-pinned-dot) + var(--postsocket-entry-rail)) / -2
+      );
+
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+      }
+    }
+  }
+}
+
+.postsocket-feed__pinned:not(:empty) {
+  & + .postsocket-feed__entries .postsocket-entry {
+    &:first-child {
+      padding-top: calc(var(--postsocket-entry-dot) * 2);
+      &::before {
+        inset-block-start: calc(var(--postsocket-entry-dot) * 2);
+      }
+    }
+  }
+}
+
+@keyframes postsocket-entry-pulse {
+  0% {
+    box-shadow: 0 0 0 0
+      color-mix(in srgb, var(--postsocket-entry-accent) 75%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 8px
+      color-mix(in srgb, var(--postsocket-entry-accent) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0
+      color-mix(in srgb, var(--postsocket-entry-accent) 0%, transparent);
+  }
+}

@@ -2,14 +2,14 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: ShopSocket 0.6.0\n"
+"Project-Id-Version: ShopSocket 0.8.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/shopsocket\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-07T05:51:45+00:00\n"
+"POT-Creation-Date: 2026-11-08T22:35:07+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 3.0.0-alpha-01b1b10\n"
 "X-Domain: shopsocket\n"
@@ -20,7 +20,7 @@ msgstr ""
 #: inc/admin-board.php:54
 #: inc/channels.php:28
 #: inc/class-privacy.php:30
-#: inc/settings.php:283
+#: inc/settings.php:240
 #: build/settings.js:1
 msgid "ShopSocket"
 msgstr ""
@@ -63,27 +63,27 @@ msgstr ""
 msgid "Update WordSocket"
 msgstr ""
 
-#: inc/admin-board.php:243
+#: inc/admin-board.php:246
 msgid "(opens in a new tab)"
 msgstr ""
 
-#: inc/admin-board.php:246
+#: inc/admin-board.php:249
 msgid "Dashboard"
 msgstr ""
 
-#: inc/admin-board.php:247
+#: inc/admin-board.php:250
 msgid "Documentation"
 msgstr ""
 
-#: inc/admin-board.php:248
+#: inc/admin-board.php:251
 msgid "Support"
 msgstr ""
 
-#: inc/admin-board.php:253
+#: inc/admin-board.php:256
 msgid "External links"
 msgstr ""
 
-#: inc/admin-board.php:258
+#: inc/admin-board.php:261
 msgid "ShopSocket home (opens in a new tab)"
 msgstr ""
 
@@ -125,15 +125,15 @@ msgstr ""
 msgid "Try again in a minute."
 msgstr ""
 
-#: inc/history.php:463
+#: inc/history.php:474
 msgid "Order placed"
 msgstr ""
 
-#: inc/history.php:465
+#: inc/history.php:476
 msgid "Orders a day"
 msgstr ""
 
-#: inc/history.php:470
+#: inc/history.php:481
 #: inc/rules.php:96
 #: build/board.js:7
 #: build/board.js:214
@@ -141,7 +141,7 @@ msgstr ""
 msgid "Cart"
 msgstr ""
 
-#: inc/history.php:471
+#: inc/history.php:482
 msgid "Carts left behind a day"
 msgstr ""
 
@@ -284,43 +284,43 @@ msgstr ""
 msgid "ShopSocket storefront settings."
 msgstr ""
 
-#: inc/settings.php:331
+#: inc/settings.php:288
 msgid "Default"
 msgstr ""
 
-#: inc/settings.php:332
+#: inc/settings.php:289
 msgid "On"
 msgstr ""
 
-#: inc/settings.php:333
+#: inc/settings.php:290
 msgid "Off"
 msgstr ""
 
 #. translators: %s: a link to the ShopSocket tab of the WordSocket settings page, reading "Settings"
-#: inc/settings.php:338
+#: inc/settings.php:295
 #, php-format
 msgid "What shoppers see for this product. Default follows the ShopSocket tab on the %s page, including its excluded categories; On and Off apply here whatever that page says."
 msgstr ""
 
-#: inc/settings.php:339
+#: inc/settings.php:296
 msgid "Settings"
 msgstr ""
 
-#: inc/settings.php:344
+#: inc/settings.php:301
 #: build/settings.js:1
 msgid "In-cart count"
 msgstr ""
 
-#: inc/settings.php:345
+#: inc/settings.php:302
 msgid "The \"shoppers have this in their cart\" line on this product."
 msgstr ""
 
-#: inc/settings.php:354
+#: inc/settings.php:311
 #: build/settings.js:1
 msgid "Added-to-cart notification"
 msgstr ""
 
-#: inc/settings.php:355
+#: inc/settings.php:312
 msgid "The \"someone just added this\" notice other shoppers see for this product."
 msgstr ""
 

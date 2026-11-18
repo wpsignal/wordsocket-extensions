@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "postsocket/entry-content",
+  "version": "0.1.0",
+  "title": "Entry Content",
+  "category": "theme",
+  "description": "Shows the content of the live blog entry.",
+  "keywords": ["live blog", "entry", "content"],
+  "textdomain": "postsocket",
+  "ancestor": ["postsocket/entry"],
+  "usesContext": ["postId", "postType"],
+  "supports": {
+    "html": false,
+    "multiple": false,
+    "reusable": false,
+    "color": {
+      "background": true,
+      "text": true,
+      "link": true
+    },
+    "spacing": {
+      "margin": true,
+      "padding": true
+    },
+    "typography": {
+      "fontSize": true,
+      "lineHeight": true
+    },
+    "__experimentalBorder": {
+      "color": true,
+      "radius": true,
+      "style": true,
+      "width": true,
+      "__experimentalDefaultControls": {
+        "color": true,
+        "radius": true,
+        "width": true
+      }
+    }
+  },
+  "editorScript": "file:./index.js"
+}
