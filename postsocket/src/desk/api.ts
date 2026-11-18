@@ -211,6 +211,48 @@ export function setEnded(liveblog: Liveblog, ended: boolean): Promise<Liveblog> 
 export interface Template {
   id: number;
   title: string;
+  modified: string;
+}
+
+/**
+ * The preview page split up: the page without its previews, and each preview's markup by key, `{id}` or `{id}:pinned`.
+ *
+ * @since 0.1.0
+ */
+export interface Previews {
+  shell: string;
+  sections: Record<string, string>;
+}
+
+const PREVIEW_SLOT = "<!--postsocket-preview-->";
+
+/**
+ * One entry printed in each pattern, as the site's front end styles it, in a single request; 0 is the default layout.
+ *
+ * @since 0.1.0
+ */
+export async function fetchPreviews(liveblog: number, patterns: number[]): Promise<Previews> {
+  const response = await fetch(addQueryArgs(cfg.previewUrl, { [cfg.previewArg]: liveblog, patterns: patterns.join(",") }), { credentials: "same-origin" });
+  if (!response.ok) throw new Error(`Template previews: ${response.status}`);
+  const page = new DOMParser().parseFromString(await response.text(), "text/html");
+  page.querySelectorAll('script, noscript, link[rel="modulepreload"], link[rel="preload"]').forEach((node) => node.remove());
+  const sections: Record<string, string> = {};
+  page.querySelectorAll<HTMLElement>("[data-postsocket-preview]").forEach((section) => {
+    sections[section.dataset.postsocketPreview ?? ""] = section.outerHTML;
+    section.remove();
+  });
+  page.body.prepend(page.createComment("postsocket-preview"));
+  return { shell: `<!doctype html>${page.documentElement.outerHTML}`, sections };
+}
+
+/**
+ * The document a frame shows for one preview, or null when the page holds none under that key.
+ *
+ * @since 0.1.0
+ */
+export function previewDocument(previews: Previews | null, key: string): string | null {
+  const section = previews?.sections[key];
+  return previews && section ? previews.shell.replace(PREVIEW_SLOT, () => section) : null;
 }
 
 /**
@@ -219,10 +261,12 @@ export interface Template {
  * @since 0.1.0
  */
 export async function fetchTemplates(): Promise<Template[]> {
-  const patterns = await apiFetch<{ id: number; title: { raw: string }; content: { raw: string } }[]>({
-    path: addQueryArgs("/wp/v2/blocks", { context: "edit", status: "publish", per_page: 100, _fields: "id,title,content" }),
+  const patterns = await apiFetch<{ id: number; modified_gmt: string; title: { raw: string }; content: { raw: string } }[]>({
+    path: addQueryArgs("/wp/v2/blocks", { context: "edit", status: "publish", per_page: 100, _fields: "id,modified_gmt,title,content" }),
   });
-  return patterns.filter((pattern) => pattern.content.raw.includes("<!-- wp:postsocket/entry ")).map((pattern) => ({ id: pattern.id, title: pattern.title.raw }));
+  return patterns
+    .filter((pattern) => pattern.content.raw.includes("<!-- wp:postsocket/entry "))
+    .map((pattern) => ({ id: pattern.id, title: pattern.title.raw, modified: pattern.modified_gmt }));
 }
 
 /**

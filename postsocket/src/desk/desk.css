@@ -43,3 +43,31 @@
 	/* Keeps the table's sticky layers under a dialog, which is rendered outside the desk. */
 	isolation: isolate;
 }
+
+/* A template preview: a front-end page in a frame, drawn at half size and cut to a fixed box. */
+.postsocket-template-preview {
+	inline-size: 320px;
+	block-size: 180px;
+	overflow: hidden;
+	border: 1px solid var(--wpds-color-stroke-surface-neutral, #ddd);
+	border-radius: var(--wpds-border-radius-md, 4px);
+	background: #fff;
+	box-sizing: border-box;
+
+	& * {
+		box-sizing: border-box;
+	}
+
+	& iframe {
+		inline-size: 640px;
+		block-size: 360px;
+		border: 0;
+		transform: scale(0.5);
+		transform-origin: top left;
+	}
+}
+
+/* A template select is wide enough for a pattern's name, whatever the row leaves it. */
+.postsocket-template-select {
+	min-inline-size: 220px;
+}

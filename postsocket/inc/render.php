@@ -570,11 +570,24 @@ function entry_labels( \WP_Post $entry ): string {
  *
  * @since 0.1.0
  *
- * @param \WP_Post $entry The entry.
+ * @param \WP_Post $entry   The entry.
+ * @param string   $variant A Live Feed block's variant, or empty.
  * @return string
  */
-function render_entry( \WP_Post $entry ): string {
-	$template = entry_template( liveblog_id_of( $entry ), is_pinned( $entry->ID ) );
+function render_entry( \WP_Post $entry, string $variant = '' ): string {
+	return render_entry_in( $entry, entry_template( liveblog_id_of( $entry ), is_pinned( $entry->ID ), $variant ) );
+}
+
+/**
+ * An entry printed in a parsed Live Blog Entry block, or in the default layout for null.
+ *
+ * @since 0.1.0
+ *
+ * @param \WP_Post   $entry    The entry.
+ * @param array|null $template The parsed block.
+ * @return string
+ */
+function render_entry_in( \WP_Post $entry, ?array $template ): string {
 	if ( ! $template ) {
 		return render_default_entry( $entry );
 	}

@@ -114,6 +114,20 @@ const META_TEMPLATE = '_postsocket_template';
 const META_PINNED_TEMPLATE = '_postsocket_pinned_template';
 
 /**
+ * Term meta key, one row per placement, for a template variant a published post shows the live blog in: `{variant}:{post id}`.
+ *
+ * @since 0.1.0
+ */
+const META_VARIANT = '_postsocket_variant';
+
+/**
+ * Post meta key for the variants a post's Live Feed blocks show, each `{live blog id}:{variant}`.
+ *
+ * @since 0.1.0
+ */
+const META_FEEDS = '_postsocket_feeds';
+
+/**
  * Oldest WordSocket this plugin runs with.
  *
  * @since 0.1.0
@@ -143,6 +157,7 @@ require_once DIR . 'inc/feed.php';
 require_once DIR . 'inc/blocks.php';
 require_once DIR . 'inc/living.php';
 require_once DIR . 'inc/reader.php';
+require_once DIR . 'inc/preview.php';
 if ( is_admin() ) {
 	require_once DIR . 'inc/admin.php';
 	require_once DIR . 'inc/desk.php';

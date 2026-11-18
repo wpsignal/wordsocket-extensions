@@ -58,6 +58,8 @@ interface PostSocketDeskConfig {
   createPageUrl: string;
   editUrl: string;
   templateUrl: string;
+  previewUrl: string;
+  previewArg: string;
   meta: { state: string; started: string; ended: string; home: string; pinned: string; template: string; pinnedTemplate: string };
   channel: string;
   deskChannel: string;

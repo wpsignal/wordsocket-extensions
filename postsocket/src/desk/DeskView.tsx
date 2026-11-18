@@ -24,6 +24,7 @@ import {
   Badge,
   ButtonLink,
   Card,
+  CollapsibleCard,
   EmptyState,
   Link,
   Notice,
@@ -37,8 +38,10 @@ import {
   coalesce,
   deleteEntry,
   entriesPath,
+  fetchPreviews,
   fetchTemplates,
   liveblogsPath,
+  previewDocument,
   restoreEntry,
   setEnded,
   setTemplate,
@@ -47,6 +50,7 @@ import {
   usePage,
   type Entry,
   type Liveblog,
+  type Previews,
   type Template,
 } from "./api";
 import { formatTime, isEnded } from "./format";
@@ -200,6 +204,26 @@ export function DeskView({
     [],
   );
   useEffect(loadTemplates, [loadTemplates]);
+
+  /* The previews are fetched again only when a pattern is added, removed or saved. */
+  const [previews, setPreviews] = useState<Previews | null>(null);
+  const [highlighted, setHighlighted] = useState<Record<string, string>>({});
+  const templatesKey = templates
+    .map((template) => `${template.id}:${template.modified}`)
+    .join(",");
+  useEffect(() => {
+    if (!cfg.canManage) return;
+    let current = true;
+    const ids = templatesKey
+      ? templatesKey.split(",").map((part) => parseInt(part, 10))
+      : [];
+    fetchPreviews(id, [0, ...ids])
+      .then((next) => current && setPreviews(next))
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [id, templatesKey]);
 
   const query = {
     context: "edit",
@@ -449,13 +473,30 @@ export function DeskView({
 
   const ended = liveblog ? isEnded(liveblog) : false;
   const home = liveblog?.postsocket.home ?? null;
+
   const templateSelect = (
     label: string,
     key: string,
     none: string,
+    pinned = false,
   ): JSX.Element | null => {
     if (!liveblog) return null;
     const chosen = Number(liveblog.meta[key] ?? 0);
+    /* The option under the pointer or the keys while the list is open, else the choice; a pinned entry without a template of its own is shown in the entries' one. */
+    let shown = Number(highlighted[key] ?? chosen);
+    if (pinned && shown === 0) {
+      shown = Number(liveblog.meta[cfg.meta.template] ?? 0);
+    }
+    const preview = previewDocument(
+      previews,
+      `${shown}${pinned ? ":pinned" : ""}`,
+    );
+    const setShown = (value?: string): void =>
+      setHighlighted((was) => {
+        if (was[key] === value) return was;
+        const { [key]: _, ...rest } = was;
+        return value === undefined ? rest : { ...rest, [key]: value };
+      });
     const items = [
       { value: "0", label: none },
       ...templates.map((template) => ({
@@ -464,39 +505,60 @@ export function DeskView({
       })),
     ];
     return (
-      <Stack direction="row" gap="sm" align="end">
-        <SearchableSelectControl
-          label={label}
-          items={items}
-          value={
-            items.find((item) => item.value === String(chosen)) ?? items[0]
-          }
-          onValueChange={(item) => {
-            const next = item ? Number(item.value) : 0;
-            void run(
-              () =>
-                setLiveblog({
-                  ...liveblog,
-                  meta: { ...liveblog.meta, [key]: next },
-                }),
-              () => setTemplate(liveblog.id, key, next).then(setLiveblog),
-            );
-          }}
-        />
-        {chosen > 0 && (
-          <ButtonLink
-            variant="outline"
-            size="compact"
-            href={`${cfg.editUrl}${chosen}`}
-            aria-label={sprintf(
-              /* translators: %s: which template, such as "Entry template" */
-              __("Edit: %s", "postsocket"),
-              label,
+      <Stack direction="column" gap="lg">
+        <Text variant="heading-sm">{label}</Text>
+        <Stack direction="row" gap="sm" align="start">
+          {preview && (
+            <div className="postsocket-template-preview">
+              <iframe
+                /* translators: %s: which template, such as "Entry template" */
+                title={sprintf(__("Preview: %s", "postsocket"), label)}
+                srcDoc={preview}
+                sandbox="allow-same-origin"
+                tabIndex={-1}
+              />
+            </div>
+          )}
+          <Stack direction="column" gap="sm" align="end">
+            <SearchableSelectControl
+              label={label}
+              hideLabelFromVision
+              className="postsocket-template-select"
+              popupWidth="content"
+              items={items}
+              onItemHighlighted={(item) => setShown(item?.value)}
+              onOpenChange={(open) => !open && setShown()}
+              value={
+                items.find((item) => item.value === String(chosen)) ?? items[0]
+              }
+              onValueChange={(item) => {
+                const next = item ? Number(item.value) : 0;
+                void run(
+                  () =>
+                    setLiveblog({
+                      ...liveblog,
+                      meta: { ...liveblog.meta, [key]: next },
+                    }),
+                  () => setTemplate(liveblog.id, key, next).then(setLiveblog),
+                );
+              }}
+            />
+            {chosen > 0 && (
+              <ButtonLink
+                variant="outline"
+                size="compact"
+                href={`${cfg.editUrl}${chosen}`}
+                aria-label={sprintf(
+                  /* translators: %s: which template, such as "Entry template" */
+                  __("Edit: %s", "postsocket"),
+                  label,
+                )}
+              >
+                {__("Edit", "postsocket")}
+              </ButtonLink>
             )}
-          >
-            {__("Edit", "postsocket")}
-          </ButtonLink>
-        )}
+          </Stack>
+        </Stack>
       </Stack>
     );
   };
@@ -598,27 +660,7 @@ export function DeskView({
                   </Stack>
                 )}
               </Stack>
-              {cfg.canManage && (
-                <Stack direction="row" gap="sm" align="end" wrap="wrap">
-                  {templateSelect(
-                    __("Entry template", "postsocket"),
-                    cfg.meta.template,
-                    __("Default layout", "postsocket"),
-                  )}
-                  {templateSelect(
-                    __("Pinned entry template", "postsocket"),
-                    cfg.meta.pinnedTemplate,
-                    __("Same as entries", "postsocket"),
-                  )}
-                  <ButtonLink
-                    variant="outline"
-                    size="compact"
-                    href={cfg.templateUrl}
-                  >
-                    {__("Create template", "postsocket")}
-                  </ButtonLink>
-                </Stack>
-              )}
+
               {cfg.canManage && (
                 <SwitchControl
                   label={__("End Live Blog", "postsocket")}
@@ -642,6 +684,44 @@ export function DeskView({
           </Card.Content>
         </Card.Root>
       )}
+
+      <CollapsibleCard.Root defaultOpen>
+        <CollapsibleCard.Header>
+        <Stack direction="row" gap="xl" align="center" justify="space-between">
+            <Text variant="heading-lg">{__("Patterns", "postsocket")}</Text>
+            <Text variant="body-sm">{__("Create and edit patterns for your Live Blog entries.", "postsocket")}</Text>
+          </Stack>
+        </CollapsibleCard.Header>
+
+        <CollapsibleCard.Content>
+          {cfg.canManage && (
+            <Stack direction="column" gap="xl">
+              <Stack direction="row" gap="xl" align="end" wrap="wrap">
+                {templateSelect(
+                  __("Entry template", "postsocket"),
+                  cfg.meta.template,
+                  __("Default layout", "postsocket"),
+                )}
+                {templateSelect(
+                  __("Pinned entry template", "postsocket"),
+                  cfg.meta.pinnedTemplate,
+                  __("Same as entries", "postsocket"),
+                  true,
+                )}
+              </Stack>
+              <div>
+                  <ButtonLink
+                    variant="outline"
+                    size="compact"
+                    href={cfg.templateUrl}
+                  >
+                    {__("Create template", "postsocket")}
+                  </ButtonLink>
+              </div>
+            </Stack>
+          )}
+        </CollapsibleCard.Content>
+      </CollapsibleCard.Root>
 
       <Tabs.Root
         value={tab}

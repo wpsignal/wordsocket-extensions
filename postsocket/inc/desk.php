@@ -150,6 +150,8 @@ function enqueue_desk(): void {
 				'createPageUrl' => add_query_arg( 'post_type', host_post_type(), admin_url( 'post-new.php' ) ),
 				'editUrl'       => admin_url( 'post.php?action=edit&post=' ),
 				'templateUrl'   => create_template_url(),
+				'previewUrl'    => template_preview_url(),
+				'previewArg'    => PREVIEW_ARG,
 				'meta'          => array(
 					'state'          => META_STATE,
 					'started'        => META_STARTED,
