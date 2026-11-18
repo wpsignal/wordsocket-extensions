@@ -122,23 +122,24 @@ function claim_publish( string $event, int $post_id, ?bool $release = null ): bo
  *
  * @since 0.1.0
  *
- * @param \WP_Post $entry The entry.
+ * @param \WP_Post $entry   The entry.
+ * @param string   $variant A Live Feed block's variant, or empty.
  * @return array{html: string, assets: array, hash: string}
  */
-function rendered_entry( \WP_Post $entry ): array {
+function rendered_entry( \WP_Post $entry, string $variant = '' ): array {
 	static $cache = array();
 	$key          = implode(
 		':',
 		array(
 			$entry->ID,
-			md5( $entry->post_title . "\0" . $entry->post_content . "\0" . entry_template_markup( liveblog_id_of( $entry ), is_pinned( $entry->ID ) ) ),
+			md5( $entry->post_title . "\0" . $entry->post_content . "\0" . entry_template_markup( liveblog_id_of( $entry ), is_pinned( $entry->ID ), $variant ) ),
 			is_pinned( $entry->ID ) ? 1 : 0,
 			(int) get_post_thumbnail_id( $entry ),
 			render_generation( $entry->ID ),
 		)
 	);
 	if ( ! isset( $cache[ $key ] ) ) {
-		$rendered         = with_render_assets( static fn() => render_entry( $entry ) );
+		$rendered         = with_render_assets( static fn() => render_entry( $entry, $variant ) );
 		$rendered['hash'] = content_hash( $rendered['html'] );
 		$cache[ $key ]    = $rendered;
 	}
@@ -185,19 +186,22 @@ function content_moved( int $post_id, ?bool $set = null ): bool {
 }
 
 /**
- * The `postsocket.entry.updated` payload.
+ * The `postsocket.entry.updated` payload: the entry as the live blog prints it with the variants published beside it, or as one variant prints it.
  *
  * @since 0.1.0
  *
- * @param \WP_Post $entry The entry.
+ * @param \WP_Post $entry   The entry.
+ * @param string   $variant A variant, or empty.
  * @return array
  */
-function entry_payload( \WP_Post $entry ): array {
+function entry_payload( \WP_Post $entry, string $variant = '' ): array {
+	$liveblog_id = liveblog_id_of( $entry );
+	$variants    = '' === $variant ? liveblog_variants( $liveblog_id ) : array();
 	return fit_payload(
 		array(
 			'id'       => (int) $entry->ID,
-			'liveblog' => liveblog_id_of( $entry ),
-			'html'     => rendered_entry( $entry )['html'],
+			'liveblog' => $liveblog_id,
+			'html'     => rendered_entry( $entry, $variant )['html'],
 			'headline' => get_the_title( $entry ),
 			'date'     => mysql2date( 'c', $entry->post_date_gmt, false ),
 			'modified' => mysql2date( 'c', $entry->post_modified_gmt, false ),
@@ -206,9 +210,25 @@ function entry_payload( \WP_Post $entry ): array {
 				'name'   => get_the_author_meta( 'display_name', (int) $entry->post_author ),
 				'avatar' => get_avatar_url( (int) $entry->post_author, array( 'size' => 64 ) ),
 			),
-			'assets'   => rendered_entry( $entry )['assets'],
-		)
+			'assets'   => rendered_entry( $entry, $variant )['assets'],
+		) + ( '' !== $variant ? array( 'variant' => $variant ) : array() ) + ( $variants ? array( 'variants' => $variants ) : array() )
 	);
+}
+
+/**
+ * The payload for the live blog's channel, after the entry is published on the channel of each variant a post shows.
+ *
+ * @since 0.1.0
+ *
+ * @param \WP_Post $entry The entry.
+ * @return array
+ */
+function publish_entry( \WP_Post $entry ): array {
+	$liveblog_id = liveblog_id_of( $entry );
+	foreach ( liveblog_variants( $liveblog_id ) as $variant ) {
+		WPS::publish( variant_channel( $liveblog_id, $variant ), 'postsocket.entry.updated', entry_payload( $entry, $variant ) );
+	}
+	return entry_payload( $entry );
 }
 
 /**
@@ -625,6 +645,7 @@ const UNWATCHED_META = array(
 	META_HASH,
 	META_PINNED,
 	META_LIVE,
+	META_FEEDS,
 	'_edit_lock',
 	'_edit_last',
 	'_pingme',
@@ -766,6 +787,22 @@ add_action(
 );
 
 /**
+ * A short name for the markup a live blog's entries are printed in, its variants included.
+ *
+ * @since 0.1.0
+ *
+ * @param int $liveblog_id Live blog id.
+ * @return string
+ */
+function template_version( int $liveblog_id ): string {
+	$markup = '';
+	foreach ( array_merge( array( '' ), liveblog_variants( $liveblog_id ) ) as $variant ) {
+		$markup .= entry_template_markup( $liveblog_id, false, $variant ) . "\0" . entry_template_markup( $liveblog_id, true, $variant ) . "\0";
+	}
+	return substr( md5( $markup ), 0, 8 );
+}
+
+/**
  * Tell a live blog's readers that its entry template changed, once per request.
  *
  * @since 0.1.0
@@ -846,7 +883,7 @@ add_action(
 			->on( 'wp_after_insert_post', 20, 2 )
 			->channel( $entry_channel, $label )
 			->when( static fn( int $id, \WP_Post $post ): bool => entry_publishable( $post ) )
-			->data( static fn( int $id, \WP_Post $post ): array => entry_payload( $post ) )
+			->data( static fn( int $id, \WP_Post $post ): array => publish_entry( $post ) )
 			->register();
 
 		foreach ( array( 'updated_post_meta', 'added_post_meta', 'deleted_post_meta' ) as $hook ) {
@@ -854,7 +891,7 @@ add_action(
 				->on( $hook, 10, 4 )
 				->channel( static fn( $meta_id, int $post_id ): string => $entry_channel( $post_id ), $label )
 				->when( static fn( $meta_id, int $post_id, string $key ): bool => in_array( $key, array( META_PINNED, '_thumbnail_id' ), true ) && entry_publishable( get_post( $post_id ) ) )
-				->data( static fn( $meta_id, int $post_id ): array => entry_payload( get_post( $post_id ) ) )
+				->data( static fn( $meta_id, int $post_id ): array => publish_entry( get_post( $post_id ) ) )
 				->register();
 		}
 
@@ -881,7 +918,7 @@ add_action(
 			->on( 'set_object_terms', 20, 4 )
 			->channel( static fn( int $id ): string => $entry_channel( $id ), $label )
 			->when( static fn( int $id ): bool => is_entry( $id ) && entry_publishable( get_post( $id ) ) )
-			->data( static fn( int $id ): array => entry_payload( get_post( $id ) ) )
+			->data( static fn( int $id ): array => publish_entry( get_post( $id ) ) )
 			->register();
 
 		WPS::trigger( 'postsocket.entry.removed' )
@@ -946,7 +983,7 @@ add_action(
 			->data(
 				static fn( int $id ): array => array(
 					'id' => $id,
-					'v'  => substr( md5( entry_template_markup( $id ) . "\0" . entry_template_markup( $id, true ) ), 0, 8 ),
+					'v'  => template_version( $id ),
 				)
 			)
 			->register();

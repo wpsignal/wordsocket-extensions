@@ -26,6 +26,19 @@ function liveblog_channel( int $liveblog_id ): string {
 }
 
 /**
+ * The channel a live blog's entries travel on as one variant prints them.
+ *
+ * @since 0.1.0
+ *
+ * @param int    $liveblog_id Live blog term id.
+ * @param string $variant     Variant.
+ * @return string
+ */
+function variant_channel( int $liveblog_id, string $variant ): string {
+	return liveblog_channel( $liveblog_id ) . ':t:' . $variant;
+}
+
+/**
  * The channel a post's content updates travel on.
  *
  * @since 0.1.0

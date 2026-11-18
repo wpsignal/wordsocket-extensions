@@ -94,17 +94,58 @@ add_filter(
 );
 
 /**
+ * What proves the server gave a feed its variant, sent back with the variant to the entries and drafts routes.
+ *
+ * @since 0.1.0
+ *
+ * @param int    $liveblog_id Live blog id.
+ * @param string $variant     Variant.
+ * @return string
+ */
+function variant_token( int $liveblog_id, string $variant ): string {
+	return substr( wp_hash( 'postsocket-variant:' . $liveblog_id . ':' . $variant ), 0, 16 );
+}
+
+/**
+ * The variant a request asks its entries in, empty for none, or an error when its token does not match.
+ *
+ * @since 0.1.0
+ *
+ * @param \WP_REST_Request $request     The request.
+ * @param int              $liveblog_id Live blog id.
+ * @return string|\WP_Error
+ */
+function requested_variant( \WP_REST_Request $request, int $liveblog_id ): string|\WP_Error {
+	$variant = (string) ( $request['template'] ?? '' );
+	if ( '' === $variant ) {
+		return '';
+	}
+	if ( array( 0, 0 ) === variant_templates( $variant ) || ! hash_equals( variant_token( $liveblog_id, $variant ), (string) ( $request['sig'] ?? '' ) ) ) {
+		return new \WP_Error( 'postsocket_invalid_template', __( 'No such template for this live blog.', 'postsocket' ), array( 'status' => 403 ) );
+	}
+	return $variant;
+}
+
+/**
  * The feed markup for a live blog, with its module enqueued and its store seeded.
  *
  * @since 0.1.0
  *
- * @param int $liveblog_id Live blog term id.
+ * @param int    $liveblog_id Live blog term id.
+ * @param string $variant     The variant of the Live Feed block it is printed for, or empty.
  * @return string Empty for anything but a live blog.
  */
-function render_feed( int $liveblog_id ): string {
+function render_feed( int $liveblog_id, string $variant = '' ): string {
+	static $feeds = 0;
 	if ( ! is_liveblog( $liveblog_id ) ) {
 		return '';
 	}
+	$variant  = array( 0, 0 ) === variant_templates( $variant ) ? '' : $variant;
+	$key      = 'f' . ( ++$feeds );
+	$asked    = '' !== $variant ? array(
+		'template' => $variant,
+		'sig'      => variant_token( $liveblog_id, $variant ),
+	) : array();
 	$per_page = settings()['entries_per_page'];
 	$pinned   = entries_query(
 		$liveblog_id,
@@ -136,58 +177,73 @@ function render_feed( int $liveblog_id ): string {
 	wp_interactivity_state(
 		FEED_STORE,
 		array(
-			'channel'     => liveblog_channel( $liveblog_id ),
-			'entriesUrl'  => rest_url( REST_NS . '/liveblog/' . $liveblog_id . '/entries' ),
-			'draftsUrl'   => rest_url( REST_NS . '/liveblog/' . $liveblog_id . '/drafts' ),
-			'nonceUrl'    => admin_url( 'admin-ajax.php?action=rest-nonce' ),
-			'deskChannel' => desk_channel( $liveblog_id ),
-			'perPage'     => $per_page,
-			'ended'       => 'ended' === $state,
-			'more'        => $more,
-			'pending'     => 0,
-			'loading'     => false,
-			'i18n'        => array(
+			'nonceUrl' => admin_url( 'admin-ajax.php?action=rest-nonce' ),
+			'perPage'  => $per_page,
+			'i18n'     => array(
 				'live'    => __( 'Live', 'postsocket' ),
 				'ended'   => __( 'Ended', 'postsocket' ),
 				/* translators: %d: number of new updates waiting above */
 				'pending' => __( '%d new updates', 'postsocket' ),
 				'one'     => __( '1 new update', 'postsocket' ),
 			),
+			'feeds'    => array(
+				$key => array(
+					'variant'        => $variant,
+					'channel'        => liveblog_channel( $liveblog_id ),
+					'variantChannel' => '' !== $variant ? variant_channel( $liveblog_id, $variant ) : '',
+					'entriesUrl'     => add_query_arg( $asked, rest_url( REST_NS . '/liveblog/' . $liveblog_id . '/entries' ) ),
+					'draftsUrl'      => add_query_arg( $asked, rest_url( REST_NS . '/liveblog/' . $liveblog_id . '/drafts' ) ),
+					'deskChannel'    => desk_channel( $liveblog_id ),
+					'ended'          => 'ended' === $state,
+					'badge'          => 'ended' === $state ? __( 'Ended', 'postsocket' ) : __( 'Live', 'postsocket' ),
+					'more'           => $more,
+					'pending'        => 0,
+					'pendingLabel'   => '',
+					'loading'        => false,
+				),
+			),
 		)
 	);
+	$own   = 'state.feeds.' . $key . '.';
 	$html  = sprintf(
-		'<section class="postsocket-feed" data-postsocket-feed="%1$d" data-postsocket-state="%2$s" data-postsocket-newest="%3$s" data-postsocket-oldest="%4$s" data-postsocket-oldest-id="%8$d" data-postsocket-rendered="%5$d" data-wp-interactive="%6$s" %7$s>',
+		'<section class="postsocket-feed" data-postsocket-feed="%1$d"%9$s data-postsocket-state="%2$s" data-postsocket-newest="%3$s" data-postsocket-oldest="%4$s" data-postsocket-oldest-id="%8$d" data-postsocket-rendered="%5$d" data-wp-interactive="%6$s" %7$s>',
 		$liveblog_id,
 		esc_attr( $state ),
 		esc_attr( $newest ),
 		esc_attr( $oldest ),
 		time(),
 		esc_attr( FEED_STORE ),
-		wp_interactivity_data_wp_context( array( 'liveblog' => $liveblog_id ) ),
-		$oldest_id
+		wp_interactivity_data_wp_context( array( 'feed' => $key ) ),
+		$oldest_id,
+		'' !== $variant ? ' data-postsocket-variant="' . esc_attr( $variant ) . '"' : ''
 	);
 	$html .= '<header class="postsocket-feed__header">';
 	$html .= sprintf(
-		'<span class="postsocket-feed__badge%s" data-wp-class--is-ended="state.ended" data-wp-text="state.badge">%s</span>',
+		'<span class="postsocket-feed__badge%1$s" data-wp-class--is-ended="%3$sended" data-wp-text="%3$sbadge">%2$s</span>',
 		'ended' === $state ? ' is-ended' : '',
-		'ended' === $state ? esc_html__( 'Ended', 'postsocket' ) : esc_html__( 'Live', 'postsocket' )
+		'ended' === $state ? esc_html__( 'Ended', 'postsocket' ) : esc_html__( 'Live', 'postsocket' ),
+		$own
 	);
-	$html .= '<button type="button" class="postsocket-feed__pending" hidden data-wp-bind--hidden="!state.pending" data-wp-on--click="actions.showPending" data-wp-text="state.pendingLabel"></button>';
+	$html .= sprintf(
+		'<button type="button" class="postsocket-feed__pending" hidden data-wp-bind--hidden="!%1$spending" data-wp-on--click="actions.showPending" data-wp-text="%1$spendingLabel"></button>',
+		$own
+	);
 	$html .= '</header>';
 	$html .= '<div class="postsocket-feed__pinned" data-postsocket-pinned-list>';
 	foreach ( $pinned as $entry ) {
-		$html .= render_entry( $entry );
+		$html .= render_entry( $entry, $variant );
 	}
 	$html .= '</div>';
 	$html .= '<div class="postsocket-feed__entries" data-postsocket-entry-list>';
 	foreach ( $latest as $entry ) {
-		$html .= render_entry( $entry );
+		$html .= render_entry( $entry, $variant );
 	}
 	$html .= '</div>';
 	$html .= sprintf(
-		'<button type="button" class="postsocket-feed__older"%s data-wp-bind--hidden="!state.more" data-wp-bind--disabled="state.loading" data-wp-on--click="actions.loadOlder">%s</button>',
+		'<button type="button" class="postsocket-feed__older"%1$s data-wp-bind--hidden="!%3$smore" data-wp-bind--disabled="%3$sloading" data-wp-on--click="actions.loadOlder">%2$s</button>',
 		$more ? '' : ' hidden',
-		esc_html__( 'Load older updates', 'postsocket' )
+		esc_html__( 'Load older updates', 'postsocket' ),
+		$own
 	);
 	$html .= '</section>';
 	return $html;
@@ -291,6 +347,8 @@ add_action(
 						'minimum' => 1,
 						'maximum' => ENTRIES_MAX,
 					),
+					'template'  => array( 'type' => 'string' ),
+					'sig'       => array( 'type' => 'string' ),
 				),
 				'callback'            => __NAMESPACE__ . '\handle_entries',
 			)
@@ -301,6 +359,10 @@ add_action(
 			array(
 				'methods'             => 'GET',
 				'permission_callback' => static fn(): bool => current_user_can( 'edit_posts' ),
+				'args'                => array(
+					'template' => array( 'type' => 'string' ),
+					'sig'      => array( 'type' => 'string' ),
+				),
 				'callback'            => __NAMESPACE__ . '\handle_drafts',
 			)
 		);
@@ -308,7 +370,7 @@ add_action(
 );
 
 /**
- * Serve a page of a live blog's entries, newest first, as rendered items.
+ * Serve a page of a live blog's entries, newest first, as rendered items, in the variant asked for.
  *
  * @since 0.1.0
  *
@@ -320,6 +382,11 @@ function handle_entries( \WP_REST_Request $request ): \WP_REST_Response|\WP_Erro
 	if ( ! $liveblog ) {
 		return new \WP_Error( 'postsocket_not_found', __( 'No such live blog.', 'postsocket' ), array( 'status' => 404 ) );
 	}
+	$variant = requested_variant( $request, (int) $liveblog->term_id );
+	if ( is_wp_error( $variant ) ) {
+		return $variant;
+	}
+
 	$limit     = (int) ( $request['limit'] ?? settings()['entries_per_page'] );
 	$before    = (string) ( $request['before'] ?? '' );
 	$before_id = (int) ( $request['before_id'] ?? 0 );
@@ -342,7 +409,7 @@ function handle_entries( \WP_REST_Request $request ): \WP_REST_Response|\WP_Erro
 	$more  = count( $posts ) > $limit;
 	$items = array();
 	foreach ( array_slice( $posts, 0, $limit ) as $entry ) {
-		$rendered = rendered_entry( $entry );
+		$rendered = rendered_entry( $entry, $variant );
 		$items[]  = array(
 			'id'       => (int) $entry->ID,
 			'html'     => $rendered['html'],
@@ -372,7 +439,7 @@ function handle_entries( \WP_REST_Request $request ): \WP_REST_Response|\WP_Erro
 const DRAFTS_MAX = 50;
 
 /**
- * Serve a live blog's draft, pending and scheduled entries that the current user may edit, as rendered items, never cached.
+ * Serve a live blog's draft, pending and scheduled entries that the current user may edit, as rendered items in the variant asked for, never cached.
  *
  * @since 0.1.0
  *
@@ -383,6 +450,10 @@ function handle_drafts( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error
 	$liveblog = get_liveblog( (int) $request['id'] );
 	if ( ! $liveblog ) {
 		return new \WP_Error( 'postsocket_not_found', __( 'No such live blog.', 'postsocket' ), array( 'status' => 404 ) );
+	}
+	$variant = requested_variant( $request, (int) $liveblog->term_id );
+	if ( is_wp_error( $variant ) ) {
+		return $variant;
 	}
 	$posts = entries_query(
 		$liveblog->term_id,
@@ -400,7 +471,7 @@ function handle_drafts( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error
 		if ( ! current_user_can( 'edit_post', $entry->ID ) ) {
 			continue;
 		}
-		$rendered = rendered_entry( $entry );
+		$rendered = rendered_entry( $entry, $variant );
 		$items[]  = array(
 			'id'       => (int) $entry->ID,
 			'html'     => $rendered['html'],

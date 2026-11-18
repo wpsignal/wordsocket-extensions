@@ -2,9 +2,11 @@
 /**
  * PostSocket's blocks.
  *
- * - `postsocket/live-feed`: the live blog named by its `liveblog` attribute, rendered by `render_feed()`.
+ * - `postsocket/live-feed`: the live blog named by its `liveblog` attribute, in the templates it names or the live blog's, rendered by `render_feed()`.
  * - `postsocket/entry`: the element an entry is printed in, for a live blog's entry template.
  * - `postsocket/entry-content`: the entry's content, inside that block.
+ * - `postsocket/pinned`: an icon in a collection of its own, for the Icon block.
+ * - `postsocket-grey`: a colour added to the theme's palette.
  *
  * @package WPSignal\Extensions\PostSocket
  */
@@ -55,15 +57,92 @@ add_action(
 );
 
 /**
+ * The colours PostSocket adds to the editor's palette.
+ *
+ * @since 0.1.0
+ *
+ * @return array<int, array{slug: string, name: string, color: string}>
+ */
+function palette(): array {
+	return array(
+		array(
+			'slug'  => 'postsocket-grey',
+			'name'  => __( 'PostSocket Grey', 'postsocket' ),
+			'color' => '#d9d9d9',
+		),
+	);
+}
+
+/**
+ * The theme's own palette, before PostSocket's colours: its theme.json's, else its parent's, else the one it declares through theme support.
+ *
+ * @since 0.1.0
+ *
+ * @param array $data The theme's theme.json data.
+ * @return array[]
+ */
+function theme_palette( array $data ): array {
+	$palette = $data['settings']['color']['palette'] ?? null;
+	if ( is_array( $palette ) ) {
+		return array_values( $palette['theme'] ?? $palette );
+	}
+	$parent = wp_get_theme()->parent();
+	$file   = $parent ? $parent->get_file_path( 'theme.json' ) : '';
+	if ( $file && is_readable( $file ) ) {
+		$palette = wp_json_file_decode( $file, array( 'associative' => true ) )['settings']['color']['palette'] ?? null;
+		if ( is_array( $palette ) ) {
+			return array_values( $palette );
+		}
+	}
+	$support = get_theme_support( 'editor-color-palette' );
+	return is_array( $support ) && is_array( $support[0] ?? null ) ? array_values( $support[0] ) : array();
+}
+
+// PostSocket's colours join the theme's palette, after the theme's own.
+add_filter(
+	'wp_theme_json_data_theme',
+	static function ( $theme_json ) {
+		$data = $theme_json->get_data();
+		$own  = array_column( palette(), 'slug' );
+		$kept = array_filter( theme_palette( $data ), static fn( $color ): bool => ! in_array( $color['slug'] ?? '', $own, true ) );
+		return $theme_json->update_with(
+			array(
+				'version'  => $data['version'] ?? \WP_Theme_JSON::LATEST_SCHEMA,
+				'settings' => array( 'color' => array( 'palette' => array_merge( array_values( $kept ), palette() ) ) ),
+			)
+		);
+	}
+);
+
+// PostSocket's icon collection, where WordPress has icon collections.
+add_action(
+	'init',
+	static function (): void {
+		if ( ! function_exists( 'wp_register_icon_collection' ) ) {
+			return;
+		}
+		wp_register_icon_collection( SLUG, array( 'label' => __( 'PostSocket', 'postsocket' ) ) );
+		wp_register_icon(
+			SLUG . '/pinned',
+			array(
+				'label'     => __( 'Pinned', 'postsocket' ),
+				'file_path' => DIR . 'icons/pinned.svg',
+			)
+		);
+	}
+);
+
+/**
  * The empty marker a relay render puts where a feed sits, so the browser keeps its own feed there.
  *
  * @since 0.1.0
  *
- * @param int $liveblog_id Live blog id.
+ * @param int    $liveblog_id Live blog id.
+ * @param string $variant     The feed's variant, or empty.
  * @return string
  */
-function feed_slot( int $liveblog_id ): string {
-	return '<div data-postsocket-feed-slot="' . $liveblog_id . '" hidden></div>';
+function feed_slot( int $liveblog_id, string $variant = '' ): string {
+	return '<div data-postsocket-feed-slot="' . esc_attr( $liveblog_id . ( '' !== $variant ? ':' . $variant : '' ) ) . '" hidden></div>';
 }
 
 /**
@@ -80,9 +159,9 @@ function render_live_feed_block( array $attributes ): string {
 		return '';
 	}
 	if ( rendering_for_relay() ) {
-		return feed_slot( $liveblog_id );
+		return feed_slot( $liveblog_id, feed_variant( $attributes ) );
 	}
-	return render_feed( $liveblog_id );
+	return render_feed( $liveblog_id, feed_variant( $attributes ) );
 }
 
 /**

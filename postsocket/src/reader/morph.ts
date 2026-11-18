@@ -17,10 +17,16 @@ const HIGHLIGHT_MS = 2500;
 const FEED = "[data-postsocket-feed]";
 const SLOT = "[data-postsocket-feed-slot]";
 
-/** The slot a relay render puts where the feed for `liveblog` sits. */
-function slotFor(liveblog: string): HTMLElement {
+/** What a feed's slot is named by: its live blog, and its variant when it has one. */
+function slotKey(feed: Element): string {
+  const variant = feed.getAttribute("data-postsocket-variant") ?? "";
+  return (feed.getAttribute("data-postsocket-feed") ?? "") + (variant ? `:${variant}` : "");
+}
+
+/** The slot a relay render puts where a feed sits. */
+function slotFor(feed: Element): HTMLElement {
   const slot = document.createElement("div");
-  slot.setAttribute("data-postsocket-feed-slot", liveblog);
+  slot.setAttribute("data-postsocket-feed-slot", slotKey(feed));
   slot.hidden = true;
   return slot;
 }
@@ -29,10 +35,10 @@ function slotFor(liveblog: string): HTMLElement {
 function identity(el: Element): string {
   let node: Element = el;
   if (el.matches(FEED)) {
-    node = slotFor(el.getAttribute("data-postsocket-feed") ?? "");
+    node = slotFor(el);
   } else if (el.querySelector(FEED)) {
     node = el.cloneNode(true) as Element;
-    for (const feed of node.querySelectorAll(FEED)) feed.replaceWith(slotFor(feed.getAttribute("data-postsocket-feed") ?? ""));
+    for (const feed of node.querySelectorAll(FEED)) feed.replaceWith(slotFor(feed));
   }
   return node.outerHTML.replace(/\s(?:loading|decoding|fetchpriority)="[^"]*"/g, "").replace(/\s+/g, " ");
 }
@@ -76,8 +82,8 @@ export function highlight(el: Element): void {
  * @since 0.1.0
  */
 export function morphChildren(container: Element, html: string): Element[] {
-  const feeds = new Map<string, Element>();
-  for (const feed of container.querySelectorAll(FEED)) feeds.set(feed.getAttribute("data-postsocket-feed") ?? "", feed);
+  const feeds = new Map<string, Element[]>();
+  for (const feed of container.querySelectorAll(FEED)) feeds.set(slotKey(feed), [...(feeds.get(slotKey(feed)) ?? []), feed]);
 
   const incoming = Array.from(fragment(html).children);
   const old = Array.from(container.children);
@@ -104,7 +110,7 @@ export function morphChildren(container: Element, html: string): Element[] {
   for (const el of ordered) {
     const slots = el.matches(SLOT) ? [el] : Array.from(el.querySelectorAll(SLOT));
     for (const slot of slots) {
-      const feed = feeds.get(slot.getAttribute("data-postsocket-feed-slot") ?? "");
+      const feed = feeds.get(slot.getAttribute("data-postsocket-feed-slot") ?? "")?.shift();
       if (!feed) continue;
       if (slot === el) ordered[ordered.indexOf(el)] = feed;
       else slot.replaceWith(feed);
@@ -173,7 +179,7 @@ export function morphElement(target: Element, source: Element): Element[] {
   const sameShape = olds.length === news.length && olds.every((el, i) => el.tagName === news[i].tagName);
   if (target.matches(POST) || !sameShape) {
     const copy = source.cloneNode(true) as Element;
-    for (const feed of copy.querySelectorAll(FEED)) feed.replaceWith(slotFor(feed.getAttribute("data-postsocket-feed") ?? ""));
+    for (const feed of copy.querySelectorAll(FEED)) feed.replaceWith(slotFor(feed));
     return morphChildren(target, copy.innerHTML);
   }
   return olds.flatMap((el, i) => morphElement(el, news[i]));

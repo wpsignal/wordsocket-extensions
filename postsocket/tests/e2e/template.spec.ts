@@ -6,6 +6,7 @@ import {
   createLiveblog,
   deleteLiveblog,
   deletePost,
+  feedBlock,
   keepSettings,
   paragraph,
   updateLiveblog,
@@ -14,7 +15,7 @@ import {
 } from "./helpers";
 
 const TEMPLATE =
-  '<!-- wp:postsocket/entry {"className":"e2e-card is-style-card"} --><!-- wp:post-date /--><!-- wp:post-title {"level":4} /--><!-- wp:postsocket/entry-content /--><!-- /wp:postsocket/entry -->';
+  '<!-- wp:postsocket/entry {"className":"e2e-card is-style-timeline","style":{"@mobile":{"spacing":{"margin":{"left":"33px"}}}}} --><!-- wp:post-date /--><!-- wp:post-title {"level":4} /--><!-- wp:postsocket/entry-content /--><!-- /wp:postsocket/entry -->';
 
 /**
  * A live blog's entries are printed in the synced pattern chosen for it: open readers get the new layout
@@ -100,9 +101,17 @@ test.describe("entry templates", () => {
     await expect(landed.locator("h4.wp-block-post-title")).toHaveText("Goal");
     await expect
       .poll(() =>
-        landed.evaluate((el) => getComputedStyle(el).borderTopLeftRadius),
+        landed.evaluate((el) => getComputedStyle(el).borderInlineStartWidth),
       )
-      .toBe("8px");
+      .toBe("1px");
+
+    /* The template's mobile rule came with the entry, over the relay. */
+    const marginAt = async (width: number) => {
+      await reader.setViewportSize({ width, height: 800 });
+      return landed.evaluate((el) => getComputedStyle(el).marginLeft);
+    };
+    expect(await marginAt(400)).toBe("33px");
+    expect(await marginAt(1280)).not.toBe("33px");
 
     await admin.visitAdminPage(
       "admin.php",
@@ -122,7 +131,20 @@ test.describe("entry templates", () => {
     await expect(
       page.getByRole("link", { name: "Create template" }),
     ).toHaveAttribute("href", /post_type=wp_block&postsocket_template=1$/);
+    const preview = page.locator('iframe[title="Preview: Entry template"]');
+    await expect(preview).toHaveAttribute("srcdoc", /e2e-card/, {
+      timeout: 15_000,
+    });
+    await expect(
+      page.locator('iframe[title="Preview: Pinned entry template"]'),
+    ).toHaveAttribute("srcdoc", /e2e-card[^>]*is-pinned|is-pinned[^>]*e2e-card/);
+    await expect(preview).not.toHaveAttribute("srcdoc", /<script/);
     await select.click();
+    await page.getByText("Default layout", { exact: true }).hover();
+    await expect(preview).toHaveAttribute(
+      "srcdoc",
+      /postsocket-entry__headline/,
+    );
     await page.getByText("Default layout", { exact: true }).click();
     await expect(landed.locator(".postsocket-entry__headline")).toHaveText(
       "Goal",
@@ -130,6 +152,101 @@ test.describe("entry templates", () => {
     );
     await expect(landed).not.toHaveClass(/e2e-card/);
     await reader.context().close();
+  });
+
+  test("two feeds of one live blog on a page each print and receive entries in their own template", async ({
+    browser,
+    requestUtils,
+    baseURL,
+  }) => {
+    const own = `<!-- wp:postsocket/live-feed {"liveblog":${liveblog},"template":${pattern}} /-->`;
+    const both = (await requestUtils.rest({
+      method: "POST",
+      path: "/wp/v2/posts",
+      data: {
+        title: "E2E two feeds",
+        content: feedBlock(liveblog) + own,
+        status: "publish",
+      },
+    })) as { id: number; link: string };
+
+    const reader = await (await visitorContext(browser, baseURL)).newPage();
+    const fetched: string[] = [];
+    reader.on("request", (request) => {
+      if (request.url().includes("/entries")) fetched.push(request.url());
+    });
+    await reader.goto(both.link);
+    await waitForLive(reader);
+    await expect(reader.locator("[data-postsocket-feed]")).toHaveCount(2);
+    const plain = reader.locator(
+      "[data-postsocket-feed]:not([data-postsocket-variant])",
+    );
+    const varied = reader.locator(
+      `[data-postsocket-feed][data-postsocket-variant="${pattern}-0"]`,
+    );
+    await expect(
+      plain.locator("[data-postsocket-entry]").first(),
+    ).not.toHaveClass(/e2e-card/);
+    await expect(varied.locator("[data-postsocket-entry]").first()).toHaveClass(
+      /e2e-card/,
+    );
+
+    const late = await createEntry(
+      requestUtils,
+      liveblog,
+      paragraph("Two nil at the death."),
+      { title: "Late goal" },
+    );
+    entries.push(late.id);
+    await expect(
+      plain.locator(
+        `[data-postsocket-entry="${late.id}"] .postsocket-entry__headline`,
+      ),
+    ).toHaveText("Late goal", { timeout: 15_000 });
+    const landed = varied.locator(`[data-postsocket-entry="${late.id}"]`);
+    await expect(landed).toHaveClass(/e2e-card/, { timeout: 15_000 });
+    await expect(landed.locator("h4.wp-block-post-title")).toHaveText(
+      "Late goal",
+    );
+    expect(fetched).toEqual([]);
+
+    await updateLiveblog(requestUtils, liveblog, {
+      meta: { _postsocket_state: "ended" },
+    });
+    await expect(plain.locator(".postsocket-feed__badge")).toHaveText("Ended", {
+      timeout: 15_000,
+    });
+    await expect(varied.locator(".postsocket-feed__badge")).toHaveText("Ended");
+    await updateLiveblog(requestUtils, liveblog, {
+      meta: { _postsocket_state: "live" },
+    });
+
+    await reader.context().close();
+    await deletePost(requestUtils, "posts", both.id);
+  });
+
+  test("the Live Feed block chooses a template for its own placement", async ({
+    admin,
+    editor,
+    page,
+  }) => {
+    await admin.createNewPost();
+    await editor.insertBlock({
+      name: "postsocket/live-feed",
+      attributes: { liveblog },
+    });
+    const select = editor.canvas.getByRole("combobox", {
+      name: "Entry template here",
+      exact: true,
+    });
+    await expect(select).toContainText("The live blog's template", {
+      timeout: 15_000,
+    });
+    await select.click();
+    await page.getByText("E2E entry card", { exact: true }).click();
+    await expect
+      .poll(async () => (await editor.getBlocks())[0]?.attributes?.template)
+      .toBe(pattern);
   });
 
   test("Create template asks for a name and whether to sync, then holds the entry block and its usual blocks", async ({

@@ -52,6 +52,10 @@ interface EntryUpdated {
   pinned: boolean;
   author?: { name: string; avatar: string };
   assets?: PostSocketAssets;
+  /** On a variant's channel: the variant the entry is printed in. */
+  variant?: string;
+  /** On the live blog's channel: the variants the entry was also published in, each on its own channel. */
+  variants?: string[];
 }
 
 /** `postsocket.entry.removed`. */

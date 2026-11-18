@@ -1,5 +1,5 @@
 /**
- * The Live Feed block's editor side: choose or create the live blog it shows.
+ * The Live Feed block's editor side: choose or create the live blog it shows, and the templates this placement prints its entries in.
  *
  * @since 0.1.0
  */
@@ -20,7 +20,17 @@ const cfg = window.postsocketBlock;
 
 interface Attributes {
   liveblog: number;
+  template: number;
+  pinnedTemplate: number;
 }
+
+interface Pattern {
+  id: number;
+  title: { raw: string };
+  content: { raw: string };
+}
+
+const ENTRY_BLOCK = "<!-- wp:postsocket/entry ";
 
 interface LiveblogTerm {
   id: number;
@@ -75,6 +85,28 @@ function Edit({ attributes, setAttributes }: { attributes: Attributes; setAttrib
     enabled: attributes.liveblog > 0,
   });
 
+  const { records: patterns } = useEntityRecords<Pattern>("postType", "wp_block", {
+    per_page: 100,
+    status: "publish",
+    context: "edit",
+    _fields: "id,title,content",
+  });
+
+  const templates = [
+    { value: "0", label: __("The live blog's template", "postsocket") },
+    ...(patterns ?? [])
+      .filter((pattern) => pattern.content.raw.includes(ENTRY_BLOCK))
+      .map((pattern) => ({ value: String(pattern.id), label: decodeEntities(pattern.title.raw) })),
+  ];
+  const templateSelect = (label: string, key: "template" | "pinnedTemplate"): JSX.Element => (
+    <SearchableSelectControl
+      label={label}
+      items={templates}
+      value={templates.find((item) => item.value === String(attributes[key])) ?? templates[0]}
+      onValueChange={(item) => setAttributes({ [key]: item ? Number(item.value) : 0 })}
+    />
+  );
+
   const items = (records ?? []).map((term) => ({ value: String(term.id), label: decodeEntities(term.name) }));
   const selected = items.find((item) => item.value === String(attributes.liveblog)) ?? null;
   const ended = record?.meta?.[cfg?.meta.state ?? ""] === "ended";
@@ -115,6 +147,8 @@ function Edit({ attributes, setAttributes }: { attributes: Attributes; setAttrib
                 )}
               </Stack>
             )}
+            {record && templateSelect(__("Entry template here", "postsocket"), "template")}
+            {record && templateSelect(__("Pinned entry template here", "postsocket"), "pinnedTemplate")}
             {cfg?.canManage && <NewLiveblog onCreated={(id) => setAttributes({ liveblog: id })} />}
           </Stack>
         </Card.Content>

@@ -211,19 +211,56 @@ function valid_template( mixed $pattern_id ): int {
 }
 
 /**
- * The block markup a live blog's entries are printed in, empty for the default layout; a pinned entry's is the pinned template, or the entries' when there is none.
+ * The variant a Live Feed block's own templates make, `{template}-{pinned template}`, or empty when it names neither.
  *
  * @since 0.1.0
  *
- * @param int  $liveblog_id Live blog id.
- * @param bool $pinned      Whether the entry is pinned.
+ * @param array $attributes Block attributes.
  * @return string
  */
-function entry_template_markup( int $liveblog_id, bool $pinned = false ): string {
-	$pattern_id = 0;
+function feed_variant( array $attributes ): string {
+	$template = absint( $attributes['template'] ?? 0 );
+	$pinned   = absint( $attributes['pinnedTemplate'] ?? 0 );
+	return $template > 0 || $pinned > 0 ? $template . '-' . $pinned : '';
+}
+
+/**
+ * The entry and pinned entry pattern ids a variant names, 0 for one it leaves to the live blog.
+ *
+ * @since 0.1.0
+ *
+ * @param string $variant Variant, or empty.
+ * @return int[] Two ids.
+ */
+function variant_templates( string $variant ): array {
+	return preg_match( '/^(\d{1,12})-(\d{1,12})$/', $variant, $ids ) ? array( (int) $ids[1], (int) $ids[2] ) : array( 0, 0 );
+}
+
+/**
+ * The block markup a live blog's entries are printed in, empty for the default layout.
+ *
+ * A pinned entry's is the pinned template, or the entries' when there is none; a variant's own templates come before the live blog's.
+ *
+ * @since 0.1.0
+ *
+ * @param int    $liveblog_id Live blog id.
+ * @param bool   $pinned      Whether the entry is pinned.
+ * @param string $variant     A Live Feed block's variant, or empty.
+ * @return string
+ */
+function entry_template_markup( int $liveblog_id, bool $pinned = false, string $variant = '' ): string {
+	list( $own, $own_pinned ) = variant_templates( $variant );
+	$candidates               = array( $pinned ? $own_pinned : 0, $own );
 	if ( $liveblog_id > 0 ) {
-		$pattern_id = $pinned ? valid_template( get_term_meta( $liveblog_id, META_PINNED_TEMPLATE, true ) ) : 0;
-		$pattern_id = $pattern_id > 0 ? $pattern_id : valid_template( get_term_meta( $liveblog_id, META_TEMPLATE, true ) );
+		$candidates[] = $pinned ? (int) get_term_meta( $liveblog_id, META_PINNED_TEMPLATE, true ) : 0;
+		$candidates[] = (int) get_term_meta( $liveblog_id, META_TEMPLATE, true );
+	}
+	$pattern_id = 0;
+	foreach ( array_filter( $candidates ) as $candidate ) {
+		$pattern_id = valid_template( $candidate );
+		if ( $pattern_id > 0 ) {
+			break;
+		}
 	}
 	$markup = $pattern_id > 0 ? (string) get_post( $pattern_id )->post_content : '';
 	/**
@@ -234,8 +271,9 @@ function entry_template_markup( int $liveblog_id, bool $pinned = false ): string
 	 * @param string $markup      Block markup, empty for the default layout.
 	 * @param int    $liveblog_id Live blog id.
 	 * @param bool   $pinned      Whether the markup is for a pinned entry.
+	 * @param string $variant     The variant of the Live Feed block the entry is printed for, or empty.
 	 */
-	return (string) apply_filters( 'postsocket_entry_template', $markup, $liveblog_id, $pinned );
+	return (string) apply_filters( 'postsocket_entry_template', $markup, $liveblog_id, $pinned, $variant );
 }
 
 /**
@@ -243,13 +281,14 @@ function entry_template_markup( int $liveblog_id, bool $pinned = false ): string
  *
  * @since 0.1.0
  *
- * @param int  $liveblog_id Live blog id.
- * @param bool $pinned      Whether the entry is pinned.
+ * @param int    $liveblog_id Live blog id.
+ * @param bool   $pinned      Whether the entry is pinned.
+ * @param string $variant     A Live Feed block's variant, or empty.
  * @return array|null
  */
-function entry_template( int $liveblog_id, bool $pinned = false ): ?array {
+function entry_template( int $liveblog_id, bool $pinned = false, string $variant = '' ): ?array {
 	static $cache = array();
-	$markup       = entry_template_markup( $liveblog_id, $pinned );
+	$markup       = entry_template_markup( $liveblog_id, $pinned, $variant );
 	if ( '' === $markup ) {
 		return null;
 	}
@@ -283,7 +322,7 @@ function find_block( array $blocks, string $name ): ?array {
 }
 
 /**
- * The ids of the live blogs whose entry template or pinned entry template is this pattern.
+ * The ids of the live blogs that print entries in this pattern: as their template, their pinned template, or in a variant a post shows.
  *
  * @since 0.1.0
  *
@@ -306,10 +345,15 @@ function template_liveblogs( int $pattern_id ): array {
 					'key'   => META_PINNED_TEMPLATE,
 					'value' => (string) $pattern_id,
 				),
+				array(
+					'key'     => META_VARIANT,
+					'value'   => '^(' . $pattern_id . '-[0-9]+|[0-9]+-' . $pattern_id . '):',
+					'compare' => 'REGEXP',
+				),
 			),
 		)
 	);
-	return is_array( $ids ) ? array_map( 'intval', $ids ) : array();
+	return is_array( $ids ) ? array_values( array_unique( array_map( 'intval', $ids ) ) ) : array();
 }
 
 /**
@@ -342,14 +386,43 @@ function starting_template( string $post_type ): bool {
 }
 
 /**
- * The content a new entry template starts with: an empty Live Blog Entry block in the Timeline style on a pale yellow background, which the editor fills with its usual blocks.
+ * The content a new entry template starts with: an empty Live Blog Entry block in the Timeline style with its starting padding and side margins, wider on small screens, which the editor fills with its usual blocks.
  *
  * @since 0.1.0
  *
  * @return string
  */
 function template_seed(): string {
-	return '<!-- wp:' . ENTRY_BLOCK . ' {"className":"is-style-timeline"} /-->';
+	$gap    = 'var:preset|spacing|40';
+	$narrow = array(
+		'spacing' => array(
+			'margin' => array(
+				'right' => 'var:preset|spacing|50',
+				'left'  => 'var:preset|spacing|50',
+			),
+		),
+	);
+	return '<!-- wp:' . ENTRY_BLOCK . ' ' . wp_json_encode(
+		array(
+			'className' => 'is-style-timeline',
+			'style'     => array(
+				'spacing' => array(
+					'padding' => array(
+						'top'    => '0',
+						'right'  => $gap,
+						'bottom' => $gap,
+						'left'   => $gap,
+					),
+					'margin'  => array(
+						'right' => $gap,
+						'left'  => $gap,
+					),
+				),
+				'@mobile' => $narrow,
+				'@tablet' => $narrow,
+			),
+		)
+	) . ' /-->';
 }
 
 // A pattern started from "Create template" is stored with its starting content, and the editor is handed the same content.
@@ -537,6 +610,33 @@ function entry_ids( int $liveblog_id, array $statuses ): array {
 }
 
 /**
+ * The attributes of every Live Feed block in some post content that names a live blog.
+ *
+ * @since 0.1.0
+ *
+ * @param string $content Post content.
+ * @return array[]
+ */
+function feed_blocks( string $content ): array {
+	if ( ! str_contains( $content, '<!-- wp:' . FEED_BLOCK ) ) {
+		return array();
+	}
+	$found = array();
+	$walk  = static function ( array $blocks ) use ( &$found, &$walk ): void {
+		foreach ( $blocks as $block ) {
+			if ( FEED_BLOCK === ( $block['blockName'] ?? '' ) && (int) ( $block['attrs']['liveblog'] ?? 0 ) > 0 ) {
+				$found[] = $block['attrs'];
+			}
+			if ( ! empty( $block['innerBlocks'] ) ) {
+				$walk( $block['innerBlocks'] );
+			}
+		}
+	};
+	$walk( parse_blocks( $content ) );
+	return $found;
+}
+
+/**
  * The live blog ids of the Live Feed blocks in some post content.
  *
  * @since 0.1.0
@@ -545,23 +645,80 @@ function entry_ids( int $liveblog_id, array $statuses ): array {
  * @return int[]
  */
 function feed_liveblogs( string $content ): array {
-	if ( ! str_contains( $content, '<!-- wp:' . FEED_BLOCK ) ) {
-		return array();
+	return array_values( array_unique( array_map( static fn( array $attrs ): int => (int) $attrs['liveblog'], feed_blocks( $content ) ) ) );
+}
+
+/**
+ * The variants a live blog is shown in by published posts.
+ *
+ * @since 0.1.0
+ *
+ * @param int $liveblog_id Live blog id.
+ * @return string[]
+ */
+function liveblog_variants( int $liveblog_id ): array {
+	$variants = array();
+	foreach ( (array) get_term_meta( $liveblog_id, META_VARIANT, false ) as $row ) {
+		$variant = strtok( (string) $row, ':' );
+		if ( array( 0, 0 ) !== variant_templates( (string) $variant ) ) {
+			$variants[ $variant ] = true;
+		}
 	}
-	$ids  = array();
-	$walk = static function ( array $blocks ) use ( &$ids, &$walk ): void {
-		foreach ( $blocks as $block ) {
-			if ( FEED_BLOCK === ( $block['blockName'] ?? '' ) && (int) ( $block['attrs']['liveblog'] ?? 0 ) > 0 ) {
-				$ids[] = (int) $block['attrs']['liveblog'];
-			}
-			if ( ! empty( $block['innerBlocks'] ) ) {
-				$walk( $block['innerBlocks'] );
+	return array_map( 'strval', array_keys( $variants ) );
+}
+
+/**
+ * Record on each live blog the variants a post's Live Feed blocks show it in, and drop the ones the post no longer shows.
+ *
+ * @since 0.1.0
+ *
+ * @param \WP_Post $post    The saved post.
+ * @param bool     $leaving Whether the post is being deleted.
+ * @return void
+ */
+function sync_variants( \WP_Post $post, bool $leaving = false ): void {
+	if ( ENTRY_TYPE === $post->post_type || wp_is_post_revision( $post ) || wp_is_post_autosave( $post ) ) {
+		return;
+	}
+	$shown = array();
+	if ( ! $leaving && 'publish' === $post->post_status ) {
+		foreach ( feed_blocks( $post->post_content ) as $attrs ) {
+			if ( '' !== feed_variant( $attrs ) ) {
+				$shown[] = (int) $attrs['liveblog'] . ':' . feed_variant( $attrs );
 			}
 		}
-	};
-	$walk( parse_blocks( $content ) );
-	return array_values( array_unique( $ids ) );
+		$shown = array_values( array_unique( $shown ) );
+	}
+	$before = array_values( array_filter( (array) get_post_meta( $post->ID, META_FEEDS, true ) ) );
+	if ( $shown === $before ) {
+		return;
+	}
+	foreach ( array_diff( $before, $shown ) as $pair ) {
+		list( $liveblog_id, $variant ) = explode( ':', (string) $pair, 2 ) + array( '', '' );
+		delete_term_meta( (int) $liveblog_id, META_VARIANT, $variant . ':' . $post->ID );
+	}
+	foreach ( array_diff( $shown, $before ) as $pair ) {
+		list( $liveblog_id, $variant ) = explode( ':', $pair, 2 );
+		if ( is_liveblog( (int) $liveblog_id ) ) {
+			add_term_meta( (int) $liveblog_id, META_VARIANT, $variant . ':' . $post->ID );
+		}
+	}
+	if ( $shown ) {
+		update_post_meta( $post->ID, META_FEEDS, $shown );
+	} else {
+		delete_post_meta( $post->ID, META_FEEDS );
+	}
 }
+add_action( 'wp_after_insert_post', static fn( int $post_id, \WP_Post $post ) => sync_variants( $post ), 10, 2 );
+add_action(
+	'before_delete_post',
+	static function ( int $post_id ): void {
+		$post = get_post( $post_id );
+		if ( $post ) {
+			sync_variants( $post, true );
+		}
+	}
+);
 
 /**
  * Whether a post is published and holds a Live Feed block for the live blog.

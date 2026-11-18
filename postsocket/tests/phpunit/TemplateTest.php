@@ -14,6 +14,8 @@ use function WPSignal\Extensions\PostSocket\liveblog_channel;
 use function WPSignal\Extensions\PostSocket\render_entry;
 use function WPSignal\Extensions\PostSocket\render_feed;
 use function WPSignal\Extensions\PostSocket\restricted_blocks;
+use function WPSignal\Extensions\PostSocket\template_previews;
+use function WPSignal\Extensions\PostSocket\template_seed;
 use function WPSignal\Extensions\PostSocket\valid_template;
 
 final class TemplateTest extends ExtensionTestCase {
@@ -156,9 +158,36 @@ final class TemplateTest extends ExtensionTestCase {
 		$this->assertCount( 1, $this->events_on( liveblog_channel( $liveblog ), 'postsocket.liveblog.template' ), 'a save of the pinned template tells readers' );
 	}
 
+	public function test_a_template_s_viewport_styles_reach_readers_with_the_entry(): void {
+		if ( ! function_exists( 'wp_render_block_states_support' ) ) {
+			$this->markTestSkipped( 'Viewport styles need WordPress 7.1.' );
+		}
+		$liveblog = $this->make_liveblog();
+		update_term_meta( $liveblog, META_TEMPLATE, $this->make_pattern( template_seed() ) );
+		$this->published = array();
+		$this->make_entry( $liveblog );
+
+		$events = $this->events_on( liveblog_channel( $liveblog ), 'postsocket.entry.updated' );
+		$this->assertCount( 1, $events );
+		$data = $events[0]['data'];
+		$this->assertSame( 1, preg_match( '/<article[^>]*class="[^"]*\b(wp-[a-z0-9-]*state[a-z0-9-]*)\b/', $data['html'], $class ), 'the entry carries the class its viewport rules hang on' );
+		$css = $data['assets']['css'] ?? '';
+		$this->assertMatchesRegularExpression( '/@media \(width <= 480px\)\{\.' . preg_quote( $class[1], '/' ) . '[^{]*\{[^}]*margin-left:\s*var\(--wp--preset--spacing--50\)\s*!important/', $css, 'the mobile rule rides along' );
+		$this->assertStringContainsString( '@media (480px < width <= 782px)', $css, 'the tablet rule rides along' );
+	}
+
+	public function test_the_theme_palette_keeps_its_colours_and_gains_postsocket_s(): void {
+		$palette = wp_get_global_settings( array( 'color', 'palette', 'theme' ) );
+		$slugs   = array_column( $palette, 'slug' );
+		$this->assertSame( 'postsocket-grey', end( $slugs ), 'the colour comes after the theme\'s own' );
+		$this->assertGreaterThan( 1, count( $slugs ), 'the theme\'s colours are still there' );
+		$this->assertSame( '#d9d9d9', end( $palette )['color'] );
+		$this->assertStringContainsString( '--wp--preset--color--postsocket-grey: #d9d9d9', wp_get_global_stylesheet( array( 'variables' ) ) );
+	}
+
 	public function test_the_entry_block_offers_its_styles(): void {
 		$block = WP_Block_Type_Registry::get_instance()->get_registered( 'postsocket/entry' );
-		$this->assertSame( array( 'default', 'card', 'timeline', 'highlight' ), array_column( $block->styles, 'name' ) );
+		$this->assertSame( array( 'default', 'timeline' ), array_column( $block->styles, 'name' ) );
 		$this->assertNotEmpty( $block->style_handles, 'the styles ship with the block' );
 	}
 
@@ -245,5 +274,103 @@ final class TemplateTest extends ExtensionTestCase {
 		$this->assertStringContainsString( 'data-postsocket-post="' . $host . '"', $page );
 		$this->assertStringContainsString( 'data-postsocket-entry="' . $entry . '"', $page );
 		$this->assertStringContainsString( 'is-card', $page );
+	}
+
+	public function test_a_feed_block_with_templates_of_its_own_prints_and_publishes_its_entries_in_them(): void {
+		$liveblog = $this->make_liveblog();
+		$card     = $this->make_pattern();
+		$banner   = $this->make_pattern( str_replace( 'is-card', 'is-banner', self::TEMPLATE ) );
+		$variant  = $banner . '-0';
+		$own      = '<!-- wp:postsocket/live-feed {"liveblog":' . $liveblog . ',"template":' . $banner . '} /-->';
+		update_term_meta( $liveblog, META_TEMPLATE, $card );
+
+		$this->assertSame( array(), \WPSignal\Extensions\PostSocket\liveblog_variants( $liveblog ) );
+		$host = $this->make_host( $liveblog, array( 'post_content' => self::feed_block( $liveblog ) . $own ) );
+		$this->assertSame( array( $variant ), \WPSignal\Extensions\PostSocket\liveblog_variants( $liveblog ), 'a published post records the variant it shows' );
+
+		$entry   = $this->make_entry( $liveblog );
+		$main    = $this->events_on( liveblog_channel( $liveblog ), 'postsocket.entry.updated' );
+		$channel = \WPSignal\Extensions\PostSocket\variant_channel( $liveblog, $variant );
+		$varied  = $this->events_on( $channel, 'postsocket.entry.updated' );
+		$this->assertCount( 1, $main );
+		$this->assertStringContainsString( 'is-card', $main[0]['data']['html'] );
+		$this->assertSame( array( $variant ), $main[0]['data']['variants'], 'the live blog channel names the variants published beside it' );
+		$this->assertCount( 1, $varied, 'once on the variant channel' );
+		$this->assertStringContainsString( 'is-banner', $varied[0]['data']['html'] );
+		$this->assertStringNotContainsString( 'is-card', $varied[0]['data']['html'] );
+		$this->assertSame( $variant, $varied[0]['data']['variant'] );
+
+		$page = do_blocks( get_post( $host )->post_content );
+		$this->assertSame( 2, substr_count( $page, 'data-postsocket-feed="' . $liveblog . '"' ), 'two feeds of one live blog on a page' );
+		$this->assertSame( 1, substr_count( $page, 'data-postsocket-variant="' . $variant . '"' ) );
+		$this->assertSame( 1, substr_count( $page, 'is-card' ) );
+		$this->assertSame( 1, substr_count( $page, 'is-banner' ) );
+		preg_match_all( '/data-wp-text="state\.feeds\.(f\d+)\.badge"/', $page, $keys );
+		$this->assertCount( 2, array_unique( $keys[1] ), 'each feed has its own state' );
+		$relay = \WPSignal\Extensions\PostSocket\render_content( get_post( $host ) );
+		$this->assertStringContainsString( 'data-postsocket-feed-slot="' . $liveblog . '"', $relay );
+		$this->assertStringContainsString( 'data-postsocket-feed-slot="' . $liveblog . ':' . $variant . '"', $relay );
+
+		wp_set_current_user( 0 );
+		$route = '/' . \WPSignal\Extensions\PostSocket\REST_NS . '/liveblog/' . $liveblog . '/entries';
+		$this->assertStringContainsString( 'is-card', $this->rest( 'GET', $route )->get_data()['entries'][0]['html'] );
+		$asked = $this->rest(
+			'GET',
+			$route,
+			array(
+				'template' => $variant,
+				'sig'      => \WPSignal\Extensions\PostSocket\variant_token( $liveblog, $variant ),
+			)
+		);
+		$this->assertStringContainsString( 'is-banner', $asked->get_data()['entries'][0]['html'], 'the route serves the variant the server signed' );
+		$forged = array(
+			'template' => $card . '-0',
+			'sig'      => \WPSignal\Extensions\PostSocket\variant_token( $liveblog, $variant ),
+		);
+		$this->assertSame( 403, $this->rest( 'GET', $route, $forged )->get_status(), 'a variant the server did not sign is refused' );
+		$this->assertSame( 403, $this->rest( 'GET', $route, array( 'template' => $variant ) )->get_status() );
+
+		wp_set_current_user( $this->admin_id() );
+		wp_update_post(
+			array(
+				'ID'           => $banner,
+				'post_content' => str_replace( 'is-card', 'is-ticker', self::TEMPLATE ),
+			)
+		);
+		$this->assertCount( 1, $this->events_on( liveblog_channel( $liveblog ), 'postsocket.liveblog.template' ), 'a save of a variant\'s pattern tells the live blog\'s readers' );
+
+		wp_update_post(
+			array(
+				'ID'           => $host,
+				'post_content' => self::feed_block( $liveblog ),
+			)
+		);
+		$this->assertSame( array(), \WPSignal\Extensions\PostSocket\liveblog_variants( $liveblog ), 'and forgets it when the block is gone' );
+		wp_update_post(
+			array(
+				'ID'         => $entry,
+				'post_title' => 'Two nil',
+			)
+		);
+		$this->assertCount( 1, $this->events_on( $channel, 'postsocket.entry.updated' ), 'nothing more on the variant channel' );
+		$this->assertArrayNotHasKey( 'variants', $this->events_on( liveblog_channel( $liveblog ), 'postsocket.entry.updated' )[1]['data'] );
+	}
+
+	public function test_previews_print_one_entry_in_each_pattern_as_an_entry_and_as_a_pinned_one(): void {
+		$liveblog = $this->make_liveblog();
+		$entry   = $this->make_entry( $liveblog );
+		$pattern = $this->make_pattern();
+		$plain   = $this->make_pattern( '<!-- wp:paragraph --><p>No entry block.</p><!-- /wp:paragraph -->' );
+
+		$previews = template_previews( $liveblog, array( 0, $pattern, $plain, $pattern ) );
+		$this->assertSame( array( '0', '0:pinned', (string) $pattern, $pattern . ':pinned' ), array_map( 'strval', array_keys( $previews ) ), 'a pattern without the block is left out' );
+		$this->assertStringContainsString( 'postsocket-entry__headline', $previews['0'] );
+		$this->assertStringContainsString( 'data-postsocket-pinned="0"', $previews['0'] );
+		$this->assertStringContainsString( 'data-postsocket-pinned="1"', $previews['0:pinned'] );
+		$this->assertStringContainsString( 'is-card', $previews[ $pattern ] );
+		$this->assertStringContainsString( 'data-postsocket-entry="' . $entry . '"', $previews[ $pattern ] );
+		$this->assertStringContainsString( 'is-pinned', $previews[ $pattern . ':pinned' ] );
+		$this->assertStringNotContainsString( 'is-pinned', $previews[ $pattern ] );
+		$this->assertEmpty( get_post_meta( $entry, META_PINNED, true ), 'the entry itself is not pinned' );
 	}
 }

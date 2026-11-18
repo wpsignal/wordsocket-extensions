@@ -9,11 +9,12 @@
   "keywords": ["live blog", "entries", "realtime"],
   "textdomain": "postsocket",
   "attributes": {
-    "liveblog": { "type": "number", "default": 0 }
+    "liveblog": { "type": "number", "default": 0 },
+    "template": { "type": "number", "default": 0 },
+    "pinnedTemplate": { "type": "number", "default": 0 }
   },
   "supports": {
     "html": false,
-    "multiple": false,
     "reusable": false,
     "interactivity": true,
     "spacing": {
